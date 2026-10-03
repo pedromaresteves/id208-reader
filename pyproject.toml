@@ -1,0 +1,15 @@
+[project]
+name = "id208-reader"
+version = "0.1.0"
+description = "Local, no-account reader for ID208 Plus (IDO/VeryFit 0x0AF0). Steps/sleep first."
+requires-python = ">=3.10"
+dependencies = ["bleak>=0.21"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.4"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

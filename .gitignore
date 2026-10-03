@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+out/
+dist/
+build/
+*.log
+.DS_Store
+*.egg-info/
+captures/*.jsonl
+captures/*.jpeg
+phase0/idowatch.html
