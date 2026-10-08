@@ -26,6 +26,7 @@ button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
 <section id="secSleep"><h2>Sleep</h2><div class="body muted">Loading…</div></section>
 <section id="secHr"><h2>Heart rate</h2><div class="body muted">Loading…</div><canvas id="chHr"></canvas></section>
 <section id="secWorkouts"><h2>Workouts</h2><div class="body muted">Loading…</div><canvas id="chWorkout"></canvas></section>
+<section id="secDebug"><h2>Debug</h2><div class="body muted">Raw store contents for troubleshooting — copy from here when reporting an issue.</div><details><summary>Show raw store JSON</summary><pre id="debugDump" style="font-size:0.7rem; max-height:40vh; overflow:auto;"></pre></details></section>
 
 <script src="store.js"></script>
 <script>
@@ -66,6 +67,8 @@ function lineChart(id, values, lo, hi) {
 }
 function fmtDur(s) { return Math.floor(s / 60) + 'm' + (s % 60) + 's'; }
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+// Display helper: missing values render as an em dash, never "undefined".
+function num(v, suffix) { return (v === undefined || v === null || v === '') ? '—' : v + (suffix || ''); }
 
 async function render() {
   document.getElementById('status').textContent = 'Loading…';
@@ -75,14 +78,20 @@ async function render() {
     var hr = await Store.list('hr');
     var workouts = await Store.list('workout');
 
-    // Steps: latest + 14-day bars.
+    // Steps: latest + 14-day bars + last-7 table.
     if (steps.length) {
       var last = steps[steps.length - 1].payload;
       var tail = steps.slice(-14);
+      var weekRows = steps.slice(-7).reverse().map(function (r) {
+        var s = r.payload;
+        return '<tr><td>' + esc(s.date) + '</td><td>' + esc(num(s.steps)) + '</td>' +
+          '<td>' + esc(num(s.distance_m, ' m')) + '</td><td>' + esc(num(s.kcal)) + '</td></tr>';
+      }).join('');
       document.querySelector('#secSteps .body').innerHTML =
-        '<div class="big">' + esc(last.steps) + ' steps</div>' +
-        '<div class="muted">' + esc(last.date) + ' · ' + esc(last.distance_m) +
-        ' m · ' + esc(last.kcal === '' ? '—' : last.kcal) + ' kcal</div>';
+        '<div class="big">' + esc(num(last.steps)) + ' <span class="muted">steps</span></div>' +
+        '<div class="muted">' + esc(last.date) + ' · ' + esc(num(last.distance_m, ' m')) +
+        ' · ' + esc(num(last.kcal, ' kcal')) + ' · ' + esc(num(last.active_min, ' min active')) + '</div>' +
+        '<table><tr><th>Date</th><th>Steps</th><th>Dist</th><th>Kcal</th></tr>' + weekRows + '</table>';
       barChart('chSteps', tail.map(function (r) { return r.date; }),
         tail.map(function (r) { return Number(r.payload.steps) || 0; }));
     } else {
@@ -94,25 +103,28 @@ async function render() {
       var n0 = sleep[sleep.length - 1].payload;
       var rows = sleep.slice(-7).reverse().map(function (r) {
         var n = r.payload;
-        return '<tr><td>' + esc(n.night) + '</td><td>' + esc(n.total_min) + 'm</td>' +
-          '<td>w' + esc(n.wake_min) + ' l' + esc(n.light_min) + ' r' + esc(n.rem_min) +
-          ' d' + esc(n.deep_min) + '</td></tr>';
+        return '<tr><td>' + esc(n.night) + '</td><td>' + esc(num(n.total_min, 'm')) + '</td>' +
+          '<td>w' + esc(num(n.wake_min)) + ' l' + esc(num(n.light_min)) + ' r' + esc(num(n.rem_min)) +
+          ' d' + esc(num(n.deep_min)) + '</td></tr>';
       }).join('');
       document.querySelector('#secSleep .body').innerHTML =
-        '<div class="big">' + esc(n0.total_min) + ' min <span class="muted">' + esc(n0.night) + '</span></div>' +
+        '<div class="big">' + esc(num(n0.total_min)) + ' <span class="muted">min · ' + esc(n0.night) + '</span></div>' +
         '<table>' + rows + '</table>';
     } else {
       document.querySelector('#secSleep .body').textContent = 'No data yet — run a sync.';
     }
 
-    // HR: latest day + its curve.
+    // HR: latest day + its curve (min/max computed on real samples only —
+    // a missing day shows dashes, never a fake 0).
     if (hr.length) {
       var h0 = hr[hr.length - 1].payload;
       var bpms = (h0.samples || []).map(function (s) { return s.bpm; });
+      var hMin = bpms.length ? Math.min.apply(null, bpms) : null;
+      var hMax = bpms.length ? Math.max.apply(null, bpms) : null;
       document.querySelector('#secHr .body').innerHTML =
         '<div class="big">' + esc(h0.date) + '</div>' +
-        '<div class="muted">min ' + Math.min.apply(null, bpms.concat([0])) +
-        ' · max ' + Math.max.apply(null, bpms.concat([0])) +
+        '<div class="muted">min ' + esc(num(hMin)) +
+        ' · max ' + esc(num(hMax)) +
         ' · ' + bpms.length + ' samples</div>';
       lineChart('chHr', bpms);
     } else {
@@ -124,9 +136,9 @@ async function render() {
       var items = workouts.slice().reverse().map(function (r) {
         var w = r.payload;
         return '<tr><td>' + esc(w.date || '') + '</td><td>' + esc(fmtDur(w.durationsS || 0)) +
-          '</td><td>' + esc(w.kcal) + 'kcal</td><td>' +
+          '</td><td>' + esc(num(w.kcal)) + '</td><td>' +
           esc(w.distanceM ? (w.distanceM / 1000) + 'km' : '—') + '</td><td>HR ' +
-          esc(w.avgHr) + '/' + esc(w.maxHr) + '/' + esc(w.minHr) + '</td></tr>';
+          esc(num(w.avgHr)) + '/' + esc(num(w.maxHr)) + '/' + esc(num(w.minHr)) + '</td></tr>';
       }).join('');
       document.querySelector('#secWorkouts .body').innerHTML =
         '<table><tr><th>Date</th><th>Time</th><th>Kcal</th><th>Dist</th><th>HR a/x/n</th></tr>' +
@@ -139,6 +151,9 @@ async function render() {
 
     var total = steps.length + sleep.length + hr.length + workouts.length;
     document.getElementById('status').textContent = total + ' records in store.';
+    document.getElementById('debugDump').textContent = JSON.stringify({
+      steps: steps, sleep: sleep, hr: hr, workouts: workouts,
+    }, null, 1).slice(0, 20000);
   } catch (e) {
     document.getElementById('status').textContent = 'Store unavailable: ' + e;
   }

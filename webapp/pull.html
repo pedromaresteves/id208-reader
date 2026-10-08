@@ -212,16 +212,16 @@ function handleLegacy(arr) {
 // Last item_count seen on START replies (operate 0x00) per type; STOP acks
 // (operate 0x01) don't touch these. The daily macro uses lastSleepItems === 0
 // as its paging stop rule (same as the old manual repeat-until-empty).
-var lastSleepItems = -1, lastSportItems = -1, lastHrItems = -1, lastPair = -1;
+var lastSleepItems = -1, lastSportItems = -1, lastHrItems = -1, lastWorkoutItems = -1, lastPair = -1;
 // Captured decoded records for the on-phone store (reset at each macro start).
-var capLive = null, capSport = null, capHr = null, capWorkout = null, capSleepNights = [];
+var capLive = null, capSport = null, capHr = null, capSleepNights = [], capWorkouts = [];
 function pad2(n) { return String(n).padStart(2, '0'); }
 function todayStr() {
   var n = new Date();
   return n.getFullYear() + '-' + pad2(n.getMonth() + 1) + '-' + pad2(n.getDate());
 }
 function resetCaptures() {
-  capLive = null; capSport = null; capHr = null; capWorkout = null; capSleepNights = [];
+  capLive = null; capSport = null; capHr = null; capWorkouts = []; capSleepNights = [];
 }
 function refreshStoreStatus() {
   var el = document.getElementById('storeStatus');
@@ -270,10 +270,13 @@ async function saveCaptured(tag) {
       });
       saved.push('HR');
     }
-    if (capWorkout) {
-      var wkey = capWorkout.date + ' ' + capWorkout.startS;
-      await Store.put(wkey, 'workout', capWorkout);
-      saved.push('workout');
+    if (capWorkouts.length) {
+      for (var wi = 0; wi < capWorkouts.length; wi++) {
+        var w = capWorkouts[wi];
+        var wkey = w.date + ' ' + w.startS;
+        await Store.put(wkey, 'workout', w);
+      }
+      saved.push(capWorkouts.length + ' workout(s)');
     }
     log('Saved to store [' + tag + ']: ' + (saved.length ? saved.join(', ') : 'nothing captured'));
 if (typeof Store !== 'undefined') refreshStoreStatus();
@@ -398,11 +401,16 @@ async function dailyAuto() {
     await wait(30000);
     await wr(writeChar, '0x0AF6', buildV3Stop04(3));
     await wait(3000);
-    log('[Pull 6/6] Workouts (30 s)...');
-    await wr(writeChar, '0x0AF6', buildV3Start04(4, 0));
-    await wait(30000);
-    await wr(writeChar, '0x0AF6', buildV3Stop04(4));
-    await wait(3000);
+    log('[Pull 6/6] Workouts (paged, ~25 s each, stops when empty)...');
+    for (var wn = 0; wn < 8; wn++) {
+      log('Workout round ' + (wn + 1) + '/8 (offset ' + wn + ')...');
+      lastWorkoutItems = -1;
+      await wr(writeChar, '0x0AF6', buildV3Start04(4, wn));
+      await wait(25000);
+      await wr(writeChar, '0x0AF6', buildV3Stop04(4));
+      await wait(3000);
+      if (lastWorkoutItems === 0) { log('Workout history empty — paging done.'); break; }
+    }
     await saveCaptured('daily ' + todayStr());
     show('Daily pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
   } finally { macroRunning = false; setMacroButtons(false); }
@@ -446,10 +454,15 @@ function dispatchV3(buf) {
     if (dataType === 7) lastSleepItems = itemCount;
     else if (dataType === 8) lastSportItems = itemCount;
     else if (dataType === 3) lastHrItems = itemCount;
+    else if (dataType === 4) lastWorkoutItems = itemCount;
     // Post-reset empty stores can answer with an unknown data_type and zero
     // items (seen: 65 B reply to sleep START). During sleep paging that still
     // means "no more nights", so stop instead of looping 8 times.
     else if (itemCount === 0) lastSleepItems = 0;
+  }
+  if (p[0] !== 0x00) { // STOP ack (operate 0x01): zeroed body, never data.
+    log('STOP ack dataType=' + dataType + ' (ignored for capture/display)');
+    return;
   }
   var hs = 14, he = Math.min(p.length, hs + headSize), de = Math.min(p.length, he + dataSize);
   var h = p.slice(hs, he), d = p.slice(he, de);
@@ -529,7 +542,7 @@ function dispatchV3(buf) {
         samples: wsamples,
       };
     }
-    if (wrec) capWorkout = wrec;
+    if (wrec) capWorkouts.push(wrec);
     show('WORKOUT dataType=4 items=' + itemCount + ' headSize=' + headSize + ' dataSize=' + dataSize +
       ' dur=' + wdur + ' ' + wkcal + ' HR ' + whr + wdist + ' headHex=' + hexStr(h.slice(0, Math.min(h.length, 16))));
   } else {
@@ -647,7 +660,7 @@ document.getElementById('btnTime').addEventListener('pointerup', function () { w
 document.getElementById('btnUser').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildUserInfoSample()); });
 document.getElementById('btnUnbind').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildBindStop()); });
 document.getElementById('btnAuth').addEventListener('pointerup', function () { var p = buildBindAuthPacket(); if (p) wr(writeChar, '0x0AF6', p); });
-document.getElementById('btnWorkout').addEventListener('pointerup', function () { capWorkout = null; wr(writeChar, '0x0AF6', buildV3Start04(4, readOffset())); });
+document.getElementById('btnWorkout').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(4, readOffset())); });
 document.getElementById('btnWorkoutStop').addEventListener('pointerup', async function () {
   await wr(writeChar, '0x0AF6', buildV3Stop04(4));
   await wait(3000);
