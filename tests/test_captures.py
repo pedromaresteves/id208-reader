@@ -68,5 +68,36 @@ def test_collect_health_skips_empty_marker() -> None:
             "hex": (bytes((0x33,)) + logical).hex(),
         }
     ]
-    sport, sleep = collect_health(lines, "test")
-    assert sport == [] and sleep == []
+    sport, sleep, hr, workouts = collect_health(lines, "test")
+    assert sport == [] and sleep == [] and hr == [] and workouts == []
+
+
+def test_collect_health_harvests_raw_workout() -> None:
+    # dataType 0x04 with items: decoded summary (see parse_workout_summary).
+    head = bytes.fromhex("10EA070A08123A2805") + bytes(92)
+    payload = (
+        bytes((0x00, 0x04, 0x00, 0x00, 0x00, 0x01, 0x00))
+        + len(head).to_bytes(2, "little")
+        + (8).to_bytes(4, "little")
+        + bytes((0x00,))
+        + head
+        + bytes((0x00, 0x00, 0x00, 0x00, 0x41, 0x42, 0x43, 0x00))
+    )
+    logical = _frame_bytes(0x0004, 0x70, payload)
+    lines = [
+        {
+            "ts": "t",
+            "char": "0x0AF7",
+            "dir": "RX",
+            "hex": (bytes((0x33,)) + logical).hex(),
+        }
+    ]
+    sport, sleep, hr, workouts = collect_health(lines, "test")
+    assert sport == [] and sleep == [] and hr == []
+    assert len(workouts) == 1
+    row = workouts[0]
+    assert row["date"] == "2026-10-08"
+    assert row["sport_type"] == 5
+    assert row["hr_samples"] == [0x41, 0x42, 0x43]
+    assert row["head_hex"] == head.hex()
+    assert row["source"] == "test"

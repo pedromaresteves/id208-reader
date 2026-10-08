@@ -11,10 +11,12 @@ import json
 from pathlib import Path
 
 from ido.decoder import (
+    parse_hr_day,
     parse_live_data,
     parse_sleep_summary,
     parse_sport_summary,
     parse_v3_health_common,
+    parse_workout_summary,
 )
 
 V3_PREAMBLE = bytes((0x33, 0xDA, 0xAD, 0xDA, 0xAD))
@@ -83,16 +85,25 @@ def collect_live(lines: list[dict[str, str]]) -> list[dict[str, object]]:
 
 def collect_health(
     lines: list[dict[str, str]], source: str
-) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-    """Collect v3 sport summaries and sleep nights from RX chunks.
+) -> tuple[
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+]:
+    """Collect v3 sport summaries, sleep nights, HR days and raw workouts.
 
     Groups consecutive RX chunks starting with 0x33 on the same
     characteristic into frames; skips empty end-of-history markers
     (item_count == 0) and STOP acks (no header).
-    Returns (sport_rows, sleep_rows) with decoded fields + source.
+    Returns (sport_rows, sleep_rows, hr_rows, workout_rows); workout rows
+    carry the decoded summary plus head_hex (segment tables stay in the
+    source JSONL until a run anchors their layout).
     """
     sport_rows: list[dict[str, object]] = []
     sleep_rows: list[dict[str, object]] = []
+    hr_rows: list[dict[str, object]] = []
+    workout_rows: list[dict[str, object]] = []
     pending: list[bytes] = []
     pending_char = ""
 
@@ -110,6 +121,7 @@ def collect_health(
             head = payload[14 : 14 + common["head_size"]]
             if len(head) < common["head_size"]:
                 continue
+            data = payload[14 + common["head_size"] :]
             if common["data_type"] == 0x08 and len(head) >= 20:
                 summary = parse_sport_summary(head)
                 year = int.from_bytes(head[1:3], "little")
@@ -123,6 +135,31 @@ def collect_health(
             elif common["data_type"] == 0x07 and len(head) >= 16:
                 summary = parse_sleep_summary(head)
                 sleep_rows.append({**summary, "source": source})
+            elif common["data_type"] == 0x03 and len(head) >= 10:
+                summary = parse_hr_day(head, data, common["item_count"])
+                hr_rows.append(
+                    {
+                        "date": (
+                            f"{summary['year']:04d}-{summary['month']:02d}-"
+                            f"{summary['day']:02d}"
+                        ),
+                        **summary,
+                        "source": source,
+                    }
+                )
+            elif common["data_type"] == 0x04 and len(head) >= 100:
+                summary = parse_workout_summary(head, data)
+                workout_rows.append(
+                    {
+                        "date": (
+                            f"{summary['year']:04d}-{summary['month']:02d}-"
+                            f"{summary['day']:02d}"
+                        ),
+                        **summary,
+                        "head_hex": head.hex(),
+                        "source": source,
+                    }
+                )
 
     for line in lines:
         if line.get("dir") != "RX":
@@ -137,4 +174,4 @@ def collect_health(
         pending.append(raw)
     if pending:
         flush()
-    return sport_rows, sleep_rows
+    return sport_rows, sleep_rows, hr_rows, workout_rows

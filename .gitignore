@@ -11,4 +11,7 @@ build/
 *.egg-info/
 captures/*.jsonl
 captures/*.jpeg
+captures/README.md
 phase0/idowatch.html
+PLAN.md
+PLAN-WEBAPP.md

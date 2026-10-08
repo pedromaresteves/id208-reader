@@ -1,9 +1,9 @@
-"""Local sync entry point: decode phone captures -> out/steps.csv + out/sleep.json.
+"""Local sync entry point: decode phone captures -> out/steps.csv + more.
 
 No network, no account. Flow: try a BLE scan (skips cleanly on WSL with
 no adapter), then decode captures/*.jsonl offline with src/ido/captures.py.
 Steps prefer v3 sport summaries; nights without one fall back to the latest
-02 A0 live snapshot of that day.
+02 A0 live snapshot of that day. Also exports sleep, HR days and workouts.
 """
 
 import asyncio
@@ -113,16 +113,22 @@ async def _main() -> int:
     sport_rows: list[dict[str, object]] = []
     live_rows: list[dict[str, object]] = []
     sleep_rows: list[dict[str, object]] = []
+    hr_rows: list[dict[str, object]] = []
+    workout_rows: list[dict[str, object]] = []
     for path in sorted(CAPTURES_DIR.glob("*.jsonl")):
         lines = load_lines(path)
         for row in collect_live(lines):
             row["source"] = path.name
             live_rows.append(row)
-        sport, sleep = collect_health(lines, path.name)
+        sport, sleep, hr, workouts = collect_health(lines, path.name)
         sport_rows.extend(sport)
         sleep_rows.extend(sleep)
+        hr_rows.extend(hr)
+        workout_rows.extend(workouts)
     print(
-        f"decoded {len(sport_rows)} sport, {len(live_rows)} live, {len(sleep_rows)} sleep rows"
+        f"decoded {len(sport_rows)} sport, {len(live_rows)} live, "
+        f"{len(sleep_rows)} sleep, {len(hr_rows)} hr, "
+        f"{len(workout_rows)} workout rows"
     )
 
     OUT_DIR.mkdir(exist_ok=True)
@@ -141,6 +147,14 @@ async def _main() -> int:
     sleep_json = OUT_DIR / "sleep.json"
     sleep_json.write_text(json.dumps(nights, indent=2) + "\n")
     print(f"wrote {sleep_json} ({len(nights)} nights)")
+
+    hr_json = OUT_DIR / "hr.json"
+    hr_json.write_text(json.dumps(hr_rows, indent=2) + "\n")
+    print(f"wrote {hr_json} ({len(hr_rows)} days)")
+
+    workout_json = OUT_DIR / "workouts.json"
+    workout_json.write_text(json.dumps(workout_rows, indent=2) + "\n")
+    print(f"wrote {workout_json} ({len(workout_rows)} records)")
     return 0
 
 

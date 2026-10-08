@@ -15,6 +15,9 @@ button { margin: 4px; padding: 10px 14px; font-size: 1rem; }
 <h1>ID208 Health Capture</h1>
 <p>Ground truth 2026-10-01 18:31: <b>5736 steps / 468 kcal</b>, sleep <b>07h05m (23:47 → 06:52)</b>.
 Compare decoded totals below against those numbers.</p>
+<button id="btnSetupAuto" disabled>A. Setup watch (1 tap: bind + time + user + info)</button>
+<button id="btnDailyAuto" disabled>B. Daily pull (1 tap: live + sizes + sport + sleep + HR)</button>
+<br>
 <button id="btnConnect">1. Connect (0x0AF0)</button>
 <button id="btnInfo" disabled>2. Device info (02 01)</button>
 <button id="btnLive" disabled>3. Live data (02 A0)</button>
@@ -23,10 +26,23 @@ Compare decoded totals below against those numbers.</p>
 <button id="btnSleep" disabled>6. Sleep START (v3 0x04 type 07)</button>
 <button id="btnSportStop" disabled>7. Sport STOP (type 08)</button>
 <button id="btnSleepStop" disabled>8. Sleep STOP (type 07)</button>
+<button id="btnHr" disabled>9. HR START (type 03)</button>
+<button id="btnHrStop" disabled>10. HR STOP (type 03)</button>
+<br>
+<button id="btnBind" disabled>11. Bind (04 01, clears QR setup)</button>
+<button id="btnTime" disabled>12. Set time (03 01, phone clock)</button>
+<button id="btnUser" disabled>13. User info (03 10 sample)</button>
+<button id="btnUnbind" disabled>14. Unbind (04 02)</button>
+<button id="btnAuth" disabled>15. Auth (04 05, finalizes bind)</button>
+<br>
+<button id="btnWorkout" disabled>16. Workout START (v3 0x04 type 04)</button>
+<button id="btnWorkoutStop" disabled>17. Workout STOP (type 04)</button>
 <br>
 <label for="offset">Offset (which saved record to start from, 0 = oldest):</label>
 <input id="offset" type="number" value="0" min="0" max="65535" style="width: 6em; padding: 8px; font-size: 1rem;">
-<p><b>After START: wait 30 s.</b> Sizes (137B) goes on 0x0AF1; small START/STOP (19B) go on 0x0AF6, replies on 0x0AF7 and/or 0x0AF2. If nothing comes, tap the matching STOP, wait 10 s, then retry START.</p>
+<p><b>Manual fallback:</b> buttons 2-17 below do one command each (START then wait 30 s, then STOP).
+One-tap A/B above run the same writes with the same waits — use Download JSONL when they finish.</p>
+<p><b>Fresh reset (QR setup screen):</b> Connect -> <b>A. Setup watch</b> (bind + 04 05 auth finalizes it, no tap needed) -> <b>B. Daily pull</b>. No VeryFit account needed.</p>
 <br>
 <button id="btnCopy">Copy log</button>
 <button id="btnJsonl">Download JSONL</button>
@@ -100,6 +116,203 @@ function buildV3Start04(dataType, offset) {
   return pkt;
 }
 function v3TotalLen(first) { return first[6] | (first[7] << 8); }
+// Bind / setup (0x0AF6 write -> 0x0AF7 notify, no account).
+// BIND_START live-verified on A200 (bind-v3.json): TX 04 01 F1... -> RX 04 01 00 00.
+// SET time from VeryFit logcat set_time.txt: 03 01 + yearLE + MM DD hh mm ss weekday + 6 zeros.
+// User info from fresh-launch: 03 10 B4 40 1F 00 D6 07 03 01 (sample clears setup gate).
+function buildBindStart() { return new Uint8Array([0x04, 0x01, 0xF1, 0x01, 0x01, 0x02, 0x02, 0x01, 0x00]); }
+function buildBindStop() { return new Uint8Array([0x04, 0x02, 0xF1, 0x01, 0x01, 0x02, 0x02, 0x01, 0x00]); }
+// Bare 04 03 probe (watch stays silent on it — confirmed 2x, kept for probing).
+function buildBindAuthProbe() { return new Uint8Array([0x04, 0x03]); }
+// 03 23 02 00: VeryFit sends this between bind and auth (purpose unknown).
+function buildSet23Sample() { return new Uint8Array([0x03, 0x23, 0x02, 0x00]); }
+// 04 05 encrypted auth (16 B): the step that finalizes binding (solved
+// 2026-10-08, captures/veryfit-bind-2026-10-08.log #26-32 + reset-test proof).
+// Layout: 04 05 0C 00 + challenge[6] + (challenge XOR watchMAC)[6];
+// challenge + MAC both come from the 04 01 reply. Reply 04 05 00 00 =
+// accepted (pair flips 0 -> 1); 04 05 02 00 = rejected (stale challenge or
+// wrong seal — random trailing bytes are rejected, proven 2026-10-08).
+var bindChallenge = null, bindMac = null; // captured from the 04 01 reply
+function buildBindAuthPacket() {
+  if (!bindChallenge || !bindMac) {
+    log('No 04 01 challenge captured yet — run Bind (step 6) first');
+    return null;
+  }
+  var pkt = new Uint8Array(16);
+  pkt[0] = 0x04; pkt[1] = 0x05; pkt[2] = 0x0C; pkt[3] = 0x00;
+  pkt.set(bindChallenge.subarray(0, 6), 4);
+  for (var i = 0; i < 6; i++) pkt[10 + i] = bindChallenge[i] ^ bindMac[i];
+  return pkt;
+}
+function buildSetTimeNow() {
+  var n = new Date();
+  var pkt = new Uint8Array(16);
+  pkt[0] = 0x03; pkt[1] = 0x01;
+  pkt[2] = n.getFullYear() & 0xFF; pkt[3] = (n.getFullYear() >> 8) & 0xFF;
+  pkt[4] = n.getMonth() + 1; pkt[5] = n.getDate();
+  pkt[6] = n.getHours(); pkt[7] = n.getMinutes(); pkt[8] = n.getSeconds();
+  pkt[9] = (n.getDay() + 6) % 7 + 1; // Mon=1..Sun=7
+  return pkt;
+}
+function buildUserInfoSample() { return new Uint8Array([0x03, 0x10, 0xB4, 0x40, 0x1F, 0x00, 0xD6, 0x07, 0x03, 0x01]); }
+// Post-bind prelude from VeryFit fresh-launch logcat: the watch stays on its
+// QR setup screen until it gets units + goals + weather switch, not just bind.
+// Units 17B, calorie+distance goals 20B, weather-off 6B (all byte-identical).
+function buildUnitsSample() { return parseHex('03 11 01 01 01 00 02 01 00 00 00 01 01 01 01 00 00'); }
+function buildUnitsBind() { return parseHex('03 11 01 01 01 00 02 02 00 00 00 01 01 01 01 00 00'); }
+function buildGoalsSample() { return parseHex('03 43 F4 01 00 00 00 00 00 00 08 07 00 00 FA 00 0E 06 0C 00'); }
+function buildWeatherOff() { return new Uint8Array([0x03, 0x2D, 0x55, 0x00, 0x00, 0x00]); }
+// v3 0x1A func-table query (14 B) and 0x09 HR-mode (26 B): payloads transplanted
+// from the reinstall-bind logcat, seq refreshed, CRC recomputed. Both <=50 B
+// so they go on 0x0AF6 like the other short v3 frames.
+function buildV3FuncTable1A() {
+  var pkt = parseHex('33 DA AD DA AD 01 0B 00 1A 00 00 00 00 00');
+  pkt[10] = v3Seq & 0xFF; pkt[11] = (v3Seq >> 8) & 0xFF; v3Seq++;
+  var crc = crc16Ccitt(pkt, 1, pkt.length - 3);
+  pkt[pkt.length - 2] = crc & 0xFF; pkt[pkt.length - 1] = (crc >> 8) & 0xFF;
+  return pkt;
+}
+function buildHrModeSample() {
+  var pkt = parseHex('33 DA AD DA AD 01 17 00 09 00 00 00 00 00 00 00 00 01 00 00 17 3B 00 00 00 00');
+  pkt[10] = v3Seq & 0xFF; pkt[11] = (v3Seq >> 8) & 0xFF; v3Seq++;
+  var crc = crc16Ccitt(pkt, 1, pkt.length - 3);
+  pkt[pkt.length - 2] = crc & 0xFF; pkt[pkt.length - 1] = (crc >> 8) & 0xFF;
+  return pkt;
+}
+function handleLegacy(arr) {
+  if (arr.length >= 3 && arr[0] === 0x04 && (arr[1] === 0x01 || arr[1] === 0x02 || arr[1] === 0x03 || arr[1] === 0x05)) {
+    if (arr[1] === 0x01 && arr.length >= 17) {
+      bindMac = arr.slice(5, 11);
+      bindChallenge = arr.slice(11, 17); // watch clock, sealed with MAC into 04 05
+      show('BIND reply: key=0x01 status=' + arr[2] + ' challenge=' + hexStr(bindChallenge) + ' (captured for 04 05 auth)');
+    } else {
+      show('BIND reply: key=0x0' + arr[1].toString(16) + ' status=' + arr[2] + ' (00 = ok; 04 05 status 0 finalizes, QR should clear)');
+    }
+    return;
+  }
+  if (arr.length >= 2 && arr[0] === 0x02 && arr[1] === 0x01) {
+    var pair = arr.length > 8 ? arr[8] : -1;
+    var bindFlag = arr.length > 13 ? arr[13] : -1;
+    show('INFO 02 01: pair=' + pair + ' bind_flag=' + bindFlag + ' (bound usually pair=1; fresh reset shows QR until bind)');
+    return;
+  }
+  if (arr.length >= 2 && arr[0] === 0x03) {
+    show('SET ack: 03 ' + arr[1].toString(16) + ' (00s = ok)');
+    return;
+  }
+}
+// Last item_count seen on START replies (operate 0x00) per type; STOP acks
+// (operate 0x01) don't touch these. The daily macro uses lastSleepItems === 0
+// as its paging stop rule (same as the old manual repeat-until-empty).
+var lastSleepItems = -1, lastSportItems = -1, lastHrItems = -1;
+// One-tap macros: same writes + waits as the manual buttons, run in order.
+var macroRunning = false;
+function wait(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+function setMacroButtons(disabled) {
+  document.getElementById('btnSetupAuto').disabled = disabled;
+  document.getElementById('btnDailyAuto').disabled = disabled;
+}
+async function setupAuto() {
+  // Replays VeryFit's own reinstall-bind order (reinstall_app_bind_stripped):
+  // func-table reads, DND read, bind, DND read, weather/goals/units, info,
+  // HR-mode x2, battery, user info, time, info. ~90 s total.
+  if (macroRunning) { log('A macro is already running — wait for it to finish.'); return; }
+  macroRunning = true; setMacroButtons(true);
+  try {
+    log('[Setup 1/18] Func table...');
+    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x02]));
+    await wait(2000);
+    log('[Setup 2/18] Func table ex...');
+    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x07]));
+    await wait(2000);
+    log('[Setup 3/18] MTU...');
+    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xF0]));
+    await wait(2000);
+    log('[Setup 4/18] v3 func table...');
+    await wr(writeChar, '0x0AF6', buildV3FuncTable1A());
+    await wait(3000);
+    log('[Setup 5/18] DND state...');
+    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x30]));
+    await wait(2000);
+    log('[Setup 6/18] Bind (04 01, no tap needed — auth at step 8 finalizes)...');
+    await wr(writeChar, '0x0AF6', buildBindStart());
+    await wait(12000); // confirm window on the watch
+    log('[Setup 7/18] 03 23 (VeryFit sends this between bind and auth)...');
+    await wr(writeChar, '0x0AF6', buildSet23Sample());
+    await wait(2000);
+    log('[Setup 8/18] Auth 04 05 (challenge XOR MAC — finalizes bind)...');
+    var auth = buildBindAuthPacket();
+    if (auth) await wr(writeChar, '0x0AF6', auth);
+    await wait(3000);
+    log('[Setup 9/18] DND state again...');
+    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x30]));
+    await wait(3000);
+    log('[Setup 10/18] Weather switch off...');
+    await wr(writeChar, '0x0AF6', buildWeatherOff());
+    await wait(2000);
+    log('[Setup 11/18] Goals...');
+    await wr(writeChar, '0x0AF6', buildGoalsSample());
+    await wait(2000);
+    log('[Setup 12/18] Units...');
+    await wr(writeChar, '0x0AF6', buildUnitsSample());
+    await wait(2000);
+    log('[Setup 13/18] Device info...');
+    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x01]));
+    await wait(3000);
+    log('[Setup 14/18] HR mode (x2)...');
+    await wr(writeChar, '0x0AF6', buildHrModeSample());
+    await wait(2000);
+    await wr(writeChar, '0x0AF6', buildHrModeSample());
+    await wait(3000);
+    log('[Setup 15/18] Battery...');
+    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x05]));
+    await wait(2000);
+    log('[Setup 16/18] User info...');
+    await wr(writeChar, '0x0AF6', buildUserInfoSample());
+    await wait(2000);
+    log('[Setup 17/18] Set time (phone clock)...');
+    await wr(writeChar, '0x0AF6', buildSetTimeNow());
+    await wait(2000);
+    log('[Setup 18/18] Device info (check pair=1 above)...');
+    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x01]));
+    await wait(3000);
+    show('Setup done — QR should be gone. Then run B. Daily pull.');
+  } finally { macroRunning = false; setMacroButtons(false); }
+}
+async function dailyAuto() {
+  if (macroRunning) { log('A macro is already running — wait for it to finish.'); return; }
+  macroRunning = true; setMacroButtons(true);
+  try {
+    log('[Pull 1/5] Live data...');
+    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0]));
+    await wait(3000);
+    log('[Pull 2/5] Health sizes (10 s; silence here is ok on low battery)...');
+    await wr(healthWriteChar, '0x0AF1', buildV3Sizes05());
+    await wait(10000);
+    log('[Pull 3/5] Sport summary (30 s)...');
+    await wr(writeChar, '0x0AF6', buildV3Start04(8, 0));
+    await wait(30000);
+    await wr(writeChar, '0x0AF6', buildV3Stop04(8));
+    await wait(3000);
+    log('[Pull 4/5] Sleep nights (paged, ~25 s each, stops when empty)...');
+    for (var n = 0; n < 8; n++) {
+      var off = (n === 0) ? 0 : 108;
+      log('Sleep round ' + (n + 1) + '/8 (offset ' + off + ')...');
+      lastSleepItems = -1;
+      await wr(writeChar, '0x0AF6', buildV3Start04(7, off));
+      await wait(25000);
+      await wr(writeChar, '0x0AF6', buildV3Stop04(7));
+      await wait(3000);
+      if (lastSleepItems === 0) { log('Sleep history empty — paging done.'); break; }
+    }
+    log('[Pull 5/5] Heart rate (30 s)...');
+    await wr(writeChar, '0x0AF6', buildV3Start04(3, 0));
+    await wait(30000);
+    await wr(writeChar, '0x0AF6', buildV3Stop04(3));
+    await wait(3000);
+    show('Daily pull done — tap Download JSONL, then run sync.py.');
+  } finally { macroRunning = false; setMacroButtons(false); }
+}
 function buildV3Stop04(dataType) {
   var pkt = buildV3Start04(dataType);
   pkt = new Uint8Array(pkt);
@@ -135,6 +348,15 @@ function dispatchV3(buf) {
   }
   if (cmd !== 0x0004 || p.length < 14) return;
   var dataType = p[1], itemCount = u16le(p, 5), headSize = u16le(p, 7), dataSize = u32le(p, 9);
+  if (p[0] === 0x00) { // START reply only; STOP acks must not reset the trackers
+    if (dataType === 7) lastSleepItems = itemCount;
+    else if (dataType === 8) lastSportItems = itemCount;
+    else if (dataType === 3) lastHrItems = itemCount;
+    // Post-reset empty stores can answer with an unknown data_type and zero
+    // items (seen: 65 B reply to sleep START). During sleep paging that still
+    // means "no more nights", so stop instead of looping 8 times.
+    else if (itemCount === 0) lastSleepItems = 0;
+  }
   var hs = 14, he = Math.min(p.length, hs + headSize), de = Math.min(p.length, he + dataSize);
   var h = p.slice(hs, he), d = p.slice(he, de);
   if (dataType === 8 && h.length >= 20) {
@@ -147,6 +369,36 @@ function dispatchV3(buf) {
     var gu = u16le(h, 8) + '-' + h[10] + '-' + h[11] + ' ' + h[12] + ':' + String(h[13]).padStart(2, '0');
     show('SLEEP dataType=7 items=' + itemCount + ': total=' + tot + 'm wake=' + wake + 'm light=' + light + 'm REM=' + rem + 'm deep=' + deep +
       'm fallAsleep=' + fa + ' getUp=' + gu + '  [watch: 425m 23:47->06:52]');
+  } else if (dataType === 3 && h.length >= 10) {
+    var yr = h[0] | (h[1] << 8), mo = h[2], dy = h[3];
+    var st = (h[4] | (h[5] << 8) | (h[6] << 16) | (h[7] << 24)) >>> 0;
+    var silent = h[9], zs = [];
+    for (var z = 0; z < 5 && 10 + 3 * z + 1 < h.length; z++) zs.push(h[10 + 3 * z]);
+    var vals = [], tt = st;
+    for (var i = 0; i < itemCount && 2 * i + 1 < d.length; i++) {
+      tt += d[2 * i];
+      var bpm = d[2 * i + 1];
+      if (bpm >= 30 && bpm <= 220) vals.push(bpm);
+    }
+    var hh = Math.floor(st / 3600), mm = Math.floor((st % 3600) / 60);
+    var mn = vals.length ? Math.min.apply(null, vals) : -1;
+    var mx = vals.length ? Math.max.apply(null, vals) : -1;
+    show('HR ' + yr + '-' + mo + '-' + dy + ' start=' + hh + ':' + String(mm).padStart(2, '0') +
+      ' silent=' + silent + ' zones=' + zs.join('/') + ' samples=' + vals.length + '/' + itemCount +
+      ' min=' + mn + ' max=' + mx + ' bpms=' + vals.join(','));
+  } else if (dataType === 3) {
+    show('HR dataType=3 items=' + itemCount + ' headSize=' + headSize + ' dataSize=' + dataSize +
+      ' headHex=' + hexStr(h.slice(0, Math.min(h.length, 24))) + '  (parser pending — send the JSONL)');
+  } else if (dataType === 4) {
+    var wdur = '?', wkcal = '?', whr = '?', wdist = '';
+    if (h.length >= 100) {
+      wdur = Math.floor(u32le(h, 17) / 60) + 'm' + (u32le(h, 17) % 60) + 's';
+      wkcal = u32le(h, 21) + 'kcal';
+      whr = 'avg' + h[29] + '/max' + h[30] + '/min' + h[31];
+      wdist = ' ' + (u32le(h, 25) / 1000) + 'km pace' + Math.floor(u16le(h, 40) / 60) + "'" + (u16le(h, 40) % 60) + '"/km';
+    }
+    show('WORKOUT dataType=4 items=' + itemCount + ' headSize=' + headSize + ' dataSize=' + dataSize +
+      ' dur=' + wdur + ' ' + wkcal + ' HR ' + whr + wdist + ' headHex=' + hexStr(h.slice(0, Math.min(h.length, 16))));
   } else {
     show('dataType=' + dataType + ' items=' + itemCount + ' headSize=' + headSize + ' dataSize=' + dataSize + ' (logged, not decoded)');
   }
@@ -155,6 +407,23 @@ function show(msg) {
   log(msg);
   var el = document.getElementById('decoded');
   el.innerHTML += '<div class="ok">' + msg + '</div>';
+}
+// Named notify handlers (see remove-before-add at connect time).
+function onNotifyF7(e) {
+  var a = new Uint8Array(e.target.value.buffer);
+  record('0x0AF7', 'RX', a);
+  handleV3(a); // short v3 0x04 replies arrive here (19B START/STOP live on 0x0AF6)
+  handleLegacy(a); // bind 04 01 / info 02 01 / set 03 acks
+  if (a.length >= 2 && a[0] === 0x07 && a[1] === 0x40) {
+    log('ACK 07 40 (mirroring back on 0x0AF6)');
+    wr(writeChar, '0x0AF6', a);
+  }
+}
+function onNotifyF2(e) {
+  var a = new Uint8Array(e.target.value.buffer);
+  record('0x0AF2', 'RX', a);
+  handleV3(a);
+  handleLegacy(a);
 }
 var device = null;
 document.getElementById('btnConnect').addEventListener('pointerup', function () {
@@ -187,35 +456,27 @@ document.getElementById('btnConnect').addEventListener('pointerup', function () 
       });
     })
     .then(function () {
-      notifyChar.addEventListener('characteristicvaluechanged', function (e) {
-        var a = new Uint8Array(e.target.value.buffer);
-        record('0x0AF7', 'RX', a);
-        handleV3(a); // short v3 0x04 replies arrive here (19B START/STOP live on 0x0AF6)
-        if (a.length >= 2 && a[0] === 0x07 && a[1] === 0x40) {
-          log('ACK 07 40 (mirroring back on 0x0AF6)');
-          wr(writeChar, '0x0AF6', a);
-        }
-      });
+      // Named handlers + remove-before-add: reconnecting without reloading the
+      // page must not stack duplicate listeners (every RX would log twice).
+      notifyChar.removeEventListener('characteristicvaluechanged', onNotifyF7);
+      notifyChar.addEventListener('characteristicvaluechanged', onNotifyF7);
       if (healthNotifyChar) {
-        healthNotifyChar.addEventListener('characteristicvaluechanged', function (e) {
-          var a = new Uint8Array(e.target.value.buffer);
-          record('0x0AF2', 'RX', a);
-          handleV3(a);
-        });
+        healthNotifyChar.removeEventListener('characteristicvaluechanged', onNotifyF2);
+        healthNotifyChar.addEventListener('characteristicvaluechanged', onNotifyF2);
       }
       log('Starting notify 0x0AF7...');
       return notifyChar.startNotifications().then(function () { log('Notify ON 0x0AF7'); });
     })
     .then(function () {
-      ['btnInfo', 'btnLive'].forEach(function (id) { document.getElementById(id).disabled = false; });
-      if (!healthNotifyChar) { log('Health notify unavailable; legacy 0x0AF6/0x0AF7 ready (buttons 2-3)'); return; }
+      ['btnInfo', 'btnLive', 'btnSetupAuto'].forEach(function (id) { document.getElementById(id).disabled = false; });
+      if (!healthNotifyChar) { log('Health notify unavailable; legacy 0x0AF6/0x0AF7 ready (buttons 2-3 + setup macro)'); return; }
       log('Waiting 500ms before 0x0AF2 (watch dislikes back-to-back CCCD writes)...');
       return new Promise(function (res) { setTimeout(res, 500); }).then(function () {
         log('Starting notify 0x0AF2...');
         return healthNotifyChar.startNotifications().then(function () { log('Notify ON 0x0AF2'); });
       }).then(function () {
-        ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop'].forEach(function (id) { document.getElementById(id).disabled = false; });
-        log('Ready (all 8 buttons)');
+        ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop', 'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth', 'btnWorkout', 'btnWorkoutStop', 'btnDailyAuto'].forEach(function (id) { document.getElementById(id).disabled = false; });
+        log('Ready (one-tap A/B + manual buttons)');
       }, function (e) {
         log('Notify FAILED 0x0AF2: ' + e);
         log('Continuing with legacy only (buttons 2-3 work). For health: Android Settings > Bluetooth > Forget ID208, reboot watch, retry Connect — 0x0AF2 notify is refused on stale bonds.');
@@ -242,6 +503,17 @@ document.getElementById('btnSport').addEventListener('pointerup', function () { 
 document.getElementById('btnSleep').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(7, readOffset())); });
 document.getElementById('btnSportStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(8)); });
 document.getElementById('btnSleepStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(7)); });
+document.getElementById('btnHr').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(3, readOffset())); });
+document.getElementById('btnHrStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(3)); });
+document.getElementById('btnBind').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildBindStart()); });
+document.getElementById('btnTime').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildSetTimeNow()); });
+document.getElementById('btnUser').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildUserInfoSample()); });
+document.getElementById('btnUnbind').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildBindStop()); });
+document.getElementById('btnAuth').addEventListener('pointerup', function () { var p = buildBindAuthPacket(); if (p) wr(writeChar, '0x0AF6', p); });
+document.getElementById('btnWorkout').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(4, readOffset())); });
+document.getElementById('btnWorkoutStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(4)); });
+document.getElementById('btnSetupAuto').addEventListener('pointerup', function () { setupAuto(); });
+document.getElementById('btnDailyAuto').addEventListener('pointerup', function () { dailyAuto(); });
 document.getElementById('btnCopy').addEventListener('pointerup', function () {
   var text = document.getElementById('log').textContent;
   function fallback() {
