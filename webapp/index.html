@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ID208 Dashboard</title>
+<style>
+body { font-family: Arial, Helvetica, sans-serif; padding: 16px; max-width: 720px; margin: auto; overflow-wrap: break-word; }
+section { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 12px 0; }
+h2 { margin: 0 0 8px 0; font-size: 1.1rem; }
+.big { font-size: 1.6rem; font-weight: bold; }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+td, th { border-bottom: 1px solid #eee; padding: 4px; text-align: left; }
+canvas { width: 100%; height: 120px; }
+.muted { color: #666; font-size: 0.85rem; }
+button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<h1>ID208 Dashboard</h1>
+<p><a class="btn" href="pull.html" style="border:1px solid; text-decoration:none;">Sync everything</a>
+<button id="btnRefresh">Refresh</button>
+<span id="status" class="muted"></span></p>
+
+<section id="secSteps"><h2>Steps</h2><div class="body muted">Loading…</div><canvas id="chSteps"></canvas></section>
+<section id="secSleep"><h2>Sleep</h2><div class="body muted">Loading…</div></section>
+<section id="secHr"><h2>Heart rate</h2><div class="body muted">Loading…</div><canvas id="chHr"></canvas></section>
+<section id="secWorkouts"><h2>Workouts</h2><div class="body muted">Loading…</div><canvas id="chWorkout"></canvas></section>
+
+<script src="store.js"></script>
+<script>
+// Tiny canvas helpers (no framework).
+function setupCanvas(id) {
+  var c = document.getElementById(id);
+  var w = c.clientWidth || 600;
+  c.width = w; c.height = 120;
+  return { ctx: c.getContext('2d'), w: w, h: 120 };
+}
+function barChart(id, labels, values) {
+  var g = setupCanvas(id), max = Math.max.apply(null, values.concat([1]));
+  var bw = g.w / values.length;
+  g.ctx.fillStyle = '#2563eb';
+  values.forEach(function (v, i) {
+    var h = (v / max) * (g.h - 20);
+    g.ctx.fillRect(i * bw + 1, g.h - 14 - h, bw - 2, h);
+  });
+  g.ctx.fillStyle = '#666'; g.ctx.font = '10px sans-serif';
+  g.ctx.fillText('max ' + max, 4, 10);
+  if (labels.length) g.ctx.fillText(labels[0] + ' → ' + labels[labels.length - 1], 4, g.h - 2);
+}
+function lineChart(id, values, lo, hi) {
+  var g = setupCanvas(id);
+  if (!values.length) return;
+  var mn = (lo !== undefined) ? lo : Math.min.apply(null, values);
+  var mx = (hi !== undefined) ? hi : Math.max.apply(null, values);
+  if (mx === mn) mx = mn + 1;
+  g.ctx.strokeStyle = '#dc2626'; g.ctx.lineWidth = 1.5; g.ctx.beginPath();
+  values.forEach(function (v, i) {
+    var x = (i / Math.max(1, values.length - 1)) * (g.w - 8) + 4;
+    var y = g.h - 14 - ((v - mn) / (mx - mn)) * (g.h - 30);
+    if (i === 0) g.ctx.moveTo(x, y); else g.ctx.lineTo(x, y);
+  });
+  g.ctx.stroke();
+  g.ctx.fillStyle = '#666'; g.ctx.font = '10px sans-serif';
+  g.ctx.fillText('min ' + mn + '   max ' + mx, 4, 10);
+}
+function fmtDur(s) { return Math.floor(s / 60) + 'm' + (s % 60) + 's'; }
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+async function render() {
+  document.getElementById('status').textContent = 'Loading…';
+  try {
+    var steps = await Store.list('steps');
+    var sleep = await Store.list('sleep');
+    var hr = await Store.list('hr');
+    var workouts = await Store.list('workout');
+
+    // Steps: latest + 14-day bars.
+    if (steps.length) {
+      var last = steps[steps.length - 1].payload;
+      var tail = steps.slice(-14);
+      document.querySelector('#secSteps .body').innerHTML =
+        '<div class="big">' + esc(last.steps) + ' steps</div>' +
+        '<div class="muted">' + esc(last.date) + ' · ' + esc(last.distance_m) +
+        ' m · ' + esc(last.kcal === '' ? '—' : last.kcal) + ' kcal</div>';
+      barChart('chSteps', tail.map(function (r) { return r.date; }),
+        tail.map(function (r) { return Number(r.payload.steps) || 0; }));
+    } else {
+      document.querySelector('#secSteps .body').textContent = 'No data yet — run a sync.';
+    }
+
+    // Sleep: latest + last-7 table.
+    if (sleep.length) {
+      var n0 = sleep[sleep.length - 1].payload;
+      var rows = sleep.slice(-7).reverse().map(function (r) {
+        var n = r.payload;
+        return '<tr><td>' + esc(n.night) + '</td><td>' + esc(n.total_min) + 'm</td>' +
+          '<td>w' + esc(n.wake_min) + ' l' + esc(n.light_min) + ' r' + esc(n.rem_min) +
+          ' d' + esc(n.deep_min) + '</td></tr>';
+      }).join('');
+      document.querySelector('#secSleep .body').innerHTML =
+        '<div class="big">' + esc(n0.total_min) + ' min <span class="muted">' + esc(n0.night) + '</span></div>' +
+        '<table>' + rows + '</table>';
+    } else {
+      document.querySelector('#secSleep .body').textContent = 'No data yet — run a sync.';
+    }
+
+    // HR: latest day + its curve.
+    if (hr.length) {
+      var h0 = hr[hr.length - 1].payload;
+      var bpms = (h0.samples || []).map(function (s) { return s.bpm; });
+      document.querySelector('#secHr .body').innerHTML =
+        '<div class="big">' + esc(h0.date) + '</div>' +
+        '<div class="muted">min ' + Math.min.apply(null, bpms.concat([0])) +
+        ' · max ' + Math.max.apply(null, bpms.concat([0])) +
+        ' · ' + bpms.length + ' samples</div>';
+      lineChart('chHr', bpms);
+    } else {
+      document.querySelector('#secHr .body').textContent = 'No data yet — run a sync.';
+    }
+
+    // Workouts: list + HR curve of the most recent.
+    if (workouts.length) {
+      var items = workouts.slice().reverse().map(function (r) {
+        var w = r.payload;
+        return '<tr><td>' + esc(w.date || '') + '</td><td>' + esc(fmtDur(w.durationsS || 0)) +
+          '</td><td>' + esc(w.kcal) + 'kcal</td><td>' +
+          esc(w.distanceM ? (w.distanceM / 1000) + 'km' : '—') + '</td><td>HR ' +
+          esc(w.avgHr) + '/' + esc(w.maxHr) + '/' + esc(w.minHr) + '</td></tr>';
+      }).join('');
+      document.querySelector('#secWorkouts .body').innerHTML =
+        '<table><tr><th>Date</th><th>Time</th><th>Kcal</th><th>Dist</th><th>HR a/x/n</th></tr>' +
+        items + '</table>';
+      var w0 = workouts[workouts.length - 1].payload;
+      lineChart('chWorkout', w0.samples || []);
+    } else {
+      document.querySelector('#secWorkouts .body').textContent = 'No workouts yet — record one, then pull.';
+    }
+
+    var total = steps.length + sleep.length + hr.length + workouts.length;
+    document.getElementById('status').textContent = total + ' records in store.';
+  } catch (e) {
+    document.getElementById('status').textContent = 'Store unavailable: ' + e;
+  }
+}
+document.getElementById('btnRefresh').addEventListener('click', render);
+render();
+</script>
+</body>
+</html>
