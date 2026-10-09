@@ -112,7 +112,7 @@ async function render() {
     if (workouts.length) {
       var w = workouts[workouts.length - 1].payload;
       document.querySelector('#secWorkouts .body').innerHTML =
-        '<div class="big">' + esc(w.date || '') + ' <span class="muted">' +
+        '<div class="big">' + esc(sportName(w)) + ' <span class="muted">' + esc(w.date || '') + ' · ' +
         esc(num(w.kcal)) + ' kcal</span></div>' +
         '<div class="muted">' + esc(fmtDur(w.durationsS || 0)) +
         (w.distanceM ? ' · ' + esc(w.distanceM / 1000) + 'km' : '') +

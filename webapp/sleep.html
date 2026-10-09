@@ -41,6 +41,16 @@ function showNight(i) {
     '<div class="muted">awake ' + esc(fmtHM(n.wake_min)) + ' · light ' + esc(fmtHM(n.light_min)) +
     ' · REM ' + esc(fmtHM(n.rem_min)) + ' · deep ' + esc(fmtHM(n.deep_min)) + '</div>';
 }
+function drawWeek(selected) {
+  stackedBarChart('chSleepWeek', NIGHTS.map(function (r) {
+    var n = r.payload;
+    return {
+      label: String(n.night).slice(5),
+      total: Number(n.total_min) || 0,
+      parts: partsOf(n),
+    };
+  }), selected);
+}
 async function render() {
   try {
     var sleep = await Store.list('sleep');
@@ -53,15 +63,8 @@ async function render() {
       document.getElementById('status').textContent = '';
       return;
     }
-    stackedBarChart('chSleepWeek', NIGHTS.map(function (r) {
-      var n = r.payload;
-      return {
-        label: String(n.night).slice(5),
-        total: Number(n.total_min) || 0,
-        parts: partsOf(n),
-      };
-    }));
-    showNight(NIGHTS.length - 1); // latest by default
+    drawWeek(NIGHTS.length - 1); // latest highlighted by default
+    showNight(NIGHTS.length - 1);
     document.getElementById('status').textContent = sleep.length + ' nights in store.';
   } catch (e) {
     document.getElementById('status').textContent = 'Store unavailable: ' + e;
@@ -70,7 +73,7 @@ async function render() {
 document.getElementById('chSleepWeek').addEventListener('click', function (e) {
   var rect = e.target.getBoundingClientRect();
   var i = barAt('chSleepWeek', e.clientX - rect.left);
-  if (i >= 0) showNight(i);
+  if (i >= 0) { drawWeek(i); showNight(i); }
 });
 render();
 </script>

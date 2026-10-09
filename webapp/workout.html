@@ -24,7 +24,7 @@ function showWorkout(i) {
   }).filter(function (b) { return typeof b === 'number'; });
   var d = new Date(w.startS * 1000);
   document.getElementById('workoutDetail').innerHTML =
-    '<div class="big">' + esc(w.date || '') + ' <span class="muted">' + esc(num(w.kcal)) + ' kcal</span></div>' +
+    '<div class="big">' + esc(sportName(w)) + ' <span class="muted">' + esc(w.date || '') + ' · ' + esc(num(w.kcal)) + ' kcal</span></div>' +
     '<div>start ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) +
     ' · ' + esc(fmtDur(w.durationsS || 0)) +
     (w.distanceM ? ' · ' + esc(w.distanceM / 1000) + 'km' : '') + '</div>' +
@@ -48,10 +48,10 @@ async function render() {
     var rows = WORKOUTS.map(function (r, i) {
       var w = r.payload;
       return '<tr class="pick" data-i="' + i + '"><td>' + esc(w.date || '') + '</td><td>' +
-        esc(num(w.kcal)) + '</td><td>›</td></tr>';
+        esc(sportName(w)) + '</td><td>' + esc(num(w.kcal)) + '</td><td>›</td></tr>';
     }).join('');
     document.querySelector('section .body').innerHTML =
-      '<table><tr><th>Date</th><th>Kcal</th><th></th></tr>' + rows + '</table>';
+      '<table><tr><th>Date</th><th>Workout</th><th>Kcal</th><th></th></tr>' + rows + '</table>';
     document.querySelectorAll('section tr.pick').forEach(function (tr) {
       tr.addEventListener('click', function () { showWorkout(Number(tr.dataset.i)); });
     });

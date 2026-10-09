@@ -5,8 +5,15 @@
 function setupCanvas(id) {
   var c = document.getElementById(id);
   var w = c.clientWidth || 600;
-  c.width = w; c.height = 120;
-  return { ctx: c.getContext('2d'), w: w, h: 120, el: c };
+  var h = c.clientHeight || 120;
+  // Backing store scaled for devicePixelRatio: all drawing below stays in
+  // CSS pixels, but text and edges render crisp instead of janky.
+  var dpr = (window.devicePixelRatio || 1);
+  c.width = Math.round(w * dpr);
+  c.height = Math.round(h * dpr);
+  var ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx: ctx, w: w, h: h, el: c };
 }
 // Text ink follows the OS theme (matchMedia needs no JS theme state).
 function ink() {
@@ -49,9 +56,10 @@ function lineChart(id, values, lo, hi) {
 }
 
 // Stacked bars: nights = [{ label, total, parts: [{ v, color, name }] }].
+// selected: index to highlight (others dimmed); -1 or omitted = all full.
 // Remembers bar geometry on the canvas for tap-to-select (see barAt).
-function stackedBarChart(id, nights) {
-  var g = setupCanvas(id), t = ink();
+function stackedBarChart(id, nights, selected) {
+  var g = setupCanvas(id);
   g.el._bars = [];
   if (!nights.length) return;
   var max = 0, i;
@@ -60,12 +68,15 @@ function stackedBarChart(id, nights) {
   var bw = g.w / nights.length;
   for (i = 0; i < nights.length; i++) {
     var n = nights[i], y = g.h - 14, x0 = i * bw + 1, x1 = (i + 1) * bw - 1;
+    var dimmed = (selected !== undefined && selected >= 0 && selected !== i);
+    if (dimmed) g.ctx.globalAlpha = 0.35;
     for (var s = 0; s < n.parts.length; s++) {
       var h = (n.parts[s].v / max) * (g.h - 30);
       y -= h;
       g.ctx.fillStyle = n.parts[s].color;
       g.ctx.fillRect(x0, y, x1 - x0, h);
     }
+    g.ctx.globalAlpha = 1;
     g.el._bars.push({ x0: x0, x1: x1, index: i });
     g.ctx.fillStyle = t.bright; g.ctx.font = '10px sans-serif';
     g.ctx.fillText(fmtHM(n.total), x0, y - 2);
@@ -91,6 +102,14 @@ function fmtHM(min) {
   return Math.floor(min / 60) + 'h' + String(min % 60).padStart(2, '0') + 'm';
 }
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+// Workout mode names by sport type — UNMAPPED so far (type 5 seen on both
+// strength and walk records, so the label isn't simply that byte). Add
+// entries only from observed watch-icon → record pairs.
+var SPORT_NAMES = {};
+function sportName(w) {
+  if (w && SPORT_NAMES[w.sportType] !== undefined) return SPORT_NAMES[w.sportType];
+  return 'Workout';
+}
 // Display helper: missing values render as an em dash, never "undefined".
 // Zero is a real value and renders as 0.
 function num(v, suffix) {
