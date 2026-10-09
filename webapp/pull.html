@@ -6,7 +6,8 @@
 <title>ID208 Pull (advanced / recovery)</title>
 <style>
 body { font-family: Arial, Helvetica, sans-serif; padding: 20px; overflow-wrap: break-word; }
-button { margin: 4px; padding: 10px 14px; font-size: 1rem; }
+button, label.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
+label.btn { display: inline-block; white-space: nowrap; border: 1px solid #666; border-radius: 2px; background: #f4f4f4; cursor: pointer; }
 #log { white-space: pre-wrap; font-family: monospace; font-size: 0.8rem; background: #f4f4f4; padding: 10px; max-height: 40vh; overflow: auto; }
 .ok { color: #047857; font-weight: bold; }
 details { margin: 12px 0; border: 1px solid #ddd; border-radius: 8px; padding: 8px 12px; }
@@ -19,13 +20,12 @@ summary { font-weight: bold; cursor: pointer; padding: 6px 0; }
 This page is for first-time setup, re-fetching single data types, and raw
 diagnostics. Ground truth 2026-10-01 18:31: <b>5736 steps / 468 kcal</b>,
 sleep <b>07h05m (23:47 → 06:52)</b>.</p>
-<button id="btnSetupAuto" disabled>A. Setup watch (1 tap: bind + time + user + info)</button>
-<button id="btnDailyAuto" disabled>B. Sync everything (1 tap: steps, sleep, HR, workouts)</button>
-<br>
 <button id="btnConnect">1. Connect (syncs automatically when bound)</button>
 <br>
 <details>
-<summary>Advanced — manual commands (diagnostics only)</summary>
+<summary>Setup & advanced (first config, manual commands, diagnostics)</summary>
+<button id="btnSetupAuto" disabled>A. Setup watch (post-reset bind, no app needed)</button>
+<br>
 <p>
 <button id="btnInfo" disabled>2. Device info (02 01)</button>
 <button id="btnLive" disabled>3. Live data (02 A0)</button>
@@ -56,14 +56,16 @@ sleep <b>07h05m (23:47 → 06:52)</b>.</p>
 <label for="offset">Offset (which saved record to start from, 0 = oldest):</label>
 <input id="offset" type="number" value="0" min="0" max="65535" style="width: 6em; padding: 8px; font-size: 1rem;">
 </p>
-<p><b>Manual fallback:</b> buttons 2-19 do one command each (START then wait 30 s, then STOP).
+<p><b>Manual commands:</b> buttons 5/6/9/16 pair with their matching STOP
+(START, wait 30 s, then STOP); 2–4 and 11–15/18–19 are one-shot reads or
+writes. Only the macros and workout-STOP save to the store — manual pulls
+show decoded text here but don't reach the dashboard.
 <b>Fresh reset (QR setup screen):</b> Connect -> <b>A. Setup watch</b> (bind + 04 05 auth finalizes it, no tap needed).</p>
 </details>
-<br>
 <button id="btnCopy">Copy log</button>
 <button id="btnJsonl">Download JSONL</button>
 <button id="btnStoreExport">Export store backup</button>
-<label for="fileStoreImport" style="margin:4px; padding:10px 14px; font-size:1rem; border:1px solid;">Import backup/seed file</label>
+<label for="fileStoreImport" class="btn">Import backup / seed file</label>
 <input id="fileStoreImport" type="file" accept=".json,.jsonl,.csv" style="display:none;">
 <p id="storeStatus">Store: unknown (open the page in Chrome; counts appear after pulls).</p>
 <p id="events"></p>
@@ -75,7 +77,7 @@ sleep <b>07h05m (23:47 → 06:52)</b>.</p>
 <script>
 // Page wiring: ble.js holds all protocol code; here only DOM bindings.
 PAGE_BASIC_BUTTONS = ['btnInfo', 'btnLive', 'btnSetupAuto'];
-PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop', 'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth', 'btnWorkout', 'btnWorkoutStop', 'btnAutoOff', 'btnAutoWalkRun', 'btnDailyAuto'];
+PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop', 'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth', 'btnWorkout', 'btnWorkoutStop', 'btnAutoOff', 'btnAutoWalkRun'];
 function readOffset() {
   var v = parseInt(document.getElementById('offset').value, 10);
   return (isNaN(v) || v < 0) ? 0 : (v > 65535 ? 65535 : v);
@@ -106,7 +108,6 @@ document.getElementById('btnWorkoutStop').addEventListener('pointerup', async fu
 document.getElementById('btnAutoOff').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildAutoActivity(null)); });
 document.getElementById('btnAutoWalkRun').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildAutoActivity([1, 1])); });
 document.getElementById('btnSetupAuto').addEventListener('pointerup', function () { setupAuto(); });
-document.getElementById('btnDailyAuto').addEventListener('pointerup', function () { dailyAuto(); });
 document.getElementById('btnCopy').addEventListener('pointerup', function () {
   var text = document.getElementById('log').textContent;
   function fallback() {

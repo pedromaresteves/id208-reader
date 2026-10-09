@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ID208 Activity</title>
+<style>
+body { font-family: Arial, Helvetica, sans-serif; padding: 16px; max-width: 720px; margin: auto; overflow-wrap: break-word; }
+section { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 12px 0; }
+h2 { margin: 0 0 8px 0; font-size: 1.1rem; }
+.big { font-size: 1.6rem; font-weight: bold; }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+td, th { border-bottom: 1px solid #eee; padding: 4px; text-align: left; }
+canvas { width: 100%; height: 120px; }
+.muted { color: #666; font-size: 0.85rem; }
+button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<h1>Activity</h1>
+<p><a href="index.html">← Dashboard</a> <span id="status" class="muted"></span></p>
+<section id="secActivity"><h2>Last 7 days — steps & kcal</h2><div class="body muted">Loading…</div><canvas id="chActivity"></canvas></section>
+<script src="store.js"></script>
+<script src="ui.js"></script>
+<script>
+async function render() {
+  try {
+    var steps = await Store.list('steps');
+    var tail = steps.slice(-7).reverse();
+    if (!tail.length) {
+      document.querySelector('#secActivity .body').textContent = 'No data yet — run a sync.';
+      document.getElementById('status').textContent = '';
+      return;
+    }
+    var rows = tail.map(function (r) {
+      var s = r.payload;
+      return '<tr><td>' + esc(s.date) + '</td><td>' + esc(num(s.steps)) + '</td>' +
+        '<td>' + esc(num(s.kcal)) + '</td></tr>';
+    }).join('');
+    document.querySelector('section .body').innerHTML =
+      '<table><tr><th>Date</th><th>Steps</th><th>Kcal</th></tr>' + rows + '</table>';
+    var ordered = steps.slice(-7);
+    barChart('chActivity', ordered.map(function (r) { return r.date; }),
+      ordered.map(function (r) { return Number(r.payload.steps) || 0; }));
+    document.getElementById('status').textContent = steps.length + ' step days in store.';
+  } catch (e) {
+    document.getElementById('status').textContent = 'Store unavailable: ' + e;
+  }
+}
+render();
+</script>
+</body>
+</html>

@@ -35,14 +35,14 @@ button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
 <button id="btnAutoWalkRunIdx">Auto-detect walk+run</button>
 <span id="watchStatus" class="muted"></span></p></section>
 
-<section id="secSteps"><h2>Steps</h2><div class="body muted">Loading…</div><canvas id="chSteps"></canvas></section>
-<section id="secSleep"><h2>Sleep</h2><div class="body muted">Loading…</div></section>
-<section id="secHr"><h2>Heart rate</h2><div class="body muted">Loading…</div><canvas id="chHr"></canvas></section>
-<section id="secWorkouts"><h2>Workouts</h2><div class="body muted">Loading…</div><canvas id="chWorkout"></canvas></section>
+<section id="secSteps"><h2><a href="activity.html">Activity</a></h2><div class="body muted">Loading…</div></section>
+<section id="secSleep"><h2><a href="sleep.html">Sleep</a></h2><div class="body muted">Loading…</div></section>
+<section id="secWorkouts"><h2><a href="workout.html">Workouts</a></h2><div class="body muted">Loading…</div></section>
 <section id="secDebug"><h2>Debug</h2><div class="body muted">Raw store contents for troubleshooting — copy from here when reporting an issue.</div><details><summary>Show raw store JSON</summary><pre id="debugDump" style="font-size:0.7rem; max-height:40vh; overflow:auto;"></pre></details></section>
 
 <script src="store.js"></script>
 <script src="ble.js"></script>
+<script src="ui.js"></script>
 <script>
 // Progress override: ble.js calls setProgress during macros; here it drives
 // the spinner + thin step bar (paging rounds update the label; the bar moves
@@ -86,132 +86,57 @@ async function sendAutoDetect(flags, okMsg) {
     el.textContent = okMsg;
   } catch (e) { el.textContent = 'Failed: ' + e + ' (open Advanced for details)'; }
 }
-// Tiny canvas helpers (no framework).
-function setupCanvas(id) {
-  var c = document.getElementById(id);
-  var w = c.clientWidth || 600;
-  c.width = w; c.height = 120;
-  return { ctx: c.getContext('2d'), w: w, h: 120 };
-}
-function barChart(id, labels, values) {
-  var g = setupCanvas(id), max = Math.max.apply(null, values.concat([1]));
-  var bw = g.w / values.length;
-  g.ctx.fillStyle = '#2563eb';
-  values.forEach(function (v, i) {
-    var h = (v / max) * (g.h - 20);
-    g.ctx.fillRect(i * bw + 1, g.h - 14 - h, bw - 2, h);
-  });
-  g.ctx.fillStyle = '#666'; g.ctx.font = '10px sans-serif';
-  g.ctx.fillText('max ' + max, 4, 10);
-  if (labels.length) g.ctx.fillText(labels[0] + ' → ' + labels[labels.length - 1], 4, g.h - 2);
-}
-function lineChart(id, values, lo, hi) {
-  var g = setupCanvas(id);
-  if (!values.length) return;
-  var mn = (lo !== undefined) ? lo : Math.min.apply(null, values);
-  var mx = (hi !== undefined) ? hi : Math.max.apply(null, values);
-  if (mx === mn) mx = mn + 1;
-  g.ctx.strokeStyle = '#dc2626'; g.ctx.lineWidth = 1.5; g.ctx.beginPath();
-  values.forEach(function (v, i) {
-    var x = (i / Math.max(1, values.length - 1)) * (g.w - 8) + 4;
-    var y = g.h - 14 - ((v - mn) / (mx - mn)) * (g.h - 30);
-    if (i === 0) g.ctx.moveTo(x, y); else g.ctx.lineTo(x, y);
-  });
-  g.ctx.stroke();
-  g.ctx.fillStyle = '#666'; g.ctx.font = '10px sans-serif';
-  g.ctx.fillText('min ' + mn + '   max ' + mx, 4, 10);
-}
-function fmtDur(s) { return Math.floor(s / 60) + 'm' + (s % 60) + 's'; }
-function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
-// Display helper: missing values render as an em dash, never "undefined".
-function num(v, suffix) { return (v === undefined || v === null || v === '') ? '—' : v + (suffix || ''); }
-
+// Chart/format helpers live in ui.js (shared with detail pages).
 async function render() {
   document.getElementById('status').textContent = 'Loading…';
   try {
     var steps = await Store.list('steps');
     var sleep = await Store.list('sleep');
-    var hr = await Store.list('hr');
     var workouts = await Store.list('workout');
 
-    // Steps: latest + 14-day bars + last-7 table.
+    // Activity: latest steps + kcal, linked to the 7-day page.
     if (steps.length) {
       var last = steps[steps.length - 1].payload;
-      var tail = steps.slice(-14);
-      var weekRows = steps.slice(-7).reverse().map(function (r) {
-        var s = r.payload;
-        return '<tr><td>' + esc(s.date) + '</td><td>' + esc(num(s.steps)) + '</td>' +
-          '<td>' + esc(num(s.distance_m, ' m')) + '</td><td>' + esc(num(s.kcal)) + '</td></tr>';
-      }).join('');
       document.querySelector('#secSteps .body').innerHTML =
-        '<div class="big">' + esc(num(last.steps)) + ' <span class="muted">steps</span></div>' +
-        '<div class="muted">' + esc(last.date) + ' · ' + esc(num(last.distance_m, ' m')) +
-        ' · ' + esc(num(last.kcal, ' kcal')) + ' · ' + esc(num(last.active_min, ' min active')) + '</div>' +
-        '<table><tr><th>Date</th><th>Steps</th><th>Dist</th><th>Kcal</th></tr>' + weekRows + '</table>';
-      barChart('chSteps', tail.map(function (r) { return r.date; }),
-        tail.map(function (r) { return Number(r.payload.steps) || 0; }));
+        '<div class="big">' + esc(num(last.steps)) + ' <span class="muted">steps · ' +
+        esc(num(last.kcal, ' kcal')) + '</span></div>' +
+        '<div class="muted">' + esc(last.date) + ' · ' +
+        '<a href="activity.html">last 7 days →</a></div>';
     } else {
       document.querySelector('#secSteps .body').textContent = 'No data yet — run a sync.';
     }
 
-    // Sleep: latest + last-7 table.
+    // Sleep: last night only, linked to the week page.
     if (sleep.length) {
       var n0 = sleep[sleep.length - 1].payload;
-      var rows = sleep.slice(-7).reverse().map(function (r) {
-        var n = r.payload;
-        return '<tr><td>' + esc(n.night) + '</td><td>' + esc(num(n.total_min, 'm')) + '</td>' +
-          '<td>w' + esc(num(n.wake_min)) + ' l' + esc(num(n.light_min)) + ' r' + esc(num(n.rem_min)) +
-          ' d' + esc(num(n.deep_min)) + '</td></tr>';
-      }).join('');
       document.querySelector('#secSleep .body').innerHTML =
-        '<div class="big">' + esc(num(n0.total_min)) + ' <span class="muted">min · ' + esc(n0.night) + '</span></div>' +
-        '<table>' + rows + '</table>';
+        '<div class="big">' + esc(num(n0.total_min)) + ' <span class="muted">min · ' +
+        esc(n0.night) + '</span></div>' +
+        '<div class="muted">w' + esc(num(n0.wake_min)) + ' l' + esc(num(n0.light_min)) +
+        ' r' + esc(num(n0.rem_min)) + ' d' + esc(num(n0.deep_min)) +
+        ' · <a href="sleep.html">week →</a></div>';
     } else {
       document.querySelector('#secSleep .body').textContent = 'No data yet — run a sync.';
     }
 
-    // HR: latest day + its curve (min/max computed on real samples only —
-    // a missing day shows dashes, never a fake 0).
-    if (hr.length) {
-      var h0 = hr[hr.length - 1].payload;
-      var bpms = (h0.samples || []).map(function (s) { return s.bpm; });
-      var hMin = bpms.length ? Math.min.apply(null, bpms) : null;
-      var hMax = bpms.length ? Math.max.apply(null, bpms) : null;
-      document.querySelector('#secHr .body').innerHTML =
-        '<div class="big">' + esc(h0.date) + '</div>' +
-        '<div class="muted">min ' + esc(num(hMin)) +
-        ' · max ' + esc(num(hMax)) +
-        ' · ' + bpms.length + ' samples</div>';
-      lineChart('chHr', bpms);
-    } else {
-      document.querySelector('#secHr .body').textContent = 'No data yet — run a sync.';
-    }
-
-    // Workouts: list + HR curve of the most recent.
+    // Workouts: most recent only, linked to the full list.
     if (workouts.length) {
-      var items = workouts.slice().reverse().map(function (r) {
-        var w = r.payload;
-        return '<tr><td>' + esc(w.date || '') + '</td><td>' + esc(fmtDur(w.durationsS || 0)) +
-          '</td><td>' + esc(num(w.kcal)) + '</td><td>' +
-          esc(w.distanceM ? (w.distanceM / 1000) + 'km' : '—') + '</td><td>HR ' +
-          esc(num(w.avgHr)) + '/' + esc(num(w.maxHr)) + '/' + esc(num(w.minHr)) + '</td></tr>';
-      }).join('');
+      var w = workouts[workouts.length - 1].payload;
       document.querySelector('#secWorkouts .body').innerHTML =
-        '<table><tr><th>Date</th><th>Time</th><th>Kcal</th><th>Dist</th><th>HR a/x/n</th></tr>' +
-        items + '</table>';
-      var w0 = workouts[workouts.length - 1].payload;
-      var wBpms = (w0.samples || []).map(function (s) {
-        return s && typeof s === 'object' ? s.bpm : s;
-      });
-      lineChart('chWorkout', wBpms);
+        '<div class="big">' + esc(w.date || '') + ' <span class="muted">' +
+        esc(num(w.kcal)) + ' kcal</span></div>' +
+        '<div class="muted">' + esc(fmtDur(w.durationsS || 0)) +
+        (w.distanceM ? ' · ' + esc(w.distanceM / 1000) + 'km' : '') +
+        ' · HR ' + esc(num(w.avgHr)) + '/' + esc(num(w.maxHr)) + '/' + esc(num(w.minHr)) +
+        ' · <a href="workout.html">all workouts →</a></div>';
     } else {
       document.querySelector('#secWorkouts .body').textContent = 'No workouts yet — record one, then pull.';
     }
 
-    var total = steps.length + sleep.length + hr.length + workouts.length;
+    var total = steps.length + sleep.length + workouts.length;
     document.getElementById('status').textContent = total + ' records in store.';
     document.getElementById('debugDump').textContent = JSON.stringify({
-      steps: steps, sleep: sleep, hr: hr, workouts: workouts,
+      steps: steps, sleep: sleep, workouts: workouts,
     }, null, 1).slice(0, 20000);
   } catch (e) {
     document.getElementById('status').textContent = 'Store unavailable: ' + e;

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ID208 Workouts</title>
+<style>
+body { font-family: Arial, Helvetica, sans-serif; padding: 16px; max-width: 720px; margin: auto; overflow-wrap: break-word; }
+section { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 12px 0; }
+h2 { margin: 0 0 8px 0; font-size: 1.1rem; }
+.big { font-size: 1.6rem; font-weight: bold; }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+td, th { border-bottom: 1px solid #eee; padding: 4px; text-align: left; }
+tr.pick { cursor: pointer; }
+tr.pick:hover td { background: #f4f4f4; }
+canvas { width: 100%; height: 120px; }
+.muted { color: #666; font-size: 0.85rem; }
+button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
+#workoutDetail { margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>Workouts</h1>
+<p><a href="index.html">← Dashboard</a> <span id="status" class="muted"></span></p>
+<section><h2>All workouts — tap one for details</h2><div class="body muted">Loading…</div><canvas id="chWorkoutDetail"></canvas><div id="workoutDetail" class="muted">Tap a row above.</div></section>
+<script src="store.js"></script>
+<script src="ui.js"></script>
+<script>
+var WORKOUTS = [];
+function showWorkout(i) {
+  var w = WORKOUTS[i].payload;
+  var bpms = (w.samples || []).map(function (s) {
+    return s && typeof s === 'object' ? s.bpm : s;
+  }).filter(function (b) { return typeof b === 'number'; });
+  var d = new Date(w.startS * 1000);
+  document.getElementById('workoutDetail').innerHTML =
+    '<div class="big">' + esc(w.date || '') + ' <span class="muted">' + esc(num(w.kcal)) + ' kcal</span></div>' +
+    '<div>start ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) +
+    ' · ' + esc(fmtDur(w.durationsS || 0)) +
+    (w.distanceM ? ' · ' + esc(w.distanceM / 1000) + 'km' : '') + '</div>' +
+    '<div class="muted">HR avg ' + esc(num(w.avgHr)) + ' / max ' + esc(num(w.maxHr)) +
+    ' / min ' + esc(num(w.minHr)) +
+    (w.avgCadenceSpm ? ' · cadence ' + esc(w.avgCadenceSpm) + '/' + esc(w.maxCadenceSpm) + 'spm' : '') +
+    (w.avgStrideCm ? ' · stride ' + esc(w.avgStrideCm) + '/' + esc(w.maxStrideCm) + 'cm' : '') +
+    (w.avgPaceS ? ' · pace ' + Math.floor(w.avgPaceS / 60) + "'" + (w.avgPaceS % 60) + '"/km' : '') +
+    ' · ' + bpms.length + ' HR samples</div>';
+  lineChart('chWorkoutDetail', bpms);
+}
+function pad2(n) { return String(n).padStart(2, '0'); }
+async function render() {
+  try {
+    WORKOUTS = (await Store.list('workout')).slice().reverse(); // latest first
+    if (!WORKOUTS.length) {
+      document.querySelector('section .body').textContent = 'No workouts yet — record one, then pull.';
+      document.getElementById('status').textContent = '';
+      return;
+    }
+    var rows = WORKOUTS.map(function (r, i) {
+      var w = r.payload;
+      return '<tr class="pick" data-i="' + i + '"><td>' + esc(w.date || '') + '</td><td>' +
+        esc(num(w.kcal)) + '</td></tr>';
+    }).join('');
+    document.querySelector('section .body').innerHTML =
+      '<table><tr><th>Date</th><th>Kcal</th></tr>' + rows + '</table>';
+    document.querySelectorAll('section tr.pick').forEach(function (tr) {
+      tr.addEventListener('click', function () { showWorkout(Number(tr.dataset.i)); });
+    });
+    showWorkout(0); // latest by default
+    document.getElementById('status').textContent = WORKOUTS.length + ' workouts in store.';
+  } catch (e) {
+    document.getElementById('status').textContent = 'Store unavailable: ' + e;
+  }
+}
+render();
+</script>
+</body>
+</html>

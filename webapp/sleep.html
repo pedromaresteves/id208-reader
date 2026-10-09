@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ID208 Sleep week</title>
+<style>
+body { font-family: Arial, Helvetica, sans-serif; padding: 16px; max-width: 720px; margin: auto; overflow-wrap: break-word; }
+section { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 12px 0; }
+h2 { margin: 0 0 8px 0; font-size: 1.1rem; }
+.big { font-size: 1.6rem; font-weight: bold; }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+td, th { border-bottom: 1px solid #eee; padding: 4px; text-align: left; }
+canvas { width: 100%; height: 140px; }
+.muted { color: #666; font-size: 0.85rem; }
+button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 2px; }
+#nightDetail { margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>Sleep week</h1>
+<p><a href="index.html">← Dashboard</a> <span id="status" class="muted"></span></p>
+<section><h2>Last 7 nights — tap a bar for details</h2>
+<div class="muted"><span class="swatch" style="background:#1d4ed8;"></span>deep
+<span class="swatch" style="background:#a78bfa;"></span>REM
+<span class="swatch" style="background:#93c5fd;"></span>light
+<span class="swatch" style="background:#e5e7eb;"></span>awake</div>
+<canvas id="chSleepWeek"></canvas>
+<div id="nightDetail" class="muted">Tap a bar above.</div></section>
+<script src="store.js"></script>
+<script src="ui.js"></script>
+<script>
+var NIGHTS = [];
+function partsOf(n) {
+  return [
+    { v: Number(n.deep_min) || 0, color: '#1d4ed8', name: 'deep' },
+    { v: Number(n.rem_min) || 0, color: '#a78bfa', name: 'REM' },
+    { v: Number(n.light_min) || 0, color: '#93c5fd', name: 'light' },
+    { v: Number(n.wake_min) || 0, color: '#e5e7eb', name: 'awake' },
+  ];
+}
+function showNight(i) {
+  var n = NIGHTS[i].payload;
+  document.getElementById('nightDetail').innerHTML =
+    '<div class="big">' + esc(num(n.total_min)) + ' <span class="muted">min · ' + esc(n.night) + '</span></div>' +
+    '<div>' + esc(n.fall_asleep) + ' → ' + esc(n.get_up) + '</div>' +
+    '<div class="muted">awake ' + esc(num(n.wake_min)) + 'm · light ' + esc(num(n.light_min)) +
+    'm · REM ' + esc(num(n.rem_min)) + 'm · deep ' + esc(num(n.deep_min)) + 'm</div>';
+}
+async function render() {
+  try {
+    var sleep = await Store.list('sleep');
+    NIGHTS = sleep.slice(-7);
+    if (!NIGHTS.length) {
+      document.getElementById('nightDetail').textContent = 'No data yet — run a sync.';
+      document.getElementById('status').textContent = '';
+      return;
+    }
+    stackedBarChart('chSleepWeek', NIGHTS.map(function (r) {
+      var n = r.payload;
+      return {
+        label: String(n.night).slice(5),
+        total: Number(n.total_min) || 0,
+        parts: partsOf(n),
+      };
+    }));
+    showNight(NIGHTS.length - 1); // latest by default
+    document.getElementById('status').textContent = sleep.length + ' nights in store.';
+  } catch (e) {
+    document.getElementById('status').textContent = 'Store unavailable: ' + e;
+  }
+}
+document.getElementById('chSleepWeek').addEventListener('click', function (e) {
+  var rect = e.target.getBoundingClientRect();
+  var i = barAt('chSleepWeek', e.clientX - rect.left);
+  if (i >= 0) showNight(i);
+});
+render();
+</script>
+</body>
+</html>
