@@ -59,7 +59,7 @@ function lineChart(id, values, lo, hi) {
 // selected: index to highlight (others dimmed); -1 or omitted = all full.
 // Remembers bar geometry on the canvas for tap-to-select (see barAt).
 function stackedBarChart(id, nights, selected) {
-  var g = setupCanvas(id);
+  var g = setupCanvas(id), t = ink();
   g.el._bars = [];
   if (!nights.length) return;
   var max = 0, i;
@@ -69,7 +69,7 @@ function stackedBarChart(id, nights, selected) {
   for (i = 0; i < nights.length; i++) {
     var n = nights[i], y = g.h - 14, x0 = i * bw + 1, x1 = (i + 1) * bw - 1;
     var dimmed = (selected !== undefined && selected >= 0 && selected !== i);
-    if (dimmed) g.ctx.globalAlpha = 0.35;
+    if (dimmed) g.ctx.globalAlpha = 0.5;
     for (var s = 0; s < n.parts.length; s++) {
       var h = (n.parts[s].v / max) * (g.h - 30);
       y -= h;
