@@ -133,6 +133,147 @@ var Store = (function () {
     return Promise.all(writes).then(function () { return writes.length; });
   }
 
+  // Classify one decoded record by its fields (pure, no storage).
+  // Returns 'steps' | 'sleep' | 'hr' | 'workout' | null.
+  // Accepts both phone shapes (durationsS/startS/samples) and sync.py
+  // shapes (durations_s/start_time_s/hr_samples) — same data, two dialects.
+  function classifyRecord(r) {
+    if (!r || typeof r !== 'object') return null;
+    if (typeof r.night === 'string') return 'sleep';
+    if (
+      typeof r.durations_s === 'number' ||
+      typeof r.durationsS === 'number' ||
+      typeof r.startS === 'number'
+    ) {
+      return 'workout';
+    }
+    if (Array.isArray(r.samples)) return 'hr';
+    if (typeof r.date === 'string' && r.steps !== undefined) return 'steps';
+    return null;
+  }
+
+  // Normalize a workout record to phone shape (pure). sync.py rows keep
+  // their fields; JS aliases are added (durationsS, startS, avg/max/minHr,
+  // distanceM) and plain bpm arrays become [{t, bpm}] pairs (~5 s spacing,
+  // matching the watch encoding). Phone-shaped rows pass through untouched.
+  function normalizeWorkout(r) {
+    if (!r || typeof r !== 'object' || r.durationsS !== undefined) return r;
+    var start = r.start_time_s || r.startS || 0;
+    var raw = Array.isArray(r.hr_samples) ? r.hr_samples : r.samples || [];
+    var samples = raw.map(function (s, i) {
+      if (s && typeof s === 'object') {
+        return {
+          t: s.t_s !== undefined ? s.t_s : s.t !== undefined ? s.t : start + i * 5,
+          bpm: s.bpm,
+        };
+      }
+      return { t: start + i * 5, bpm: s };
+    });
+    var o = {};
+    for (var k in r) o[k] = r[k];
+    o.startS = start;
+    o.durationsS = r.durations_s;
+    o.avgHr = r.avgHr !== undefined ? r.avgHr : r.avg_hr;
+    o.maxHr = r.maxHr !== undefined ? r.maxHr : r.max_hr;
+    o.minHr = r.minHr !== undefined ? r.minHr : r.min_hr;
+    o.distanceM = r.distanceM !== undefined ? r.distanceM : r.distance_m;
+    o.samples = samples;
+    return o;
+  }
+
+  // Split a bare array of decoded records into per-type groups (pure).
+  function groupRecords(records) {
+    var groups = { steps: [], sleep: [], hr: [], workout: [] };
+    (records || []).forEach(function (r) {
+      var t = classifyRecord(r);
+      if (!t) return;
+      groups[t].push(t === 'workout' ? normalizeWorkout(r) : r);
+    });
+    return groups;
+  }
+
+  // Parse a steps.csv text into step records (pure). Throws on bad input.
+  function parseCsvSteps(text) {
+    var lines = String(text).split(/\r?\n/).filter(function (l) {
+      return l.trim() !== '';
+    });
+    if (lines.length < 2) throw new Error('empty CSV');
+    var head = lines[0].split(',').map(function (c) { return c.trim(); });
+    function col(name) { return head.indexOf(name); }
+    if (col('date') < 0 || col('steps') < 0) throw new Error('not a steps.csv');
+    function numAt(cells, name) {
+      var i = col(name);
+      if (i < 0 || cells[i] === undefined || cells[i].trim() === '') return '';
+      var n = Number(cells[i]);
+      return isNaN(n) ? cells[i].trim() : n;
+    }
+    var out = [];
+    lines.slice(1).forEach(function (ln) {
+      var cells = ln.split(',');
+      var date = cells[col('date')].trim();
+      if (!date) return;
+      out.push({
+        date: date,
+        steps: numAt(cells, 'steps'),
+        distance_m: numAt(cells, 'distance_m'),
+        kcal: numAt(cells, 'kcal'),
+        active_min: numAt(cells, 'active_min'),
+        source: col('source') >= 0 ? cells[col('source')].trim() : 'steps.csv import',
+      });
+    });
+    return out;
+  }
+
+  function writeGroups(groups) {
+    var counts = { steps: 0, sleep: 0, hr: 0, workout: 0 };
+    var writes = [];
+    function queue(type, date, payload) {
+      counts[type] += 1;
+      writes.push(put(date, type, payload, payload.source));
+    }
+    groups.steps.forEach(function (r) { if (r.date) queue('steps', r.date, r); });
+    groups.sleep.forEach(function (n) { if (n.night) queue('sleep', n.night, n); });
+    groups.hr.forEach(function (d) { if (d.date) queue('hr', d.date, d); });
+    groups.workout.forEach(function (w, i) {
+      queue('workout', w.date || ('no-date-' + i), w);
+    });
+    return Promise.all(writes).then(function () { return counts; });
+  }
+
+  // Route anything importable into per-type groups (pure, no storage).
+  // Accepts store-backup {rows}, combined {steps,sleep,hr,workouts}, bare
+  // JSON array (classified per record). Throws on garbage.
+  function routeInput(doc) {
+    if (doc && Array.isArray(doc.rows)) {
+      var direct = { steps: [], sleep: [], hr: [], workout: [] };
+      doc.rows.forEach(function (r) {
+        if (r && r.date && r.type && direct[r.type]) direct[r.type].push(r.payload || r);
+      });
+      return direct;
+    }
+    if (Array.isArray(doc)) return groupRecords(doc);
+    if (doc && typeof doc === 'object') {
+      return {
+        steps: doc.steps || [],
+        sleep: doc.sleep || [],
+        hr: doc.hr || [],
+        workout: doc.workouts || doc.workout || [],
+      };
+    }
+    throw new Error('unrecognized JSON');
+  }
+
+  // Accept anything importable and write it, resolving per-type counts:
+  // store-backup {rows}, combined {steps,sleep,hr,workouts}, bare JSON array
+  // (classified per record), or steps.csv text. Throws on garbage.
+  function importText(text) {
+    var trimmed = String(text).trim();
+    if (trimmed.charAt(0) === '[' || trimmed.charAt(0) === '{') {
+      return writeGroups(routeInput(JSON.parse(trimmed)));
+    }
+    return writeGroups({ steps: parseCsvSteps(trimmed), sleep: [], hr: [], workout: [] });
+  }
+
   return {
     open: open,
     put: put,
@@ -142,5 +283,11 @@ var Store = (function () {
     exportJSON: exportJSON,
     importJSON: importJSON,
     seedFromOut: seedFromOut,
+    classifyRecord: classifyRecord,
+    normalizeWorkout: normalizeWorkout,
+    groupRecords: groupRecords,
+    routeInput: routeInput,
+    parseCsvSteps: parseCsvSteps,
+    importText: importText,
   };
 })();

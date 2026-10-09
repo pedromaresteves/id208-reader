@@ -200,7 +200,10 @@ async function render() {
         '<table><tr><th>Date</th><th>Time</th><th>Kcal</th><th>Dist</th><th>HR a/x/n</th></tr>' +
         items + '</table>';
       var w0 = workouts[workouts.length - 1].payload;
-      lineChart('chWorkout', w0.samples || []);
+      var wBpms = (w0.samples || []).map(function (s) {
+        return s && typeof s === 'object' ? s.bpm : s;
+      });
+      lineChart('chWorkout', wBpms);
     } else {
       document.querySelector('#secWorkouts .body').textContent = 'No workouts yet — record one, then pull.';
     }

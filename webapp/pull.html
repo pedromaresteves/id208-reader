@@ -140,14 +140,13 @@ document.getElementById('fileStoreImport').addEventListener('change', function (
   if (!f) return;
   var rd = new FileReader();
   rd.onload = function () {
-    var doc;
-    try { doc = JSON.parse(rd.result); }
-    catch (err) { log('Import: not valid JSON.'); return; }
-    var p = (doc && Array.isArray(doc.rows))
-      ? Store.importJSON(rd.result)
-      : Store.seedFromOut(doc);
-    p.then(function (n) { log('Import: stored ' + n + ' record(s).'); refreshStoreStatus(); },
-      function (err) { log('Import failed: ' + err); });
+    Store.importText(rd.result).then(
+      function (c) {
+        log('Import: steps ' + c.steps + ', sleep ' + c.sleep +
+          ', hr ' + c.hr + ', workouts ' + c.workout + '.');
+        refreshStoreStatus();
+      },
+      function (err) { log('Import failed: ' + err.message); });
   };
   rd.readAsText(f);
   e.target.value = '';
