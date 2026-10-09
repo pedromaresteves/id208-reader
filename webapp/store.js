@@ -266,7 +266,7 @@ var Store = (function () {
   // Accept anything importable and write it, resolving per-type counts:
   // store-backup {rows}, combined {steps,sleep,hr,workouts}, bare JSON array
   // (classified per record), or steps.csv text. Throws on garbage.
-  function importText(text) {
+  async function importText(text) {
     var trimmed = String(text).trim();
     if (trimmed.charAt(0) === '[' || trimmed.charAt(0) === '{') {
       return writeGroups(routeInput(JSON.parse(trimmed)));
