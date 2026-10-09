@@ -25,8 +25,7 @@ async function render() {
     var rows = tail.map(function (r) {
       var s = r.payload;
       return '<tr><td>' + esc(s.date) + '</td><td>' + esc(num(s.steps)) + '</td>' +
-        '<td>' + esc(num(s.kcal)) + '</td><td>' +
-        esc(s.distance_m ? (s.distance_m / 1000) + 'km' : '—') + '</td></tr>';
+        '<td>' + esc(num(s.kcal)) + '</td><td>' + esc(kmOrDash(s.distance_m)) + '</td></tr>';
     }).join('');
     document.querySelector('#secActivity .body').innerHTML =
       '<table><tr><th>Date</th><th>Steps</th><th>Kcal</th><th>Dist</th></tr>' + rows + '</table>';

@@ -176,6 +176,7 @@ function handleLegacy(arr) {
 // (operate 0x01) don't touch these. The daily macro uses lastSleepItems === 0
 // as its paging stop rule (same as the old manual repeat-until-empty).
 var lastSleepItems = -1, lastSportItems = -1, lastHrItems = -1, lastWorkoutItems = -1, lastPair = -1;
+var lastSizesTotal = -1; // set when the v3 sizes (0x0005) reply lands, else stays -1
 // Captured decoded records for the on-phone store (reset at each macro start).
 var capLive = null, capSport = null, capHr = null, capSleepNights = [], capWorkouts = [];
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -263,6 +264,28 @@ async function autoSyncAfterConnect() {
 }
 var macroRunning = false;
 function wait(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+// Reply-driven wait: resolves the moment isDone() is true (polled every
+// 250 ms), or after capMs at the latest. Caps are generous on purpose —
+// worst observed reply latency is under a second, caps are 10-12 s, and a
+// timeout never cuts a frame: reassembly always finishes what it started.
+// Typical runs proceed in ~1 s per step; slow watches just take the cap.
+function waitFor(isDone, capMs, label) {
+  var waited = 0;
+  return new Promise(function (resolve) {
+    function poll() {
+      var done = false;
+      try { done = !!isDone(); } catch (e) { done = false; }
+      if (done || waited >= capMs) {
+        if (!done) log('Timeout waiting (' + label + ') — continuing anyway.');
+        resolve();
+        return;
+      }
+      waited += 250;
+      setTimeout(poll, 250);
+    }
+    poll();
+  });
+}
 function setMacroButtons(disabled) {
   ['btnSetupAuto', 'btnDailyAuto'].forEach(function (id) {
     var b = document.getElementById(id);
@@ -342,37 +365,40 @@ async function dailyAuto() {
   try {
     log('[Pull 1/6] Live data...'); setProgress(1, 6, 'Live data');
     await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0]));
-    await wait(3000);
-    setProgress(2, 6, 'Health sizes'); log('[Pull 2/6] Health sizes (10 s; silence here is ok on low battery)...');
+    await waitFor(function () { return capLive !== null; }, 8000, 'live reply');
+    setProgress(2, 6, 'Health sizes'); log('[Pull 2/6] Health sizes (silence is a normal answer)...');
+    lastSizesTotal = -1;
     await wr(healthWriteChar, '0x0AF1', buildV3Sizes05());
-    await wait(10000);
-    setProgress(3, 6, 'Sport summary'); log('[Pull 3/6] Sport summary (30 s)...');
+    await waitFor(function () { return lastSizesTotal >= 0; }, 10000, 'sizes reply');
+    setProgress(3, 6, 'Sport summary'); log('[Pull 3/6] Sport summary...');
+    lastSportItems = -1;
     await wr(writeChar, '0x0AF6', buildV3Start04(8, 0));
-    await wait(30000);
+    await waitFor(function () { return lastSportItems >= 0; }, 12000, 'sport reply');
     await wr(writeChar, '0x0AF6', buildV3Stop04(8));
     await wait(3000);
-    setProgress(4, 6, 'Sleep'); log('[Pull 4/6] Sleep nights (paged, ~25 s each, stops when empty)...');
+    setProgress(4, 6, 'Sleep'); log('[Pull 4/6] Sleep nights (paged, stops when empty)...');
     for (var n = 0; n < 8; n++) {
       var off = (n === 0) ? 0 : 108;
       log('Sleep round ' + (n + 1) + '/8 (offset ' + off + ')...'); setProgress(4, 6, 'Sleep round ' + (n + 1));
       lastSleepItems = -1;
       await wr(writeChar, '0x0AF6', buildV3Start04(7, off));
-      await wait(25000);
+      await waitFor(function () { return lastSleepItems >= 0; }, 12000, 'sleep reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(7));
       await wait(3000);
       if (lastSleepItems === 0) { log('Sleep history empty — paging done.'); break; }
     }
-    setProgress(5, 6, 'Heart rate'); log('[Pull 5/6] Heart rate (30 s)...');
+    setProgress(5, 6, 'Heart rate'); log('[Pull 5/6] Heart rate...');
+    lastHrItems = -1;
     await wr(writeChar, '0x0AF6', buildV3Start04(3, 0));
-    await wait(30000);
+    await waitFor(function () { return lastHrItems >= 0; }, 12000, 'HR reply');
     await wr(writeChar, '0x0AF6', buildV3Stop04(3));
     await wait(3000);
-    setProgress(6, 6, 'Workouts'); log('[Pull 6/6] Workouts (paged, ~25 s each, stops when empty)...');
+    setProgress(6, 6, 'Workouts'); log('[Pull 6/6] Workouts (paged, stops when empty)...');
     for (var wn = 0; wn < 8; wn++) {
       log('Workout round ' + (wn + 1) + '/8 (offset ' + wn + ')...'); setProgress(6, 6, 'Workout round ' + (wn + 1));
       lastWorkoutItems = -1;
       await wr(writeChar, '0x0AF6', buildV3Start04(4, wn));
-      await wait(25000);
+      await waitFor(function () { return lastWorkoutItems >= 0; }, 12000, 'workout reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(4));
       await wait(3000);
       if (lastWorkoutItems === 0) { log('Workout history empty — paging done.'); break; }
@@ -411,6 +437,7 @@ function dispatchV3(buf) {
   log('v3 complete: cmd=0x' + cmd.toString(16) + ' seq=0x' + seq.toString(16) + ' payloadBytes=' + p.length);
   if (cmd === 0x0005 && p.length >= 4) {
     var total = u32le(p, 0);
+    lastSizesTotal = total;
     show('Health sizes reply: totalBytes=' + total + ' (expect ~1021 if watch has fresh data)');
     return;
   }

@@ -46,7 +46,7 @@ function showWorkout(i) {
     '<div><div class="k">Duration</div><div class="v">' + esc(fmtDur(w.durationsS || 0)) + '</div></div>' +
     '<div><div class="k">Calories</div><div class="v">' + esc(num(w.kcal)) + '</div></div>' +
     '<div><div class="k">Distance</div><div class="v">' +
-    esc(w.distanceM ? (w.distanceM / 1000) + ' km' : '—') + '</div></div>' +
+    esc(kmOrDash(w.distanceM)) + '</div></div>' +
     '<div><div class="k">Avg HR</div><div class="v">' + esc(num(w.avgHr)) + ' bpm</div></div>' +
     '<div><div class="k">Max HR</div><div class="v">' + esc(num(w.maxHr)) + ' bpm</div></div>' +
     '<div><div class="k">Min HR</div><div class="v">' + esc(num(w.minHr)) + ' bpm</div></div>' +

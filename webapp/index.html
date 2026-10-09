@@ -92,8 +92,7 @@ async function render() {
       document.querySelector('#secSteps .body').innerHTML =
         '<div class="big">' + esc(num(last.steps)) + ' <span class="muted">steps · ' +
         esc(num(last.kcal, ' kcal')) + '</span></div>' +
-        '<div class="muted">' + esc(last.date) + ' · ' +
-        esc(last.distance_m ? (last.distance_m / 1000) + 'km' : '—') +
+        '<div class="muted">' + esc(last.date) + ' · ' + esc(kmOrDash(last.distance_m)) +
         ' · <a href="activity.html">last 7 days →</a></div>';
     } else {
       document.querySelector('#secSteps .body').textContent = 'No data yet — run a sync.';
@@ -116,7 +115,7 @@ async function render() {
         '<div class="big">' + esc(sportName(w)) + ' <span class="muted">' + esc(w.date || '') + ' · ' +
         esc(num(w.kcal)) + ' kcal</span></div>' +
         '<div class="muted">' + esc(fmtDur(w.durationsS || 0)) +
-        (w.distanceM ? ' · ' + esc(w.distanceM / 1000) + 'km' : '') +
+        (w.distanceM ? ' · ' + esc(kmOrDash(w.distanceM)) : '') +
         ' · HR ' + esc(num(w.avgHr)) + '/' + esc(num(w.maxHr)) + '/' + esc(num(w.minHr)) +
         ' · <a href="workout.html">all workouts →</a></div>';
     } else {
