@@ -4,16 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ID208 Dashboard</title>
+<link rel="stylesheet" href="app.css">
 <style>
-body { font-family: Arial, Helvetica, sans-serif; padding: 16px; max-width: 720px; margin: auto; overflow-wrap: break-word; }
-section { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 12px 0; }
-h2 { margin: 0 0 8px 0; font-size: 1.1rem; }
-.big { font-size: 1.6rem; font-weight: bold; }
-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
-td, th { border-bottom: 1px solid #eee; padding: 4px; text-align: left; }
-canvas { width: 100%; height: 120px; }
-.muted { color: #666; font-size: 0.85rem; }
-button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
 #syncBarWrap { display: none; margin: 8px 4px; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; }
 #syncBarOuter { background: #eee; border-radius: 4px; height: 10px; margin: 6px 0; }
 #syncBarInner { background: #2563eb; border-radius: 4px; height: 10px; width: 0%; }
@@ -35,9 +27,9 @@ button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
 <button id="btnAutoWalkRunIdx">Auto-detect walk+run</button>
 <span id="watchStatus" class="muted"></span></p></section>
 
-<section id="secSteps"><h2><a href="activity.html">Activity</a></h2><div class="body muted">Loading…</div></section>
-<section id="secSleep"><h2><a href="sleep.html">Sleep</a></h2><div class="body muted">Loading…</div></section>
-<section id="secWorkouts"><h2><a href="workout.html">Workouts</a></h2><div class="body muted">Loading…</div></section>
+<section id="secSteps" onclick="location.href='activity.html'" style="cursor:pointer;"><h2>Activity →</h2><div class="body muted">Loading…</div></section>
+<section id="secSleep" onclick="location.href='sleep.html'" style="cursor:pointer;"><h2>Sleep →</h2><div class="body muted">Loading…</div></section>
+<section id="secWorkouts" onclick="location.href='workout.html'" style="cursor:pointer;"><h2>Workouts →</h2><div class="body muted">Loading…</div></section>
 <section id="secDebug"><h2>Debug</h2><div class="body muted">Raw store contents for troubleshooting — copy from here when reporting an issue.</div><details><summary>Show raw store JSON</summary><pre id="debugDump" style="font-size:0.7rem; max-height:40vh; overflow:auto;"></pre></details></section>
 
 <script src="store.js"></script>
@@ -110,11 +102,8 @@ async function render() {
     if (sleep.length) {
       var n0 = sleep[sleep.length - 1].payload;
       document.querySelector('#secSleep .body').innerHTML =
-        '<div class="big">' + esc(num(n0.total_min)) + ' <span class="muted">min · ' +
-        esc(n0.night) + '</span></div>' +
-        '<div class="muted">w' + esc(num(n0.wake_min)) + ' l' + esc(num(n0.light_min)) +
-        ' r' + esc(num(n0.rem_min)) + ' d' + esc(num(n0.deep_min)) +
-        ' · <a href="sleep.html">week →</a></div>';
+        '<div class="big">' + esc(fmtHM(n0.total_min)) + ' <span class="muted">' +
+        esc(n0.night) + '</span></div>';
     } else {
       document.querySelector('#secSleep .body').textContent = 'No data yet — run a sync.';
     }
@@ -145,5 +134,12 @@ async function render() {
 document.getElementById('btnRefresh').addEventListener('click', render);
 render();
 </script>
+<nav class="tabs">
+<a href="index.html" aria-current="page">Dashboard</a>
+<a href="activity.html">Activity</a>
+<a href="sleep.html">Sleep</a>
+<a href="workout.html">Workouts</a>
+<a href="pull.html">Pull</a>
+</nav>
 </body>
 </html>

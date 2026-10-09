@@ -4,16 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ID208 Sleep week</title>
+<link rel="stylesheet" href="app.css">
 <style>
-body { font-family: Arial, Helvetica, sans-serif; padding: 16px; max-width: 720px; margin: auto; overflow-wrap: break-word; }
-section { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 12px 0; }
-h2 { margin: 0 0 8px 0; font-size: 1.1rem; }
-.big { font-size: 1.6rem; font-weight: bold; }
-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
-td, th { border-bottom: 1px solid #eee; padding: 4px; text-align: left; }
-canvas { width: 100%; height: 140px; }
-.muted { color: #666; font-size: 0.85rem; }
-button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
+canvas { height: 140px; cursor: pointer; }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 2px; }
 #nightDetail { margin-top: 8px; }
 </style>
@@ -43,15 +36,18 @@ function partsOf(n) {
 function showNight(i) {
   var n = NIGHTS[i].payload;
   document.getElementById('nightDetail').innerHTML =
-    '<div class="big">' + esc(num(n.total_min)) + ' <span class="muted">min · ' + esc(n.night) + '</span></div>' +
+    '<div class="big">' + esc(fmtHM(n.total_min)) + ' <span class="muted">· ' + esc(n.night) + '</span></div>' +
     '<div>' + esc(n.fall_asleep) + ' → ' + esc(n.get_up) + '</div>' +
-    '<div class="muted">awake ' + esc(num(n.wake_min)) + 'm · light ' + esc(num(n.light_min)) +
-    'm · REM ' + esc(num(n.rem_min)) + 'm · deep ' + esc(num(n.deep_min)) + 'm</div>';
+    '<div class="muted">awake ' + esc(fmtHM(n.wake_min)) + ' · light ' + esc(fmtHM(n.light_min)) +
+    ' · REM ' + esc(fmtHM(n.rem_min)) + ' · deep ' + esc(fmtHM(n.deep_min)) + '</div>';
 }
 async function render() {
   try {
     var sleep = await Store.list('sleep');
-    NIGHTS = sleep.slice(-7);
+    // Skip zero-total records (stale partials) — they render as dateless gaps.
+    NIGHTS = sleep.filter(function (r) {
+      return Number(r.payload.total_min) > 0;
+    }).slice(-7);
     if (!NIGHTS.length) {
       document.getElementById('nightDetail').textContent = 'No data yet — run a sync.';
       document.getElementById('status').textContent = '';
@@ -78,5 +74,12 @@ document.getElementById('chSleepWeek').addEventListener('click', function (e) {
 });
 render();
 </script>
+<nav class="tabs">
+<a href="index.html">Dashboard</a>
+<a href="activity.html">Activity</a>
+<a href="sleep.html" aria-current="page">Sleep</a>
+<a href="workout.html">Workouts</a>
+<a href="pull.html">Pull</a>
+</nav>
 </body>
 </html>
