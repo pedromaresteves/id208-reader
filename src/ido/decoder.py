@@ -47,6 +47,22 @@ CMD_SET_UNITS_SAMPLE = bytes.fromhex("0311010101000201000000010101010000")
 CMD_SET_UNITS_BIND = bytes.fromhex("0311010101000202000000010101010000")
 CMD_SET_GOALS_SAMPLE = bytes.fromhex("0343F40100000000000008070000FA000E060C00")
 CMD_SET_WEATHER_OFF = bytes.fromhex("032D55000000")
+# Auto activity/sport detection (SET 03 49, VBUS_EVT_APP_SET_ACTIVITY_SWITCH).
+# 11 bytes: 9 flag bytes after the header, in order: walk, run, bicycle,
+# auto_pause, auto_end_remind, elliptical, rowing, swim, smart_rope (0/1).
+# Captured in the Gadgetbridge-veryfit fork (TooburAutoActivitySwitchPackets):
+# all-off silences the "long walk?" prompt.
+CMD_AUTO_ACTIVITY_FLAGS = (
+    "walk",
+    "run",
+    "bicycle",
+    "auto_pause",
+    "auto_end_remind",
+    "elliptical",
+    "rowing",
+    "swim",
+    "smart_rope",
+)
 # v3 HR-mode payload transplanted from reinstall-bind logcat (12 bytes after
 # seq). Only seq + CRC are refreshed per send; stale schedule bytes tolerated.
 HR_MODE_PAYLOAD = bytes.fromhex("0000000000010000173B0000")
@@ -232,6 +248,39 @@ def build_goals_sample() -> bytes:
 def build_weather_off() -> bytes:
     """Return the 6-byte weather-switch-off packet from fresh-launch logcat."""
     return bytes(CMD_SET_WEATHER_OFF)
+
+
+def build_auto_activity(
+    *,
+    walk: bool = False,
+    run: bool = False,
+    bicycle: bool = False,
+    auto_pause: bool = False,
+    auto_end_remind: bool = False,
+    elliptical: bool = False,
+    rowing: bool = False,
+    swim: bool = False,
+    smart_rope: bool = False,
+) -> bytes:
+    """Build the 11-byte `03 49` auto activity/sport detection packet.
+
+    All flags default off (silences the "long walk?" prompt); pass any
+    combination to re-enable. Flag order follows CMD_AUTO_ACTIVITY_FLAGS.
+    """
+    flags = bytes(
+        (
+            0x01 if walk else 0x00,
+            0x01 if run else 0x00,
+            0x01 if bicycle else 0x00,
+            0x01 if auto_pause else 0x00,
+            0x01 if auto_end_remind else 0x00,
+            0x01 if elliptical else 0x00,
+            0x01 if rowing else 0x00,
+            0x01 if swim else 0x00,
+            0x01 if smart_rope else 0x00,
+        )
+    )
+    return bytes((0x03, 0x49)) + flags
 
 
 def build_v3_1a(seq: int) -> bytes:

@@ -14,13 +14,26 @@ td, th { border-bottom: 1px solid #eee; padding: 4px; text-align: left; }
 canvas { width: 100%; height: 120px; }
 .muted { color: #666; font-size: 0.85rem; }
 button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
+#syncBarWrap { display: none; margin: 8px 4px; border: 1px solid #ddd; border-radius: 8px; padding: 10px 12px; }
+#syncBarOuter { background: #eee; border-radius: 4px; height: 10px; margin: 6px 0; }
+#syncBarInner { background: #2563eb; border-radius: 4px; height: 10px; width: 0%; }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #ddd; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 <h1>ID208 Dashboard</h1>
-<p><a class="btn" href="pull.html" style="border:1px solid; text-decoration:none;">Sync everything</a>
+<p><button id="btnSync">Sync Data</button>
 <button id="btnRefresh">Refresh</button>
+<a class="btn" href="pull.html" style="border:1px solid; text-decoration:none;">Advanced</a>
 <span id="status" class="muted"></span></p>
+<div id="syncBarWrap"><span class="spinner" id="syncSpinner" style="display:none;"></span>
+<span id="syncLabel">Idle</span>
+<div id="syncBarOuter"><div id="syncBarInner"></div></div></div>
+<section id="secWatch"><h2>Watch</h2><div class="body muted">Auto-detect prompts and setup live here.</div>
+<p><button id="btnAutoOffIdx">Auto-detect OFF</button>
+<button id="btnAutoWalkRunIdx">Auto-detect walk+run</button>
+<span id="watchStatus" class="muted"></span></p></section>
 
 <section id="secSteps"><h2>Steps</h2><div class="body muted">Loading…</div><canvas id="chSteps"></canvas></section>
 <section id="secSleep"><h2>Sleep</h2><div class="body muted">Loading…</div></section>
@@ -29,7 +42,50 @@ button, a.btn { margin: 4px; padding: 10px 14px; font-size: 1rem; }
 <section id="secDebug"><h2>Debug</h2><div class="body muted">Raw store contents for troubleshooting — copy from here when reporting an issue.</div><details><summary>Show raw store JSON</summary><pre id="debugDump" style="font-size:0.7rem; max-height:40vh; overflow:auto;"></pre></details></section>
 
 <script src="store.js"></script>
+<script src="ble.js"></script>
 <script>
+// Progress override: ble.js calls setProgress during macros; here it drives
+// the spinner + thin step bar (paging rounds update the label; the bar moves
+// per phase, so it can pause inside long loops — the spinner shows life).
+function setProgress(done, total, label) {
+  var el = document.getElementById('syncLabel');
+  if (el) el.textContent = 'Syncing: ' + label + ' (' + done + '/' + total + ')';
+  var bar = document.getElementById('syncBarInner');
+  if (bar && total > 0) bar.style.width = Math.min(100, Math.round((done / total) * 100)) + '%';
+}
+function syncUiBusy(busy, label) {
+  document.getElementById('btnSync').disabled = busy;
+  document.getElementById('syncBarWrap').style.display = busy ? 'block' : 'none';
+  document.getElementById('syncSpinner').style.display = busy ? 'inline-block' : 'none';
+  if (!busy) document.getElementById('syncBarInner').style.width = '0%';
+  if (label !== undefined) document.getElementById('syncLabel').textContent = label;
+}
+document.getElementById('btnSync').addEventListener('click', async function () {
+  syncUiBusy(true, 'Connecting…');
+  try {
+    await connectAndSync();
+    document.getElementById('syncLabel').textContent = 'Sync done.';
+  } catch (e) {
+    document.getElementById('syncLabel').textContent = 'Sync failed — see pull page log. Open Advanced for details.';
+  }
+  syncUiBusy(false);
+  render();
+});
+document.getElementById('btnAutoOffIdx').addEventListener('click', async function () {
+  await sendAutoDetect(null, 'Auto-detect OFF sent — walk prompts should stop.');
+});
+document.getElementById('btnAutoWalkRunIdx').addEventListener('click', async function () {
+  await sendAutoDetect([1, 1], 'Auto-detect walk+run sent — prompts restored.');
+});
+async function sendAutoDetect(flags, okMsg) {
+  var el = document.getElementById('watchStatus');
+  el.textContent = 'Connecting…';
+  try {
+    await ensureLink();
+    await wr(writeChar, '0x0AF6', buildAutoActivity(flags));
+    el.textContent = okMsg;
+  } catch (e) { el.textContent = 'Failed: ' + e + ' (open Advanced for details)'; }
+}
 // Tiny canvas helpers (no framework).
 function setupCanvas(id) {
   var c = document.getElementById(id);

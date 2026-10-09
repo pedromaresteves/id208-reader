@@ -8,6 +8,7 @@ from ido.decoder import (
     CHAR_NOTIFY,
     CHAR_WRITE,
     SERVICE_UUID,
+    build_auto_activity,
     build_bind_auth,
     build_bind_auth_probe,
     build_bind_start,
@@ -133,6 +134,19 @@ def test_setup_prelude_samples_match_logcat() -> None:
         "0343F40100000000000008070000FA000E060C00"
     )
     assert build_weather_off() == bytes.fromhex("032D55000000")
+
+
+def test_auto_activity_matches_fork_captures() -> None:
+    # Gadgetbridge-veryfit TooburAutoActivitySwitchPackets: off capture and
+    # walk+run capture, byte-identical.
+    assert build_auto_activity() == bytes.fromhex("0349000000000000000000")
+    assert build_auto_activity(walk=True, run=True) == bytes.fromhex(
+        "0349010100000000000000"
+    )
+    pkt = build_auto_activity(bicycle=True, swim=True)
+    assert len(pkt) == 11
+    assert pkt[2:5] == bytes((0x00, 0x00, 0x01))
+    assert pkt[9] == 0x01
 
 
 def test_setup_prelude_v3_matches_logcat_crc() -> None:
