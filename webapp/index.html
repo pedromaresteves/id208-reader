@@ -93,7 +93,8 @@ async function render() {
         '<div class="big">' + esc(num(last.steps)) + ' <span class="muted">steps · ' +
         esc(num(last.kcal, ' kcal')) + '</span></div>' +
         '<div class="muted">' + esc(last.date) + ' · ' +
-        '<a href="activity.html">last 7 days →</a></div>';
+        esc(last.distance_m ? (last.distance_m / 1000) + 'km' : '—') +
+        ' · <a href="activity.html">last 7 days →</a></div>';
     } else {
       document.querySelector('#secSteps .body').textContent = 'No data yet — run a sync.';
     }

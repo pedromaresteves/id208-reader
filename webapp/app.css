@@ -42,6 +42,11 @@ label.btn {
 }
 tr.pick { cursor: pointer; }
 tr.pick:hover td { background: #f4f4f4; }
+/* Stat grid for detail views: small-muted label over each value. */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 8px 0; }
+.stats .k { font-size: 0.75rem; color: #595959; }
+.stats .v { font-size: 1.05rem; }
+.stats h3 { grid-column: 1 / -1; font-size: 0.85rem; margin: 8px 0 0 0; color: #595959; }
 a { color: #1d4ed8; }
 /* Bottom navigation: 5 links, thumb-reachable, active page marked. */
 nav.tabs {
@@ -74,6 +79,7 @@ nav.tabs a[aria-current="page"] {
   section { background: #1a1a1a; border-color: #333; }
   td, th { border-bottom-color: #333; }
   .muted { color: #b3b3b3; }
+  .stats .k, .stats h3 { color: #b3b3b3; }
   a { color: #93c5fd; }
   button, a.btn { background: #222; color: #eee; border: 1px solid #555; }
   label.btn { background: #222; border-color: #555; }

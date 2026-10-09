@@ -97,6 +97,7 @@ function barAt(id, x) {
 
 function fmtDur(s) { return Math.floor(s / 60) + 'm' + (s % 60) + 's'; }
 // Minutes -> "7h05m" for sleep totals.
+function pad2(n) { return String(n).padStart(2, '0'); }
 function fmtHM(min) {
   min = Number(min) || 0;
   return Math.floor(min / 60) + 'h' + String(min % 60).padStart(2, '0') + 'm';

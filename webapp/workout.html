@@ -22,21 +22,39 @@ function showWorkout(i) {
   var bpms = (w.samples || []).map(function (s) {
     return s && typeof s === 'object' ? s.bpm : s;
   }).filter(function (b) { return typeof b === 'number'; });
-  var d = new Date(w.startS * 1000);
+  // startS is seconds-since-midnight (watch-local): format arithmetically.
+  // new Date(startS * 1000) would shift it by the phone timezone — wrong.
+  var st = w.startS || 0;
+  var startHM = pad2(Math.floor(st / 3600)) + ':' + pad2(Math.floor((st % 3600) / 60));
+  var formRows = '';
+  if (w.avgCadenceSpm) {
+    formRows += '<div><div class="k">Cadence</div><div class="v">' +
+      esc(w.avgCadenceSpm) + '/' + esc(w.maxCadenceSpm) + ' spm</div></div>';
+  }
+  if (w.avgStrideCm) {
+    formRows += '<div><div class="k">Stride</div><div class="v">' +
+      esc(w.avgStrideCm) + '/' + esc(w.maxStrideCm) + ' cm</div></div>';
+  }
+  if (w.avgPaceS) {
+    formRows += '<div><div class="k">Pace</div><div class="v">' +
+      Math.floor(w.avgPaceS / 60) + "'" + (w.avgPaceS % 60) + '"/km</div></div>';
+  }
   document.getElementById('workoutDetail').innerHTML =
-    '<div class="big">' + esc(sportName(w)) + ' <span class="muted">' + esc(w.date || '') + ' · ' + esc(num(w.kcal)) + ' kcal</span></div>' +
-    '<div>start ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) +
-    ' · ' + esc(fmtDur(w.durationsS || 0)) +
-    (w.distanceM ? ' · ' + esc(w.distanceM / 1000) + 'km' : '') + '</div>' +
-    '<div class="muted">HR avg ' + esc(num(w.avgHr)) + ' / max ' + esc(num(w.maxHr)) +
-    ' / min ' + esc(num(w.minHr)) +
-    (w.avgCadenceSpm ? ' · cadence ' + esc(w.avgCadenceSpm) + '/' + esc(w.maxCadenceSpm) + 'spm' : '') +
-    (w.avgStrideCm ? ' · stride ' + esc(w.avgStrideCm) + '/' + esc(w.maxStrideCm) + 'cm' : '') +
-    (w.avgPaceS ? ' · pace ' + Math.floor(w.avgPaceS / 60) + "'" + (w.avgPaceS % 60) + '"/km' : '') +
-    ' · ' + bpms.length + ' HR samples</div>';
+    '<div class="big">' + esc(sportName(w)) + '</div>' +
+    '<div class="muted">' + esc(w.date || '') + ' · start ' + startHM + '</div>' +
+    '<div class="stats">' +
+    '<div><div class="k">Duration</div><div class="v">' + esc(fmtDur(w.durationsS || 0)) + '</div></div>' +
+    '<div><div class="k">Calories</div><div class="v">' + esc(num(w.kcal)) + '</div></div>' +
+    '<div><div class="k">Distance</div><div class="v">' +
+    esc(w.distanceM ? (w.distanceM / 1000) + ' km' : '—') + '</div></div>' +
+    '<div><div class="k">Avg HR</div><div class="v">' + esc(num(w.avgHr)) + ' bpm</div></div>' +
+    '<div><div class="k">Max HR</div><div class="v">' + esc(num(w.maxHr)) + ' bpm</div></div>' +
+    '<div><div class="k">Min HR</div><div class="v">' + esc(num(w.minHr)) + ' bpm</div></div>' +
+    (formRows ? '<h3>Form</h3>' + formRows : '') +
+    '</div>' +
+    '<div class="muted">' + bpms.length + ' HR samples</div>';
   lineChart('chWorkoutDetail', bpms);
 }
-function pad2(n) { return String(n).padStart(2, '0'); }
 async function render() {
   try {
     WORKOUTS = (await Store.list('workout')).slice().reverse(); // latest first
