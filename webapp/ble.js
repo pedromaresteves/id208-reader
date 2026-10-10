@@ -518,7 +518,7 @@ function dispatchV3(buf) {
       wdur = Math.floor(durS / 60) + 'm' + (durS % 60) + 's';
       wkcal = kcalW + 'kcal';
       whr = 'avg' + h[29] + '/max' + h[30] + '/min' + h[31];
-      wdist = ' ' + (u32le(h, 25) / 1000) + 'km pace' + Math.floor(u16le(h, 40) / 60) + "'" + (u16le(h, 40) % 60) + '"/km';
+      wdist = ' ' + (u32le(h, 25) / 1000).toFixed(2) + 'km pace' + Math.floor(u16le(h, 40) / 60) + "'" + (u16le(h, 40) % 60) + '"/km';
       var wsamples = [];
       for (var k = 4; k < d.length; k++) {
         if (d[k] === 0x00) break;

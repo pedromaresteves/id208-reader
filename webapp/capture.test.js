@@ -18,8 +18,9 @@ function makeEl() {
   };
 }
 global.window = {};
+const __els = {};
 global.document = {
-  getElementById: () => makeEl(),
+  getElementById: (id) => (__els[id] || (__els[id] = makeEl())),
   createElement: () => makeEl(),
   createTextNode: (t) => ({ text: t }),
   body: makeEl(),
@@ -63,4 +64,26 @@ const CHUNKS = [
   assert.strictEqual(r.distance_m, 7641, 'distance decoded');
   assert.strictEqual(r.kcal, 631, 'display kcal decoded');
   console.log('capture.test.js: all assertions passed');
+
+  // Workout log line renders distance with 2 decimals (was "1.469km").
+  // Synthetic type-04 frame: 1469 m at header [25:29], pace 749 s at [40:42].
+  const wHead = Buffer.alloc(100, 0);
+  wHead.writeUInt32LE(1101, 17);
+  wHead.writeUInt32LE(85, 21);
+  wHead.writeUInt32LE(1469, 25);
+  wHead[29] = 93; wHead[30] = 121; wHead[31] = 74;
+  wHead.writeUInt16LE(749, 40);
+  const wPay = Buffer.concat([
+    Buffer.from([0x00, 0x04, 0x00, 0x00, 0x00, 0x01, 0x00, 100, 0x00, 8, 0x00, 0x00, 0x00, 0x00]),
+    wHead,
+    Buffer.from([70, 80, 90, 100, 0, 0, 0, 0]),
+  ]);
+  const wBuf = Buffer.concat([Buffer.from([0xDA, 0xAD, 0xDA, 0xAD, 0x01, 0, 0, 0x04, 0x00, 0x61, 0x00]), wPay]);
+  wBuf.writeUInt16LE(wBuf.length, 5);
+  B.resetCaptures();
+  B.handleV3(new Uint8Array(Buffer.concat([Buffer.from([0x33]), wBuf])));
+  const decoded = global.document.getElementById('decoded').innerHTML;
+  assert.ok(decoded.includes('1.47km'), 'workout log shows 2-decimal km, got: ' + decoded);
+  assert.ok(!decoded.includes('1.469km'), 'no 3-decimal km left in: ' + decoded);
+  console.log('capture.test.js: workout log format passed');
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });
