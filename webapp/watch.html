@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ID208 Watch settings</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<h1>Watch settings</h1>
+<p><a href="index.html">← Dashboard</a></p>
+<section id="secAuto"><h2>Auto-detect</h2><div class="body muted">Walk/run auto-detect prompts on the watch (03 49).</div>
+<p><button id="btnAutoOff">Auto-detect OFF</button>
+<button id="btnAutoWalkRun">Auto-detect walk+run</button>
+<span id="watchStatus" class="muted"></span></p></section>
+<section id="secMore"><h2>More</h2><div class="body muted">Future on/off watch features land here, not on the dashboard.</div></section>
+<script src="ble.js"></script>
+<script>
+// Fail fast on file skew (see index.html): banner instead of silent hang.
+(function checkAppFiles() {
+  var need = ['ensureLink', 'wr', 'buildAutoActivity'];
+  var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
+  if (!missing.length) return;
+  var d = document.createElement('div');
+  d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
+  d.textContent = 'App files out of sync (' + missing.join(', ') +
+    ' missing) — re-download all webapp files together (index/pull/store/ble/ui).';
+  document.body.insertBefore(d, document.body.firstChild);
+  throw new Error('halt: ' + missing.join(','));
+})();
+document.getElementById('btnAutoOff').addEventListener('click', async function () {
+  await sendAutoDetect(null, 'Auto-detect OFF sent — walk prompts should stop.');
+});
+document.getElementById('btnAutoWalkRun').addEventListener('click', async function () {
+  await sendAutoDetect([1, 1], 'Auto-detect walk+run sent — prompts restored.');
+});
+async function sendAutoDetect(flags, okMsg) {
+  var el = document.getElementById('watchStatus');
+  el.textContent = 'Connecting…';
+  try {
+    await ensureLink();
+    await wr(writeChar, '0x0AF6', buildAutoActivity(flags));
+    el.textContent = okMsg;
+  } catch (e) { el.textContent = 'Failed: ' + e + ' (open Pull for details)'; }
+}
+</script>
+<nav class="tabs">
+<a href="index.html">Dashboard</a>
+<a href="activity.html">Activity</a>
+<a href="sleep.html">Sleep</a>
+<a href="workout.html">Workouts</a>
+<a href="watch.html" aria-current="page">Watch</a>
+<a href="pull.html">Pull</a>
+</nav>
+</body>
+</html>

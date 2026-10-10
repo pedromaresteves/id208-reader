@@ -39,7 +39,7 @@ global.document = {
 
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ui.js'), 'utf8') +
-    '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM };'
+    '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, kmOrDash };'
 );
 const U = globalThis.U;
 
@@ -83,5 +83,12 @@ for (let i = 0; i < 7; i++) {
 // fmtHM sanity.
 assert.strictEqual(U.fmtHM(425), '7h05m');
 assert.strictEqual(U.fmtHM(0), '0h00m');
+
+// kmOrDash: 2 decimals everywhere, missing stays a dash (never 0-conflated).
+assert.strictEqual(U.kmOrDash(7641), '7.64km');
+assert.strictEqual(U.kmOrDash(1469), '1.47km');
+assert.strictEqual(U.kmOrDash(0), '0.00km');
+assert.strictEqual(U.kmOrDash(null), '—');
+assert.strictEqual(U.kmOrDash(undefined), '—');
 
 console.log('chart.test.js: all assertions passed');

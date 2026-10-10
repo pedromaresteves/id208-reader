@@ -117,8 +117,8 @@ function num(v, suffix) {
   if (v === undefined || v === null || v === '') return '—';
   return v + (suffix || '');
 }
-// Meters (or null/missing) -> "7.64km" / "0km" / "—". Never conflate 0 with missing.
+// Meters (or null/missing) -> "7.64km" / "0.00km" / "—". Never conflate 0 with missing.
 function kmOrDash(m) {
   if (m === undefined || m === null || m === '') return '—';
-  return Number(m) / 1000 + 'km';
+  return (Number(m) / 1000).toFixed(2) + 'km';
 }

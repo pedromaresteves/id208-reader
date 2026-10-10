@@ -22,10 +22,8 @@
 <div id="syncBarWrap"><span class="spinner" id="syncSpinner" style="display:none;"></span>
 <span id="syncLabel">Idle</span>
 <div id="syncBarOuter"><div id="syncBarInner"></div></div></div>
-<section id="secWatch"><h2>Watch</h2><div class="body muted">Auto-detect prompts and setup live here.</div>
-<p><button id="btnAutoOffIdx">Auto-detect OFF</button>
-<button id="btnAutoWalkRunIdx">Auto-detect walk+run</button>
-<span id="watchStatus" class="muted"></span></p></section>
+<section id="secWatch"><h2>Watch</h2><div class="body muted">Watch on/off features live on their own page.</div>
+<p><a class="btn" href="watch.html" style="border:1px solid; text-decoration:none;">Watch settings</a></p></section>
 
 <section id="secSteps" onclick="location.href='activity.html'" style="cursor:pointer;"><h2>Activity →</h2><div class="body muted">Loading…</div></section>
 <section id="secSleep" onclick="location.href='sleep.html'" style="cursor:pointer;"><h2>Sleep →</h2><div class="body muted">Loading…</div></section>
@@ -77,21 +75,6 @@ document.getElementById('btnSync').addEventListener('click', async function () {
   syncUiBusy(false);
   render();
 });
-document.getElementById('btnAutoOffIdx').addEventListener('click', async function () {
-  await sendAutoDetect(null, 'Auto-detect OFF sent — walk prompts should stop.');
-});
-document.getElementById('btnAutoWalkRunIdx').addEventListener('click', async function () {
-  await sendAutoDetect([1, 1], 'Auto-detect walk+run sent — prompts restored.');
-});
-async function sendAutoDetect(flags, okMsg) {
-  var el = document.getElementById('watchStatus');
-  el.textContent = 'Connecting…';
-  try {
-    await ensureLink();
-    await wr(writeChar, '0x0AF6', buildAutoActivity(flags));
-    el.textContent = okMsg;
-  } catch (e) { el.textContent = 'Failed: ' + e + ' (open Advanced for details)'; }
-}
 // Chart/format helpers live in ui.js (shared with detail pages).
 async function render() {
   document.getElementById('status').textContent = 'Loading…';
@@ -153,6 +136,7 @@ render();
 <a href="activity.html">Activity</a>
 <a href="sleep.html">Sleep</a>
 <a href="workout.html">Workouts</a>
+<a href="watch.html">Watch</a>
 <a href="pull.html">Pull</a>
 </nav>
 </body>
