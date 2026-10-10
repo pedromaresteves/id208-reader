@@ -48,10 +48,14 @@ function partsOf(n) {
 function showNight(i) {
   var n = NIGHTS[i].payload;
   document.getElementById('nightDetail').innerHTML =
-    '<div class="big">' + esc(fmtHM(n.total_min)) + ' <span class="muted">· ' + esc(n.night) + '</span></div>' +
-    '<div>' + esc(n.fall_asleep) + ' → ' + esc(n.get_up) + '</div>' +
-    '<div class="muted">awake ' + esc(fmtHM(n.wake_min)) + ' · light ' + esc(fmtHM(n.light_min)) +
-    ' · REM ' + esc(fmtHM(n.rem_min)) + ' · deep ' + esc(fmtHM(n.deep_min)) + '</div>';
+    '<div class="big">' + esc(fmtHM(n.total_min)) + '</div>' +
+    '<div class="muted">' + esc(n.night) + ' · ' + esc(n.fall_asleep) + ' → ' + esc(n.get_up) + '</div>' +
+    '<div class="stats">' +
+    '<div><div class="k">Awake</div><div class="v">' + esc(fmtHM(n.wake_min)) + '</div></div>' +
+    '<div><div class="k">Light</div><div class="v">' + esc(fmtHM(n.light_min)) + '</div></div>' +
+    '<div><div class="k">REM</div><div class="v">' + esc(fmtHM(n.rem_min)) + '</div></div>' +
+    '<div><div class="k">Deep</div><div class="v">' + esc(fmtHM(n.deep_min)) + '</div></div>' +
+    '</div>';
 }
 function drawWeek(selected) {
   stackedBarChart('chSleepWeek', NIGHTS.map(function (r) {

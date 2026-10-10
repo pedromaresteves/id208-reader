@@ -462,7 +462,7 @@ function dispatchV3(buf) {
   if (dataType === 8 && h.length >= 20) {
     var steps = u32le(h, 8), kcal = u32le(h, 12), dist = u32le(h, 16);
     capSport = {
-      date: todayStr(), steps: steps, distance_m: dist,
+      date: todayStr(), steps: steps, distanceM: dist,
       rawCalories: kcal,
       displayKcal: h.length >= 28 ? (h[26] | (h[27] << 8)) : null,
       activeMin: h.length >= 24 ? u32le(h, 20) : null,
