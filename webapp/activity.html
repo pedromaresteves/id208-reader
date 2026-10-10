@@ -13,6 +13,18 @@
 <script src="store.js"></script>
 <script src="ui.js"></script>
 <script>
+// Fail fast on file skew (see index.html): banner instead of silent hang.
+(function checkAppFiles() {
+  var need = ['Store', 'barChart', 'esc', 'num', 'kmOrDash'];
+  var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
+  if (!missing.length) return;
+  var d = document.createElement('div');
+  d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
+  d.textContent = 'App files out of sync (' + missing.join(', ') +
+    ' missing) — re-download all webapp files together (index/pull/store/ble/ui).';
+  document.body.insertBefore(d, document.body.firstChild);
+  throw new Error('halt: ' + missing.join(','));
+})();
 async function render() {
   try {
     var steps = await Store.list('steps');

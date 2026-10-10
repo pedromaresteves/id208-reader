@@ -36,6 +36,20 @@
 <script src="ble.js"></script>
 <script src="ui.js"></script>
 <script>
+// Fail fast on file skew (e.g. new page + old ui.js): missing shared
+// symbols halt here with an actionable banner instead of a silent hang.
+(function checkAppFiles() {
+  var need = ['Store', 'fmtHM', 'sportName', 'num', 'esc', 'fmtDur', 'kmOrDash',
+    'connectAndSync', 'ensureLink'];
+  var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
+  if (!missing.length) return;
+  var d = document.createElement('div');
+  d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
+  d.textContent = 'App files out of sync (' + missing.join(', ') +
+    ' missing) — re-download all webapp files together (index/pull/store/ble/ui).';
+  document.body.insertBefore(d, document.body.firstChild);
+  throw new Error('halt: ' + missing.join(','));
+})();
 // Progress override: ble.js calls setProgress during macros; here it drives
 // the spinner + thin step bar (paging rounds update the label; the bar moves
 // per phase, so it can pause inside long loops — the spinner shows life).

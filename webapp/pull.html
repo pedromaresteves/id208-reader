@@ -73,6 +73,20 @@ show decoded text here but don't reach the dashboard.
 <script src="store.js"></script>
 <script src="ble.js"></script>
 <script>
+// Fail fast on file skew (new page + old ble.js/store.js): halt with an
+// actionable banner instead of half-wired buttons that fail silently.
+(function checkAppFiles() {
+  var need = ['Store', 'connectAndSync', 'setupAuto', 'dailyAuto', 'wr',
+    'buildV3Start04', 'buildBindAuthPacket', 'buildAutoActivity', 'saveCaptured'];
+  var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
+  if (!missing.length) return;
+  var d = document.createElement('div');
+  d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
+  d.textContent = 'App files out of sync (' + missing.join(', ') +
+    ' missing) — re-download all webapp files together (index/pull/store/ble/ui).';
+  document.body.insertBefore(d, document.body.firstChild);
+  throw new Error('halt: ' + missing.join(','));
+})();
 // Page wiring: ble.js holds all protocol code; here only DOM bindings.
 PAGE_BASIC_BUTTONS = ['btnInfo', 'btnLive', 'btnSetupAuto'];
 PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop', 'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth', 'btnWorkout', 'btnWorkoutStop', 'btnAutoOff', 'btnAutoWalkRun'];
