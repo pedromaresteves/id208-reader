@@ -63,7 +63,8 @@ function showNight(i) {
   var n = NIGHTS[i].payload;
   document.getElementById('nightDetail').innerHTML =
     '<div class="big">' + esc(fmtHM(n.total_min)) + '</div>' +
-    '<div class="muted">' + esc(n.night) + ' · ' + esc(n.fall_asleep) + ' → ' + esc(n.get_up) + '</div>' +
+    '<div class="muted">Bedtime: ' + esc(n.fall_asleep || '—') + '</div>' +
+    '<div class="muted">Awake: ' + esc(n.get_up || '—') + '</div>' +
     ratingLine(n) +
     '<div class="stats">' +
     '<div><div class="k">Awake</div><div class="v">' + esc(fmtHM(n.wake_min)) + '</div></div>' +

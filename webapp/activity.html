@@ -44,7 +44,7 @@ function renderWeek() {
   STEPS.forEach(function (r) { map[r.date] = r.payload; });
   var days = [];
   for (var i = 0; i < 7; i++) days.push(addDays(SEL.start, i));
-  var rows = days.map(function (ds) {
+  var rows = days.slice().reverse().map(function (ds) {
     var s = map[ds];
     if (!s) {
       return '<tr><td>' + esc(ds) + '</td><td>—</td><td>—</td><td>—</td></tr>';
@@ -66,11 +66,12 @@ function renderWeek() {
       }
     });
     document.getElementById('weekAvg').innerHTML =
-      'Week ' + esc(SEL.start.slice(5)) + ' – ' + esc(SEL.end.slice(5)) +
-      ' · avg of ' + withData.length + ' days: ' + Math.round(tSteps / withData.length) +
-      ' steps' + (nKcal ? ' · ' + Math.round(tKcal / nKcal) + ' kcal' : '') +
-      ' · goals ' + esc(num(GOALS.steps)) + ' steps / ' + esc(num(GOALS.kcal)) +
-      ' kcal (<a href="watch.html">edit in Settings</a>).';
+      '<div><b>Week ' + esc(SEL.start.slice(5)) + ' – ' + esc(SEL.end.slice(5)) + '</b>' +
+      ' (avg of ' + withData.length + ' days with data)</div>' +
+      '<div>Steps <b>' + Math.round(tSteps / withData.length) + '</b>' +
+      (nKcal ? ' · Kcal <b>' + Math.round(tKcal / nKcal) + '</b>' : '') + '</div>' +
+      '<div class="muted">Goals ' + esc(num(GOALS.steps)) + ' steps / ' + esc(num(GOALS.kcal)) +
+      ' kcal (<a href="watch.html">edit in Settings</a>)</div>';
   } else {
     document.getElementById('weekAvg').textContent = 'No data in week ' + SEL.start + ' – ' + SEL.end + '.';
   }
