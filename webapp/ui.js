@@ -163,6 +163,11 @@ function weeksOf(key) {
   }
   return out;
 }
+// Month pager wiring shared by the detail pages: ‹/› shift CUR by n months.
+function wireMonthNav(onMove) {
+  document.getElementById('btnPrevM').addEventListener('click', function () { onMove(-1); });
+  document.getElementById('btnNextM').addEventListener('click', function () { onMove(1); });
+}
 
 // --- Sleep quality from stage shares of actual sleep (light+deep+rem) ---
 // Baselines: light 50-60%, deep 10-25%, REM 20-25%. In-range scores 100,

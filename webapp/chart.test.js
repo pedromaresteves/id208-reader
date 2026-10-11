@@ -40,7 +40,8 @@ global.document = {
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ui.js'), 'utf8') +
     '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, kmOrDash,' +
-    ' monthKey, addMonths, daysInMonth, addDays, mondayOf, weeksOf, sleepScore, DEFAULT_GOALS };'
+    ' monthKey, addMonths, daysInMonth, addDays, mondayOf, weeksOf, sleepScore, DEFAULT_GOALS,' +
+    ' wireMonthNav };'
 );
 const U = globalThis.U;
 
@@ -114,5 +115,16 @@ assert.strictEqual(U.sleepScore({ light_min: 0, deep_min: 0, rem_min: 0 }), null
 
 // Goal defaults match the watch setup (8000 steps / 500 kcal).
 assert.deepStrictEqual(U.DEFAULT_GOALS, { steps: 8000, kcal: 500 });
+
+// wireMonthNav: ‹/› pager calls onMove with -1/+1.
+const pagerClicks = {};
+global.document = {
+  getElementById: (id) => ({ addEventListener: (ev, fn) => { pagerClicks[id] = fn; } }),
+};
+const moves = [];
+U.wireMonthNav((n) => moves.push(n));
+pagerClicks.btnPrevM();
+pagerClicks.btnNextM();
+assert.deepStrictEqual(moves, [-1, 1]);
 
 console.log('chart.test.js: all assertions passed');

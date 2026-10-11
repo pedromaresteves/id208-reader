@@ -32,7 +32,8 @@ canvas { height: 140px; cursor: pointer; }
 // Fail fast on file skew (see index.html): banner instead of silent hang.
 (function checkAppFiles() {
   var need = ['Store', 'stackedBarChart', 'barChart', 'barAt', 'esc', 'num', 'fmtHM',
-    'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'sleepScore'];
+    'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'sleepScore',
+    'wireMonthNav'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -153,12 +154,7 @@ async function render() {
     document.getElementById('status').textContent = 'Store unavailable: ' + e;
   }
 }
-document.getElementById('btnPrevM').addEventListener('click', function () {
-  CUR = addMonths(CUR, -1); renderMonth();
-});
-document.getElementById('btnNextM').addEventListener('click', function () {
-  CUR = addMonths(CUR, 1); renderMonth();
-});
+wireMonthNav(function (n) { CUR = addMonths(CUR, n); renderMonth(); });
 document.getElementById('chSleepWeek').addEventListener('click', function (e) {
   var rect = e.target.getBoundingClientRect();
   var i = barAt('chSleepWeek', e.clientX - rect.left);

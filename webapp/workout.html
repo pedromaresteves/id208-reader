@@ -12,7 +12,7 @@
 <body>
 <h1>Workouts</h1>
 <p><a href="index.html">← Dashboard</a> <span id="status" class="muted"></span></p>
-<section><h2 id="listHead">All workouts — tap one for details</h2><div class="body muted">Loading…</div><canvas id="chWorkoutDetail"></canvas><div id="workoutDetail" class="muted">Tap a row above.</div></section>
+<section id="secList"><h2 id="listHead">All workouts — tap one for details</h2><div class="body muted">Loading…</div><canvas id="chWorkoutDetail"></canvas><div id="workoutDetail" class="muted">Tap a row above.</div></section>
 <section id="secMonth"><h2>Month</h2>
 <p><button id="btnPrevM" title="Previous month" aria-label="Previous month">‹</button>
 <span id="monthLabel" class="muted"></span>
@@ -23,8 +23,8 @@
 <script>
 // Fail fast on file skew (see index.html): banner instead of silent hang.
 (function checkAppFiles() {
-  var need = ['Store', 'lineChart', 'barChart', 'esc', 'num', 'fmtDur', 'sportName', 'pad2',
-    'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays'];
+  var need = ['Store', 'lineChart', 'setupCanvas', 'barChart', 'esc', 'num', 'fmtDur', 'sportName', 'pad2',
+    'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'wireMonthNav'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -81,9 +81,9 @@ function renderList() {
   document.getElementById('listHead').textContent =
     'Week ' + SEL.start.slice(5) + ' – ' + SEL.end.slice(5) + ' — tap one for details';
   if (!WORKOUTS.length) {
-    document.querySelector('section .body').textContent = 'No workouts in week ' + SEL.start + ' – ' + SEL.end + '.';
+    document.querySelector('#secList .body').textContent = 'No workouts in week ' + SEL.start + ' – ' + SEL.end + '.';
     document.getElementById('workoutDetail').textContent = '';
-    lineChart('chWorkoutDetail', []);
+    setupCanvas('chWorkoutDetail'); // resize clears the previous curve
     return;
   }
   var rows = WORKOUTS.map(function (r, i) {
@@ -91,7 +91,7 @@ function renderList() {
     return '<tr class="pick" data-i="' + i + '"><td>' + esc(w.date || '') + '</td><td>' +
       esc(sportName(w)) + '</td><td>' + esc(num(w.kcal)) + '</td><td>›</td></tr>';
   }).join('');
-  document.querySelector('section .body').innerHTML =
+  document.querySelector('#secList .body').innerHTML =
     '<table><tr><th>Date</th><th>Workout</th><th>Kcal</th><th></th></tr>' + rows + '</table>';
   document.querySelectorAll('section tr.pick').forEach(function (tr) {
     tr.addEventListener('click', function () { showWorkout(Number(tr.dataset.i)); });
@@ -139,13 +139,17 @@ async function render() {
   try {
     ALL = await Store.list('workout'); // oldest first
     if (!ALL.length) {
-      document.querySelector('section .body').textContent = 'No workouts yet — record one, then pull.';
+      document.querySelector('#secList .body').textContent = 'No workouts yet — record one, then pull.';
       document.getElementById('status').textContent = '';
       return;
     }
-    var latest = ALL[ALL.length - 1].payload.date || '';
+    // Newest dated record anchors the week (dateless imports sort last but
+    // belong to no week); with no dates at all, pin to month start, never NaN.
+    var latest = '';
+    ALL.forEach(function (r) { if (r.payload.date) latest = r.payload.date; });
     CUR = monthKey(latest || new Date().toISOString().slice(0, 10));
-    SEL = { start: mondayOf(latest), end: addDays(mondayOf(latest), 6) };
+    var anchor = latest || (CUR + '-01');
+    SEL = { start: mondayOf(anchor), end: addDays(mondayOf(anchor), 6) };
     selectWeek();
     renderMonth();
     document.getElementById('status').textContent = ALL.length + ' workouts in store.';
@@ -153,12 +157,7 @@ async function render() {
     document.getElementById('status').textContent = 'Store unavailable: ' + e;
   }
 }
-document.getElementById('btnPrevM').addEventListener('click', function () {
-  CUR = addMonths(CUR, -1); renderMonth();
-});
-document.getElementById('btnNextM').addEventListener('click', function () {
-  CUR = addMonths(CUR, 1); renderMonth();
-});
+wireMonthNav(function (n) { CUR = addMonths(CUR, n); renderMonth(); });
 render();
 </script>
 <nav class="tabs">
