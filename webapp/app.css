@@ -30,6 +30,55 @@ button, a.btn, label.btn {
   font-size: 1rem;
   min-height: 44px;
   box-sizing: border-box;
+  background: #f4f4f4;
+  color: #111;
+  border: 1px solid #666;
+  border-radius: 8px;
+  text-decoration: none;
+}
+a.btn, label.btn { display: inline-block; }
+/* Primary action (Sync Data): full-width, larger, filled — the one tap that matters. */
+.btn-primary {
+  display: block;
+  width: calc(100% - 8px);
+  font-size: 1.25rem;
+  font-weight: bold;
+  padding: 14px 18px;
+  min-height: 56px;
+  background: #2563eb;
+  color: #fff;
+  border-color: #1d4ed8;
+}
+/* Secondary row: icon + short-text buttons share one look, smaller than primary. */
+.btn-row { display: flex; gap: 4px; align-items: stretch; }
+.btn-row .btn-sec { flex: 1; text-align: center; }
+.btn-sec { font-size: 1.1rem; padding: 8px 10px; }
+.btn-sec.icon { font-size: 1.4rem; line-height: 1; }
+.btn-sec.small-text { font-size: 0.85rem; }
+/* Tappable dashboard cards: explicit "open" pill next to the title arrow. */
+.go {
+  float: right;
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: #595959;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+/* Goal met marker in the activity table. */
+.met { font-weight: bold; color: #047857; }
+/* Month-view week rows (same tap affordance as table picks). */
+.weekrow { cursor: pointer; }
+.weekrow:hover td { background: #f4f4f4; }
+/* Goal editor inputs match button sizing. */
+input.goal {
+  width: 7em;
+  padding: 10px;
+  font-size: 1rem;
+  min-height: 44px;
+  box-sizing: border-box;
+  margin: 4px;
 }
 button:active, a.btn:active { filter: brightness(0.92); }
 label.btn {
@@ -82,8 +131,13 @@ nav.tabs a[aria-current="page"] {
   .stats .k, .stats h3 { color: #b3b3b3; }
   a { color: #93c5fd; }
   button, a.btn { background: #222; color: #eee; border: 1px solid #555; }
+  .btn-primary { background: #2563eb; color: #fff; border-color: #93c5fd; }
+  .go { color: #b3b3b3; border-color: #555; }
+  .met { color: #34d399; }
   label.btn { background: #222; border-color: #555; }
   tr.pick:hover td { background: #222; }
+  .weekrow:hover td { background: #222; }
+  input.goal { background: #222; color: #eee; border: 1px solid #555; }
   button:active, a.btn:active { filter: brightness(1.25); }
   nav.tabs { background: #1a1a1a; border-top-color: #333; }
   nav.tabs a { color: #e5e5e5; }

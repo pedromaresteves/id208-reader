@@ -14,11 +14,18 @@
 <button id="btnAutoWalkRun">Auto-detect walk+run</button>
 <span id="watchStatus" class="muted"></span></p></section>
 <section id="secMore"><h2>More</h2><div class="body muted">Future on/off watch features land here, not on the dashboard.</div></section>
+<section id="secGoals"><h2>App goals</h2><div class="body muted">Daily targets on this phone (not the watch). Shown against each day on the Activity page.</div>
+<p><label>Steps <input id="goalSteps" class="goal" type="number" min="0" step="500"></label>
+<label>Kcal <input id="goalKcal" class="goal" type="number" min="0" step="50"></label>
+<button id="btnGoals">Save goals</button>
+<span id="goalStatus" class="muted"></span></p></section>
+<script src="store.js"></script>
 <script src="ble.js"></script>
+<script src="ui.js"></script>
 <script>
 // Fail fast on file skew (see index.html): banner instead of silent hang.
 (function checkAppFiles() {
-  var need = ['ensureLink', 'wr', 'buildAutoActivity'];
+  var need = ['Store', 'DEFAULT_GOALS', 'ensureLink', 'wr', 'buildAutoActivity'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -43,6 +50,27 @@ async function sendAutoDetect(flags, okMsg) {
     el.textContent = okMsg;
   } catch (e) { el.textContent = 'Failed: ' + e + ' (open Pull for details)'; }
 }
+// Daily goals live in the store under ('goals', 'settings'); unset falls
+// back to the watch defaults so the page works before the first save.
+async function loadGoals() {
+  try {
+    var rec = await Store.get('goals', 'settings');
+    var g = (rec && rec.payload) || DEFAULT_GOALS;
+    document.getElementById('goalSteps').value = g.steps;
+    document.getElementById('goalKcal').value = g.kcal;
+  } catch (e) { document.getElementById('goalStatus').textContent = 'Store unavailable: ' + e; }
+}
+document.getElementById('btnGoals').addEventListener('click', async function () {
+  var el = document.getElementById('goalStatus');
+  var steps = parseInt(document.getElementById('goalSteps').value, 10);
+  var kcal = parseInt(document.getElementById('goalKcal').value, 10);
+  if (!(steps > 0) || !(kcal > 0)) { el.textContent = 'Enter positive numbers for both goals.'; return; }
+  try {
+    await Store.put('goals', 'settings', { steps: steps, kcal: kcal }, 'manual');
+    el.textContent = 'Saved.';
+  } catch (e) { el.textContent = 'Save failed: ' + e; }
+});
+loadGoals();
 </script>
 <nav class="tabs">
 <a href="index.html">Dashboard</a>

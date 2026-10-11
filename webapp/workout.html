@@ -12,13 +12,19 @@
 <body>
 <h1>Workouts</h1>
 <p><a href="index.html">← Dashboard</a> <span id="status" class="muted"></span></p>
-<section><h2>All workouts — tap one for details</h2><div class="body muted">Loading…</div><canvas id="chWorkoutDetail"></canvas><div id="workoutDetail" class="muted">Tap a row above.</div></section>
+<section><h2 id="listHead">All workouts — tap one for details</h2><div class="body muted">Loading…</div><canvas id="chWorkoutDetail"></canvas><div id="workoutDetail" class="muted">Tap a row above.</div></section>
+<section id="secMonth"><h2>Month</h2>
+<p><button id="btnPrevM" title="Previous month" aria-label="Previous month">‹</button>
+<span id="monthLabel" class="muted"></span>
+<button id="btnNextM" title="Next month" aria-label="Next month">›</button></p>
+<canvas id="chMonth"></canvas><div id="weekList" class="body muted"></div></section>
 <script src="store.js"></script>
 <script src="ui.js"></script>
 <script>
 // Fail fast on file skew (see index.html): banner instead of silent hang.
 (function checkAppFiles() {
-  var need = ['Store', 'lineChart', 'esc', 'num', 'fmtDur', 'sportName', 'pad2'];
+  var need = ['Store', 'lineChart', 'barChart', 'esc', 'num', 'fmtDur', 'sportName', 'pad2',
+    'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -28,7 +34,11 @@
   document.body.insertBefore(d, document.body.firstChild);
   throw new Error('halt: ' + missing.join(','));
 })();
-var WORKOUTS = [];
+var WORKOUTS = [], ALL = [], SEL = null, CUR = null;
+function inWeek(r) {
+  var d = r.payload.date || '';
+  return d >= SEL.start && d <= SEL.end;
+}
 function showWorkout(i) {
   var w = WORKOUTS[i].payload;
   var bpms = (w.samples || []).map(function (s) {
@@ -67,30 +77,88 @@ function showWorkout(i) {
     '<div class="muted">' + bpms.length + ' HR samples</div>';
   lineChart('chWorkoutDetail', bpms);
 }
+function renderList() {
+  document.getElementById('listHead').textContent =
+    'Week ' + SEL.start.slice(5) + ' – ' + SEL.end.slice(5) + ' — tap one for details';
+  if (!WORKOUTS.length) {
+    document.querySelector('section .body').textContent = 'No workouts in week ' + SEL.start + ' – ' + SEL.end + '.';
+    document.getElementById('workoutDetail').textContent = '';
+    lineChart('chWorkoutDetail', []);
+    return;
+  }
+  var rows = WORKOUTS.map(function (r, i) {
+    var w = r.payload;
+    return '<tr class="pick" data-i="' + i + '"><td>' + esc(w.date || '') + '</td><td>' +
+      esc(sportName(w)) + '</td><td>' + esc(num(w.kcal)) + '</td><td>›</td></tr>';
+  }).join('');
+  document.querySelector('section .body').innerHTML =
+    '<table><tr><th>Date</th><th>Workout</th><th>Kcal</th><th></th></tr>' + rows + '</table>';
+  document.querySelectorAll('section tr.pick').forEach(function (tr) {
+    tr.addEventListener('click', function () { showWorkout(Number(tr.dataset.i)); });
+  });
+  showWorkout(0); // latest by default
+}
+function selectWeek() {
+  WORKOUTS = ALL.filter(inWeek).slice().reverse(); // latest first
+  renderList();
+}
+function renderMonth() {
+  document.getElementById('monthLabel').textContent = CUR;
+  var kcalByDay = {};
+  ALL.forEach(function (r) {
+    var d = r.payload.date;
+    if (d && d.slice(0, 7) === CUR) kcalByDay[d] = (kcalByDay[d] || 0) + (Number(r.payload.kcal) || 0);
+  });
+  var n = daysInMonth(CUR), values = [];
+  for (var d = 1; d <= n; d++) {
+    values.push(kcalByDay[CUR + '-' + String(d).padStart(2, '0')] || 0);
+  }
+  barChart('chMonth', ['1', String(n)], values);
+  var rows = weeksOf(CUR).map(function (w) {
+    var count = 0, kcal = 0;
+    ALL.forEach(function (r) {
+      var d = r.payload.date || '';
+      if (d >= w.start && d <= w.end) { count++; kcal += Number(r.payload.kcal) || 0; }
+    });
+    var sel = SEL && w.start === SEL.start ? ' ›' : '';
+    return '<tr class="weekrow" data-start="' + w.start + '" data-end="' + w.end + '"><td>' +
+      esc(w.start.slice(5)) + ' – ' + esc(w.end.slice(5)) + sel + '</td><td>' +
+      count + ' workouts · ' + esc(num(kcal)) + ' kcal</td><td>›</td></tr>';
+  }).join('');
+  document.getElementById('weekList').innerHTML =
+    '<table><tr><th>Week (tap to view)</th><th>Total</th><th></th></tr>' + rows + '</table>';
+  document.querySelectorAll('#weekList tr.weekrow').forEach(function (tr) {
+    tr.addEventListener('click', function () {
+      SEL = { start: tr.dataset.start, end: tr.dataset.end };
+      selectWeek();
+      renderMonth();
+    });
+  });
+}
 async function render() {
   try {
-    WORKOUTS = (await Store.list('workout')).slice().reverse(); // latest first
-    if (!WORKOUTS.length) {
+    ALL = await Store.list('workout'); // oldest first
+    if (!ALL.length) {
       document.querySelector('section .body').textContent = 'No workouts yet — record one, then pull.';
       document.getElementById('status').textContent = '';
       return;
     }
-    var rows = WORKOUTS.map(function (r, i) {
-      var w = r.payload;
-      return '<tr class="pick" data-i="' + i + '"><td>' + esc(w.date || '') + '</td><td>' +
-        esc(sportName(w)) + '</td><td>' + esc(num(w.kcal)) + '</td><td>›</td></tr>';
-    }).join('');
-    document.querySelector('section .body').innerHTML =
-      '<table><tr><th>Date</th><th>Workout</th><th>Kcal</th><th></th></tr>' + rows + '</table>';
-    document.querySelectorAll('section tr.pick').forEach(function (tr) {
-      tr.addEventListener('click', function () { showWorkout(Number(tr.dataset.i)); });
-    });
-    showWorkout(0); // latest by default
-    document.getElementById('status').textContent = WORKOUTS.length + ' workouts in store.';
+    var latest = ALL[ALL.length - 1].payload.date || '';
+    CUR = monthKey(latest || new Date().toISOString().slice(0, 10));
+    SEL = { start: mondayOf(latest), end: addDays(mondayOf(latest), 6) };
+    selectWeek();
+    renderMonth();
+    document.getElementById('status').textContent = ALL.length + ' workouts in store.';
   } catch (e) {
     document.getElementById('status').textContent = 'Store unavailable: ' + e;
   }
 }
+document.getElementById('btnPrevM').addEventListener('click', function () {
+  CUR = addMonths(CUR, -1); renderMonth();
+});
+document.getElementById('btnNextM').addEventListener('click', function () {
+  CUR = addMonths(CUR, 1); renderMonth();
+});
 render();
 </script>
 <nav class="tabs">

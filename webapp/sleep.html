@@ -14,19 +14,25 @@ canvas { height: 140px; cursor: pointer; }
 <body>
 <h1>Sleep week</h1>
 <p><a href="index.html">← Dashboard</a> <span id="status" class="muted"></span></p>
-<section><h2>Last 7 nights — tap a bar for details</h2>
+<section><h2>Week — tap a bar for details</h2>
 <div class="muted"><span class="swatch" style="background:#1d4ed8;"></span>deep
 <span class="swatch" style="background:#a78bfa;"></span>REM
 <span class="swatch" style="background:#93c5fd;"></span>light
 <span class="swatch" style="background:#e5e7eb;"></span>awake</div>
 <canvas id="chSleepWeek"></canvas>
-<div id="nightDetail" class="muted">Tap a bar above.</div></section>
+<div id="nightDetail" class="muted">Tap a bar above.</div><div id="sleepAvg" class="muted"></div></section>
+<section id="secMonth"><h2>Month</h2>
+<p><button id="btnPrevM" title="Previous month" aria-label="Previous month">‹</button>
+<span id="monthLabel" class="muted"></span>
+<button id="btnNextM" title="Next month" aria-label="Next month">›</button></p>
+<canvas id="chMonth"></canvas><div id="weekList" class="body muted"></div></section>
 <script src="store.js"></script>
 <script src="ui.js"></script>
 <script>
 // Fail fast on file skew (see index.html): banner instead of silent hang.
 (function checkAppFiles() {
-  var need = ['Store', 'stackedBarChart', 'barAt', 'esc', 'num', 'fmtHM'];
+  var need = ['Store', 'stackedBarChart', 'barChart', 'barAt', 'esc', 'num', 'fmtHM',
+    'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'sleepScore'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -36,7 +42,13 @@ canvas { height: 140px; cursor: pointer; }
   document.body.insertBefore(d, document.body.firstChild);
   throw new Error('halt: ' + missing.join(','));
 })();
-var NIGHTS = [];
+var NIGHTS = [], ALL = [], SEL = null, CUR = null;
+function ratingLine(n) {
+  var r = sleepScore(n);
+  if (!r) return '';
+  return '<div class="muted">Rating: <b>' + esc(r.label) + '</b> (' + r.score + ')' +
+    ' — deep ' + r.deepPct + '% · REM ' + r.remPct + '% · light ' + r.lightPct + '%</div>';
+}
 function partsOf(n) {
   return [
     { v: Number(n.deep_min) || 0, color: '#1d4ed8', name: 'deep' },
@@ -50,6 +62,7 @@ function showNight(i) {
   document.getElementById('nightDetail').innerHTML =
     '<div class="big">' + esc(fmtHM(n.total_min)) + '</div>' +
     '<div class="muted">' + esc(n.night) + ' · ' + esc(n.fall_asleep) + ' → ' + esc(n.get_up) + '</div>' +
+    ratingLine(n) +
     '<div class="stats">' +
     '<div><div class="k">Awake</div><div class="v">' + esc(fmtHM(n.wake_min)) + '</div></div>' +
     '<div><div class="k">Light</div><div class="v">' + esc(fmtHM(n.light_min)) + '</div></div>' +
@@ -67,25 +80,85 @@ function drawWeek(selected) {
     };
   }), selected);
 }
+function inWeek(r) { return r.payload.night >= SEL.start && r.payload.night <= SEL.end; }
+function drawSelected() {
+  drawWeek(NIGHTS.length - 1); // latest highlighted by default
+  showNight(NIGHTS.length - 1);
+  var total = 0;
+  NIGHTS.forEach(function (r) { total += Number(r.payload.total_min) || 0; });
+  document.getElementById('sleepAvg').textContent =
+    'Week ' + SEL.start.slice(5) + ' – ' + SEL.end.slice(5) +
+    ' · avg ' + fmtHM(Math.round(total / NIGHTS.length)) + '/night (' + NIGHTS.length + ' nights).';
+}
+function renderMonth() {
+  document.getElementById('monthLabel').textContent = CUR;
+  var map = {};
+  ALL.forEach(function (r) { map[r.payload.night] = r.payload; });
+  var n = daysInMonth(CUR), values = [];
+  for (var d = 1; d <= n; d++) {
+    var ds = CUR + '-' + String(d).padStart(2, '0');
+    values.push((map[ds] && Number(map[ds].total_min)) || 0);
+  }
+  barChart('chMonth', ['1', String(n)], values);
+  var rows = weeksOf(CUR).map(function (w) {
+    var total = 0, count = 0;
+    for (var i = 0; i < 7; i++) {
+      var p = map[addDays(w.start, i)];
+      if (p && Number(p.total_min) > 0) { total += Number(p.total_min); count++; }
+    }
+    var sel = SEL && w.start === SEL.start ? ' ›' : '';
+    return '<tr class="weekrow" data-start="' + w.start + '" data-end="' + w.end + '"><td>' +
+      esc(w.start.slice(5)) + ' – ' + esc(w.end.slice(5)) + sel + '</td><td>' +
+      (count ? esc(fmtHM(Math.round(total / count))) + ' avg (' + count + ')' : '—') + '</td><td>›</td></tr>';
+  }).join('');
+  document.getElementById('weekList').innerHTML =
+    '<table><tr><th>Week (tap to view)</th><th>Avg night</th><th></th></tr>' + rows + '</table>';
+  document.querySelectorAll('#weekList tr.weekrow').forEach(function (tr) {
+    tr.addEventListener('click', function () {
+      SEL = { start: tr.dataset.start, end: tr.dataset.end };
+      selectWeek();
+      renderMonth();
+    });
+  });
+}
+// Nights of the selected week (skip zero-total stale partials).
+function selectWeek() {
+  NIGHTS = ALL.filter(function (r) {
+    return Number(r.payload.total_min) > 0 && inWeek(r);
+  });
+  if (!NIGHTS.length) {
+    document.getElementById('nightDetail').textContent = 'No nights in week ' + SEL.start + ' – ' + SEL.end + '.';
+    document.getElementById('sleepAvg').textContent = '';
+    stackedBarChart('chSleepWeek', [], -1);
+    return;
+  }
+  drawSelected();
+}
 async function render() {
   try {
     var sleep = await Store.list('sleep');
-    // Skip zero-total records (stale partials) — they render as dateless gaps.
-    NIGHTS = sleep.filter(function (r) {
-      return Number(r.payload.total_min) > 0;
-    }).slice(-7);
-    if (!NIGHTS.length) {
+    ALL = sleep;
+    if (!ALL.length) {
       document.getElementById('nightDetail').textContent = 'No data yet — run a sync.';
       document.getElementById('status').textContent = '';
       return;
     }
-    drawWeek(NIGHTS.length - 1); // latest highlighted by default
-    showNight(NIGHTS.length - 1);
+    var latest = ALL[ALL.length - 1].payload.night;
+    CUR = monthKey(latest);
+    SEL = { start: mondayOf(latest), end: addDays(mondayOf(latest), 6) };
+    selectWeek();
+    renderMonth();
     document.getElementById('status').textContent = sleep.length + ' nights in store.';
   } catch (e) {
     document.getElementById('status').textContent = 'Store unavailable: ' + e;
   }
 }
+document.getElementById('btnPrevM').addEventListener('click', function () {
+  CUR = addMonths(CUR, -1); renderMonth();
+});
+document.getElementById('btnNextM').addEventListener('click', function () {
+  CUR = addMonths(CUR, 1); renderMonth();
+});
 document.getElementById('chSleepWeek').addEventListener('click', function (e) {
   var rect = e.target.getBoundingClientRect();
   var i = barAt('chSleepWeek', e.clientX - rect.left);

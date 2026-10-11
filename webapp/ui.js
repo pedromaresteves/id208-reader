@@ -122,3 +122,73 @@ function kmOrDash(m) {
   if (m === undefined || m === null || m === '') return '—';
   return (Number(m) / 1000).toFixed(2) + 'km';
 }
+
+// --- Month/week date helpers (YYYY-MM-DD strings, Monday-start weeks) ---
+function monthKey(ds) { return String(ds).slice(0, 7); }
+function isoDay(y, m, d) {
+  return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+function addMonths(key, n) {
+  var y = Number(key.slice(0, 4)), m = Number(key.slice(5, 7)) - 1 + n;
+  y += Math.floor(m / 12);
+  m = ((m % 12) + 12) % 12;
+  return isoDay(y, m + 1, 1).slice(0, 7);
+}
+function daysInMonth(key) {
+  return new Date(Number(key.slice(0, 4)), Number(key.slice(5, 7)), 0).getDate();
+}
+// Noon-anchored parse: midnight parsing shifts days in far timezones.
+function parseDay(ds) {
+  return new Date(Number(ds.slice(0, 4)), Number(ds.slice(5, 7)) - 1, Number(ds.slice(8, 10)), 12);
+}
+function isoOf(d) { return isoDay(d.getFullYear(), d.getMonth() + 1, d.getDate()); }
+function addDays(ds, n) {
+  var d = parseDay(ds);
+  d.setDate(d.getDate() + n);
+  return isoOf(d);
+}
+function mondayOf(ds) {
+  var d = parseDay(ds);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return isoOf(d);
+}
+// Full Monday–Sunday weeks intersecting a month (edge weeks spill over).
+function weeksOf(key) {
+  var first = key + '-01', n = daysInMonth(key);
+  var last = key + '-' + String(n).padStart(2, '0');
+  var out = [], cur = mondayOf(first);
+  while (cur <= last) {
+    out.push({ start: cur, end: addDays(cur, 6) });
+    cur = addDays(cur, 7);
+  }
+  return out;
+}
+
+// --- Sleep quality from stage shares of actual sleep (light+deep+rem) ---
+// Baselines: light 50-60%, deep 10-25%, REM 20-25%. In-range scores 100,
+// otherwise -5 per percentage point outside (floor 0).
+// Weights: deep 40 / REM 35 / light 25. Null when there is no sleep.
+function stageScore(pct, lo, hi) {
+  if (pct >= lo && pct <= hi) return 100;
+  var outside = pct < lo ? lo - pct : pct - hi;
+  return Math.max(0, 100 - 5 * outside);
+}
+function sleepScore(n) {
+  var light = Number(n.light_min) || 0, deep = Number(n.deep_min) || 0, rem = Number(n.rem_min) || 0;
+  var base = light + deep + rem;
+  if (base <= 0) return null;
+  var score = Math.round(0.25 * stageScore(100 * light / base, 50, 60) +
+    0.40 * stageScore(100 * deep / base, 10, 25) +
+    0.35 * stageScore(100 * rem / base, 20, 25));
+  return {
+    score: score,
+    label: score >= 85 ? 'Excellent' : score >= 70 ? 'Good' : score >= 55 ? 'Fair' : 'Poor',
+    lightPct: Math.round(100 * light / base),
+    deepPct: Math.round(100 * deep / base),
+    remPct: Math.round(100 * rem / base),
+  };
+}
+
+// Daily goals: the watch ships 8000 steps / 500 kcal (setup sample + photos).
+// Editable in the settings page; pages fall back here when unset.
+var DEFAULT_GOALS = { steps: 8000, kcal: 500 };

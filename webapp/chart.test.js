@@ -39,7 +39,8 @@ global.document = {
 
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ui.js'), 'utf8') +
-    '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, kmOrDash };'
+    '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, kmOrDash,' +
+    ' monthKey, addMonths, daysInMonth, addDays, mondayOf, weeksOf, sleepScore, DEFAULT_GOALS };'
 );
 const U = globalThis.U;
 
@@ -90,5 +91,28 @@ assert.strictEqual(U.kmOrDash(1469), '1.47km');
 assert.strictEqual(U.kmOrDash(0), '0.00km');
 assert.strictEqual(U.kmOrDash(null), '—');
 assert.strictEqual(U.kmOrDash(undefined), '—');
+
+// Month/week date helpers (Monday-start weeks).
+assert.strictEqual(U.monthKey('2026-10-03'), '2026-10');
+assert.strictEqual(U.addMonths('2026-10', 1), '2026-11');
+assert.strictEqual(U.addMonths('2026-01', -1), '2025-12');
+assert.strictEqual(U.daysInMonth('2026-02'), 28);
+assert.strictEqual(U.addDays('2026-10-31', 1), '2026-11-01');
+assert.strictEqual(U.mondayOf('2026-10-11'), '2026-10-05', 'Sunday maps back to Monday');
+assert.strictEqual(U.mondayOf('2026-10-05'), '2026-10-05', 'Monday maps to itself');
+const octWeeks = U.weeksOf('2026-10');
+assert.strictEqual(octWeeks.length, 5, 'Oct 2026 spans 5 Mon-Sun weeks, got ' + octWeeks.length);
+assert.strictEqual(octWeeks[0].start, '2026-09-28', 'first week spills into Sep');
+assert.strictEqual(octWeeks[4].end, '2026-11-01', 'last week spills into Nov');
+
+// Sleep rating from stage baselines.
+const balanced = U.sleepScore({ light_min: 240, deep_min: 60, rem_min: 90 });
+assert.strictEqual(balanced.label, 'Excellent', 'balanced night rates Excellent, got ' + balanced.label);
+const restless = U.sleepScore({ light_min: 400, deep_min: 10, rem_min: 10 });
+assert.strictEqual(restless.label, 'Poor', 'light-dominated night rates Poor, got ' + restless.label);
+assert.strictEqual(U.sleepScore({ light_min: 0, deep_min: 0, rem_min: 0 }), null, 'no sleep scores null');
+
+// Goal defaults match the watch setup (8000 steps / 500 kcal).
+assert.deepStrictEqual(U.DEFAULT_GOALS, { steps: 8000, kcal: 500 });
 
 console.log('chart.test.js: all assertions passed');
