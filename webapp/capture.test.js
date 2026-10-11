@@ -73,6 +73,7 @@ const CHUNKS = [
   wHead.writeUInt32LE(1469, 25);
   wHead[29] = 93; wHead[30] = 121; wHead[31] = 74;
   wHead.writeUInt16LE(749, 40);
+  wHead.writeUInt16LE(2026, 1); wHead[3] = 10; wHead[4] = 8; // header date, not phone date
   const wPay = Buffer.concat([
     Buffer.from([0x00, 0x04, 0x00, 0x00, 0x00, 0x01, 0x00, 100, 0x00, 8, 0x00, 0x00, 0x00, 0x00]),
     wHead,
@@ -86,4 +87,43 @@ const CHUNKS = [
   assert.ok(decoded.includes('1.47km'), 'workout log shows 2-decimal km, got: ' + decoded);
   assert.ok(!decoded.includes('1.469km'), 'no 3-decimal km left in: ' + decoded);
   console.log('capture.test.js: workout log format passed');
+
+  // Header-date stamp: re-pulls overwrite the same keys instead of
+  // duplicating historic workouts under each sync day.
+  const putsBeforeDate = puts.length;
+  await B.saveCaptured('datestamp');
+  const dated = puts.slice(putsBeforeDate).filter((p) => p.type === 'workout');
+  assert.strictEqual(dated.length, 1, 'one workout saved, got ' + dated.length);
+  assert.strictEqual(dated[0].payload.date, '2026-10-08', 'header date stamped, got ' + dated[0].payload.date);
+  assert.strictEqual(dated[0].date, '2026-10-08 0', 'store key uses header date, got ' + dated[0].date);
+  console.log('capture.test.js: date stamp passed');
+
+  // Phantom guard: a real empty-history type-04 reply (2026-10-11 pull:
+  // items=0, 100 zero bytes) must capture NOTHING — it used to save one
+  // all-zeros workout per sync day under "<date> 0".
+  const EMPTY04 =
+    '33DAADDAAD017D0004006100000400000000006400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
+  B.resetCaptures();
+  B.handleV3(new Uint8Array(Buffer.from(EMPTY04, 'hex')));
+  const putsBefore = puts.length;
+  await B.saveCaptured('phantom');
+  const phantomRows = puts.slice(putsBefore).filter((p) => p.type === 'workout');
+  assert.strictEqual(phantomRows.length, 0, 'empty-history reply saves no workout, got ' + phantomRows.length);
+  console.log('capture.test.js: phantom guard passed');
+
+  // Same phantom family for sleep: a zeroed dataType-07 frame (items=0)
+  // used to store a "0-00-00" zero-night on every empty pull.
+  const sPay = Buffer.concat([
+    Buffer.from([0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 16, 0x00, 0, 0x00, 0x00, 0x00, 0x00]),
+    Buffer.alloc(16, 0),
+  ]);
+  const sBuf = Buffer.concat([Buffer.from([0xDA, 0xAD, 0xDA, 0xAD, 0x01, 0, 0, 0x04, 0x00, 0x61, 0x00]), sPay]);
+  sBuf.writeUInt16LE(sBuf.length, 5);
+  B.resetCaptures();
+  B.handleV3(new Uint8Array(Buffer.concat([Buffer.from([0x33]), sBuf])));
+  const putsBeforeSleep = puts.length;
+  await B.saveCaptured('phantom-sleep');
+  const sleepRows = puts.slice(putsBeforeSleep).filter((p) => p.type === 'sleep');
+  assert.strictEqual(sleepRows.length, 0, 'empty sleep reply saves no night, got ' + sleepRows.length);
+  console.log('capture.test.js: sleep phantom guard passed');
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

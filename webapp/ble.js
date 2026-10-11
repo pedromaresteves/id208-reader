@@ -469,6 +469,10 @@ function dispatchV3(buf) {
     };
     show('SPORT dataType=8 items=' + itemCount + ': steps=' + steps + ' kcal(raw)=' + kcal + ' distance(m)=' + dist +
       '  [watch: 5736 steps / 468 kcal]');
+  } else if (dataType === 7 && itemCount === 0) {
+    // Empty-history marker (zeroed header, not a night): same phantom
+    // family as workouts — decoding it stored "0-00-00" zero-nights.
+    log('SLEEP dataType=7 items=0: empty-history marker, ignored (not a night).');
   } else if (dataType === 7 && h.length >= 16) {
     var tot = u16le(h, 14), wake = u16le(h, 16), light = u16le(h, 18), rem = u16le(h, 20), deep = u16le(h, 22);
     var fa = u16le(h, 2) + '-' + h[4] + '-' + h[5] + ' ' + h[6] + ':' + String(h[7]).padStart(2, '0');
@@ -513,7 +517,11 @@ function dispatchV3(buf) {
   } else if (dataType === 4) {
     var wdur = '?', wkcal = '?', whr = '?', wdist = '';
     var wrec = null;
-    if (h.length >= 100) {
+    if (itemCount === 0) {
+      // Empty-history marker (100 zero bytes, not a workout): decoding it
+      // saved one all-zeros phantom per sync day under "<date> 0".
+      log('WORKOUT dataType=4 items=0: empty-history marker, ignored (not a workout).');
+    } else if (h.length >= 100) {
       var durS = u32le(h, 17), kcalW = u32le(h, 21);
       wdur = Math.floor(durS / 60) + 'm' + (durS % 60) + 's';
       wkcal = kcalW + 'kcal';
@@ -525,7 +533,10 @@ function dispatchV3(buf) {
         if (d[k] >= 30 && d[k] <= 220) wsamples.push(d[k]);
       }
       wrec = {
-        date: todayStr(), version: h[0], startS: h[5] * 3600 + h[6] * 60 + h[7],
+        // Header date, not phone date: re-pulls overwrite the same keys
+        // instead of duplicating historic workouts under each sync day.
+        date: u16le(h, 1) + '-' + String(h[3]).padStart(2, '0') + '-' + String(h[4]).padStart(2, '0'),
+        version: h[0], startS: h[5] * 3600 + h[6] * 60 + h[7],
         sportType: h[8], durationsS: durS, kcal: kcalW, distanceM: u32le(h, 25),
         avgHr: h[29], maxHr: h[30], minHr: h[31],
         avgCadenceSpm: h[32], maxCadenceSpm: h[33],
