@@ -41,7 +41,7 @@ eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ui.js'), 'utf8') +
     '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, kmOrDash,' +
     ' monthKey, addMonths, daysInMonth, addDays, mondayOf, weeksOf, sleepScore, DEFAULT_GOALS,' +
-    ' wireMonthNav };'
+    ' wireMonthNav, isoWeek };'
 );
 const U = globalThis.U;
 
@@ -105,6 +105,12 @@ const octWeeks = U.weeksOf('2026-10');
 assert.strictEqual(octWeeks.length, 5, 'Oct 2026 spans 5 Mon-Sun weeks, got ' + octWeeks.length);
 assert.strictEqual(octWeeks[0].start, '2026-09-28', 'first week spills into Sep');
 assert.strictEqual(octWeeks[4].end, '2026-11-01', 'last week spills into Nov');
+
+// ISO week numbers (weeks already run Monday–Sunday).
+assert.strictEqual(U.isoWeek('2026-10-05'), 41, 'Oct 5 2026 is Monday of W41');
+assert.strictEqual(U.isoWeek('2026-10-11'), 41, 'same week Sunday is still W41');
+assert.strictEqual(U.isoWeek('2026-01-01'), 1, 'Jan 1 2026 (Thursday) is W1');
+assert.strictEqual(U.isoWeek('2025-12-29'), 1, 'Dec 29 2025 (Monday) is W1');
 
 // Sleep rating from stage baselines.
 const balanced = U.sleepScore({ light_min: 240, deep_min: 60, rem_min: 90 });

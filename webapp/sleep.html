@@ -23,7 +23,7 @@ canvas { height: 140px; cursor: pointer; }
 <div id="nightDetail" class="muted">Tap a bar above.</div><div id="sleepAvg" class="muted"></div></section>
 <section id="secMonth"><h2>Month</h2>
 <p><button id="btnPrevM" title="Previous month" aria-label="Previous month">‹</button>
-<span id="monthLabel" class="muted"></span>
+<span id="monthLabel" class="month-label"></span>
 <button id="btnNextM" title="Next month" aria-label="Next month">›</button></p>
 <canvas id="chMonth"></canvas><div id="weekList" class="body muted"></div></section>
 <script src="store.js"></script>
@@ -33,7 +33,7 @@ canvas { height: 140px; cursor: pointer; }
 (function checkAppFiles() {
   var need = ['Store', 'stackedBarChart', 'barChart', 'barAt', 'esc', 'num', 'fmtHM',
     'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'sleepScore',
-    'wireMonthNav'];
+    'wireMonthNav', 'isoWeek'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -43,12 +43,13 @@ canvas { height: 140px; cursor: pointer; }
   document.body.insertBefore(d, document.body.firstChild);
   throw new Error('halt: ' + missing.join(','));
 })();
-var NIGHTS = [], ALL = [], SEL = null, CUR = null;
+var NIGHTS = [], ALL = [], SEL = null, CUR = null, DAYS = [];
 function ratingLine(n) {
   var r = sleepScore(n);
   if (!r) return '';
-  return '<div class="muted">Rating: <b>' + esc(r.label) + '</b> (' + r.score + ')' +
-    ' — deep ' + r.deepPct + '% · REM ' + r.remPct + '% · light ' + r.lightPct + '%</div>';
+  return '<div class="rating r-' + r.label.toLowerCase() + '">Rating: ' +
+    esc(r.label) + ' (' + r.score + ')</div>' +
+    '<div class="muted">deep ' + r.deepPct + '% · REM ' + r.remPct + '% · light ' + r.lightPct + '%</div>';
 }
 function partsOf(n) {
   return [
@@ -71,25 +72,32 @@ function showNight(i) {
     '<div><div class="k">Deep</div><div class="v">' + esc(fmtHM(n.deep_min)) + '</div></div>' +
     '</div>';
 }
-function drawWeek(selected) {
-  stackedBarChart('chSleepWeek', NIGHTS.map(function (r) {
-    var n = r.payload;
-    return {
-      label: String(n.night).slice(5),
-      total: Number(n.total_min) || 0,
-      parts: partsOf(n),
-    };
-  }), selected);
-}
 function inWeek(r) { return r.payload.night >= SEL.start && r.payload.night <= SEL.end; }
-function drawSelected() {
-  drawWeek(NIGHTS.length - 1); // latest highlighted by default
-  showNight(NIGHTS.length - 1);
+function drawSelected(selDate) {
+  // Always 7 Mon–Sun columns; missing days draw flat instead of stretching the rest.
+  var map = {};
+  ALL.forEach(function (r) { map[r.payload.night] = r.payload; });
+  DAYS = [];
+  for (var i = 0; i < 7; i++) DAYS.push(addDays(SEL.start, i));
+  var selIdx = DAYS.indexOf(selDate);
+  if (selIdx < 0) selIdx = DAYS.length - 1;
+  stackedBarChart('chSleepWeek', DAYS.map(function (ds) {
+    var p = map[ds] || {};
+    return { label: ds.slice(5), total: Number(p.total_min) || 0, parts: partsOf(p) };
+  }), selIdx);
+  showDay(DAYS[selIdx]);
   var total = 0;
   NIGHTS.forEach(function (r) { total += Number(r.payload.total_min) || 0; });
-  document.getElementById('sleepAvg').textContent =
+  document.getElementById('sleepAvg').textContent = NIGHTS.length ?
     'Week ' + SEL.start.slice(5) + ' – ' + SEL.end.slice(5) +
-    ' · avg ' + fmtHM(Math.round(total / NIGHTS.length)) + '/night (' + NIGHTS.length + ' nights).';
+    ' · avg ' + fmtHM(Math.round(total / NIGHTS.length)) + '/night (' + NIGHTS.length + ' nights).' :
+    'No nights in week ' + SEL.start + ' – ' + SEL.end + '.';
+}
+function showDay(ds) {
+  for (var i = 0; i < NIGHTS.length; i++) {
+    if (NIGHTS[i].payload.night === ds) { showNight(i); return; }
+  }
+  document.getElementById('nightDetail').textContent = 'No data for ' + ds + ' — tap a filled bar.';
 }
 function renderMonth() {
   document.getElementById('monthLabel').textContent = CUR;
@@ -109,7 +117,7 @@ function renderMonth() {
     }
     var sel = SEL && w.start === SEL.start ? ' ›' : '';
     return '<tr class="weekrow" data-start="' + w.start + '" data-end="' + w.end + '"><td>' +
-      esc(w.start.slice(5)) + ' – ' + esc(w.end.slice(5)) + sel + '</td><td>' +
+      'W' + isoWeek(w.start) + ' · ' + esc(w.start.slice(5)) + ' – ' + esc(w.end.slice(5)) + sel + '</td><td>' +
       (count ? esc(fmtHM(Math.round(total / count))) + ' avg (' + count + ')' : '—') + '</td><td>›</td></tr>';
   }).join('');
   document.getElementById('weekList').innerHTML =
@@ -127,13 +135,8 @@ function selectWeek() {
   NIGHTS = ALL.filter(function (r) {
     return Number(r.payload.total_min) > 0 && inWeek(r);
   });
-  if (!NIGHTS.length) {
-    document.getElementById('nightDetail').textContent = 'No nights in week ' + SEL.start + ' – ' + SEL.end + '.';
-    document.getElementById('sleepAvg').textContent = '';
-    stackedBarChart('chSleepWeek', [], -1);
-    return;
-  }
-  drawSelected();
+  // Latest data night selected; empty weeks still draw all 7 columns.
+  drawSelected(NIGHTS.length ? NIGHTS[NIGHTS.length - 1].payload.night : SEL.end);
 }
 async function render() {
   try {
@@ -158,7 +161,7 @@ wireMonthNav(function (n) { CUR = addMonths(CUR, n); renderMonth(); });
 document.getElementById('chSleepWeek').addEventListener('click', function (e) {
   var rect = e.target.getBoundingClientRect();
   var i = barAt('chSleepWeek', e.clientX - rect.left);
-  if (i >= 0) { drawWeek(i); showNight(i); }
+  if (i >= 0) showDay(DAYS[i]);
 });
 render();
 </script>

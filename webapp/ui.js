@@ -163,6 +163,14 @@ function weeksOf(key) {
   }
   return out;
 }
+// ISO week number for a YYYY-MM-DD date (weeks already run Monday–Sunday).
+function isoWeek(ds) {
+  var d = parseDay(ds);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3); // Thursday of this week
+  var jan4 = new Date(d.getFullYear(), 0, 4);
+  jan4.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7) + 3); // Thursday of week 1
+  return 1 + Math.round((d - jan4) / 604800000);
+}
 // Month pager wiring shared by the detail pages: ‹/› shift CUR by n months.
 function wireMonthNav(onMove) {
   document.getElementById('btnPrevM').addEventListener('click', function () { onMove(-1); });

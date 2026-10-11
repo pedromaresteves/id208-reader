@@ -15,7 +15,7 @@
 <section id="secList"><h2 id="listHead">All workouts — tap one for details</h2><div class="body muted">Loading…</div><canvas id="chWorkoutDetail"></canvas><div id="workoutDetail" class="muted">Tap a row above.</div></section>
 <section id="secMonth"><h2>Month</h2>
 <p><button id="btnPrevM" title="Previous month" aria-label="Previous month">‹</button>
-<span id="monthLabel" class="muted"></span>
+<span id="monthLabel" class="month-label"></span>
 <button id="btnNextM" title="Next month" aria-label="Next month">›</button></p>
 <canvas id="chMonth"></canvas><div id="weekList" class="body muted"></div></section>
 <script src="store.js"></script>
@@ -24,7 +24,8 @@
 // Fail fast on file skew (see index.html): banner instead of silent hang.
 (function checkAppFiles() {
   var need = ['Store', 'lineChart', 'setupCanvas', 'barChart', 'esc', 'num', 'fmtDur', 'sportName', 'pad2',
-    'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'wireMonthNav'];
+    'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'wireMonthNav',
+    'isoWeek'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -122,7 +123,7 @@ function renderMonth() {
     });
     var sel = SEL && w.start === SEL.start ? ' ›' : '';
     return '<tr class="weekrow" data-start="' + w.start + '" data-end="' + w.end + '"><td>' +
-      esc(w.start.slice(5)) + ' – ' + esc(w.end.slice(5)) + sel + '</td><td>' +
+      'W' + isoWeek(w.start) + ' · ' + esc(w.start.slice(5)) + ' – ' + esc(w.end.slice(5)) + sel + '</td><td>' +
       count + ' workouts · ' + esc(num(kcal)) + ' kcal</td><td>›</td></tr>';
   }).join('');
   document.getElementById('weekList').innerHTML =

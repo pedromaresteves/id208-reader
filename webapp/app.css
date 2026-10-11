@@ -80,6 +80,25 @@ input.goal {
   box-sizing: border-box;
   margin: 4px;
 }
+/* Sleep rating: big color-coded label, stage shares below in muted text. */
+.rating { font-size: 1.3rem; font-weight: bold; margin: 6px 0 2px 0; }
+.r-excellent { color: #065f46; }
+.r-good { color: #16a34a; }
+.r-fair { color: #ca8a04; }
+.r-poor { color: #dc2626; }
+/* Month pager label: month deserves the same visual weight as the ‹ › buttons. */
+.month-label {
+  display: inline-block;
+  min-width: 7em;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: bold;
+  vertical-align: middle;
+}
+/* App goals editor: stacked labels, full-width inputs and save. */
+#secGoals label { display: block; font-weight: bold; margin: 8px 4px 2px 4px; }
+#secGoals input.goal { display: block; width: calc(100% - 8px); }
+#secGoals #btnGoals { width: calc(100% - 8px); }
 button:active, a.btn:active { filter: brightness(0.92); }
 label.btn {
   display: inline-block;
@@ -134,6 +153,10 @@ nav.tabs a[aria-current="page"] {
   .btn-primary { background: #2563eb; color: #fff; border-color: #93c5fd; }
   .go { color: #b3b3b3; border-color: #555; }
   .met { color: #34d399; }
+  .r-excellent { color: #34d399; }
+  .r-good { color: #4ade80; }
+  .r-fair { color: #facc15; }
+  .r-poor { color: #f87171; }
   label.btn { background: #222; border-color: #555; }
   tr.pick:hover td { background: #222; }
   .weekrow:hover td { background: #222; }
