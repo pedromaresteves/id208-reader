@@ -39,7 +39,7 @@ global.Store = {
 
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ble.js'), 'utf8') +
-    '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures };'
+    '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay };'
 );
 const B = globalThis.B;
 
@@ -65,7 +65,50 @@ const CHUNKS = [
   assert.strictEqual(r.kcal, 631, 'display kcal decoded');
   assert.strictEqual(r.date, '2026-10-03', 'sport header date stamped, got ' + r.date);
   assert.strictEqual(rows[0].date, '2026-10-03', 'store key uses header date, got ' + rows[0].date);
+  const stamp = puts.filter((p) => p.type === 'meta');
+  assert.ok(stamp.length >= 1, 'last-sync stamp written, got ' + stamp.length);
+  assert.strictEqual(stamp[stamp.length - 1].date, 'last-sync', 'stamp key');
+  assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(stamp[stamp.length - 1].payload.day), 'stamp day is YYYY-MM-DD');
   console.log('capture.test.js: all assertions passed');
+
+  // Multi-day sport: two day-offset replies land under distinct header
+  // dates (never collapsed onto the phone's today).
+  function sportFrame(day, steps, dist, kcal, seq) {
+    const head = Buffer.alloc(28, 0);
+    head.writeUInt16LE(2026, 1); head[3] = 10; head[4] = day;
+    head.writeUInt32LE(steps, 8);
+    head.writeUInt32LE(999, 12);
+    head.writeUInt32LE(dist, 16);
+    head.writeUInt32LE(30, 20);
+    head.writeUInt16LE(kcal, 26);
+    const pay = Buffer.concat([
+      Buffer.from([0x00, 0x08, 0x00, 0x00, 0x00, 0x05, 0x00, 28, 0x00, 0, 0x00, 0x00, 0x00, 0x00]),
+      head,
+    ]);
+    const buf = Buffer.concat([Buffer.from([0xDA, 0xAD, 0xDA, 0xAD, 0x01, 0, 0, 0x04, 0x00, seq, 0x00]), pay]);
+    buf.writeUInt16LE(buf.length, 5);
+    return new Uint8Array(Buffer.concat([Buffer.from([0x33]), buf]));
+  }
+  B.resetCaptures();
+  B.handleV3(sportFrame(12, 8000, 6100, 450, 0x71));
+  B.handleV3(sportFrame(11, 5000, 3800, 300, 0x72));
+  const mdBefore = puts.length;
+  await B.saveCaptured('multiday');
+  const mdRows = puts.slice(mdBefore).filter((p) => p.type === 'steps');
+  assert.strictEqual(mdRows.length, 2, 'two step days saved, got ' + mdRows.length);
+  assert.deepStrictEqual(mdRows.map((p) => p.date).sort(), ['2026-10-11', '2026-10-12']);
+  assert.strictEqual(mdRows.filter((p) => p.payload.steps === 8000)[0].payload.kcal, 450);
+  console.log('capture.test.js: multiday sport passed');
+
+  // Incremental-sync helpers: day gaps and per-date upsert.
+  assert.strictEqual(B.dayDiff('2026-10-10', '2026-10-13'), 3);
+  assert.strictEqual(B.dayDiff('2026-10-13', '2026-10-13'), 0);
+  const ul = [{ date: '2026-10-12', steps: 1 }];
+  B.upsertDay(ul, { date: '2026-10-11', steps: 2 });
+  B.upsertDay(ul, { date: '2026-10-12', steps: 9 });
+  assert.strictEqual(ul.length, 2, 'upsert adds, second call replaces');
+  assert.strictEqual(ul.filter((e) => e.date === '2026-10-12')[0].steps, 9);
+  console.log('capture.test.js: sync helpers passed');
 
   // Workout log line renders distance with 2 decimals (was "1.469km").
   // Synthetic type-04 frame: 1469 m at header [25:29], pace 749 s at [40:42].

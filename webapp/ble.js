@@ -178,7 +178,33 @@ function handleLegacy(arr) {
 var lastSleepItems = -1, lastSportItems = -1, lastHrItems = -1, lastWorkoutItems = -1, lastPair = -1;
 var lastSizesTotal = -1; // set when the v3 sizes (0x0005) reply lands, else stays -1
 // Captured decoded records for the on-phone store (reset at each macro start).
+// Sport/HR accumulate one entry per header date across day-offset rounds;
+// capSport/capHr alias the latest (offset-0) entry for the live fallback.
 var capLive = null, capSport = null, capHr = null, capSleepNights = [], capWorkouts = [];
+var capSportDays = [], capHrDays = [];
+// Whole days between two YYYY-MM-DD dates (pure, phone-safe).
+function dayDiff(a, b) {
+  function dayNum(ds) {
+    return Date.UTC(Number(ds.slice(0, 4)), Number(ds.slice(5, 7)) - 1, Number(ds.slice(8, 10))) / 86400000;
+  }
+  return Math.round(dayNum(b) - dayNum(a));
+}
+// Last successful sync day (YYYY-MM-DD) or null when never synced.
+// Stored as a meta record so any page can read it; failures read as null.
+async function getLastSyncDay() {
+  try {
+    var r = await Store.get('last-sync', 'meta');
+    if (r && r.payload && typeof r.payload.day === 'string') return r.payload.day;
+  } catch (e) {}
+  return null;
+}
+async function setLastSyncDay(day, tag) {
+  try {
+    await Store.put('last-sync', 'meta', {
+      day: day, at: new Date().toISOString(), tag: tag || '',
+    });
+  } catch (e) { log('Last-sync stamp failed: ' + e); }
+}
 function pad2(n) { return String(n).padStart(2, '0'); }
 function todayStr() {
   var n = new Date();
@@ -186,6 +212,14 @@ function todayStr() {
 }
 function resetCaptures() {
   capLive = null; capSport = null; capHr = null; capWorkouts = []; capSleepNights = [];
+  capSportDays = []; capHrDays = [];
+}
+// One entry per header date; re-fetched days overwrite in place.
+function upsertDay(list, entry) {
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].date === entry.date) { list[i] = entry; return; }
+  }
+  list.push(entry);
 }
 function refreshStoreStatus() {
   var el = document.getElementById('storeStatus');
@@ -203,14 +237,17 @@ function refreshStoreStatus() {
 async function saveCaptured(tag) {
   var saved = [];
   try {
-    if (capSport) {
-      await Store.put(capSport.date, 'steps', {
-        date: capSport.date, steps: capSport.steps, distance_m: capSport.distanceM,
-        kcal: capSport.displayKcal !== null ? capSport.displayKcal : '',
-        active_min: capSport.activeMin !== null ? capSport.activeMin : '',
-        source: 'v3 sport type08 pull.html ' + tag,
-      });
-      saved.push('steps');
+    if (capSportDays.length) {
+      for (var si = 0; si < capSportDays.length; si++) {
+        var sd = capSportDays[si];
+        await Store.put(sd.date, 'steps', {
+          date: sd.date, steps: sd.steps, distance_m: sd.distanceM,
+          kcal: sd.displayKcal !== null ? sd.displayKcal : '',
+          active_min: sd.activeMin !== null ? sd.activeMin : '',
+          source: 'v3 sport type08 pull.html ' + tag,
+        });
+      }
+      saved.push(capSportDays.length + ' step day(s)');
     } else if (capLive) {
       await Store.put(todayStr(), 'steps', {
         date: todayStr(), steps: capLive.steps, distance_m: capLive.distanceM,
@@ -228,13 +265,16 @@ async function saveCaptured(tag) {
       });
     }
     if (capSleepNights.length) saved.push(capSleepNights.length + ' night(s)');
-    if (capHr) {
-      await Store.put(capHr.date, 'hr', {
-        date: capHr.date, start_time_s: capHr.startS, silent_hr: capHr.silent,
-        zones: capHr.zones, samples: capHr.samples,
-        source: 'v3 type03 pull.html ' + tag,
-      });
-      saved.push('HR');
+    if (capHrDays.length) {
+      for (var hi = 0; hi < capHrDays.length; hi++) {
+        var hd = capHrDays[hi];
+        await Store.put(hd.date, 'hr', {
+          date: hd.date, start_time_s: hd.startS, silent_hr: hd.silent,
+          zones: hd.zones, samples: hd.samples,
+          source: 'v3 type03 pull.html ' + tag,
+        });
+      }
+      saved.push(capHrDays.length + ' HR day(s)');
     }
     if (capWorkouts.length) {
       for (var wi = 0; wi < capWorkouts.length; wi++) {
@@ -245,20 +285,23 @@ async function saveCaptured(tag) {
       saved.push(capWorkouts.length + ' workout(s)');
     }
     log('Saved to store [' + tag + ']: ' + (saved.length ? saved.join(', ') : 'nothing captured'));
+    // Incremental-sync anchor: next sync fetches forward from this day.
+    // Stamped only when something landed, so failed syncs retry the gap.
+    if (saved.length) await setLastSyncDay(todayStr(), tag);
 if (typeof Store !== 'undefined') refreshStoreStatus();
 else document.getElementById('storeStatus').textContent = 'store.js not found next to pull.html — keep both files together.';
   } catch (e) { log('Store save failed [' + tag + ']: ' + e); }
 }
 // After Connect: read the bind flag, then sync automatically when bound.
 // A fresh-reset watch (pair=0) skips the 4-minute pull and asks for A instead.
-async function autoSyncAfterConnect() {
+async function autoSyncAfterConnect(opts) {
   log('Auto-sync: checking bind state...');
   lastPair = -1;
   await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x01]));
   await wait(3000);
   if (lastPair === 1) {
     log('Watch bound (pair=1) — starting automatic sync.');
-    await dailyAuto();
+    await dailyAuto(opts);
   } else {
     show('Watch not bound (pair=' + lastPair + ') — run A. Setup watch first.');
   }
@@ -288,7 +331,7 @@ function waitFor(isDone, capMs, label) {
   });
 }
 function setMacroButtons(disabled) {
-  ['btnSetupAuto', 'btnDailyAuto'].forEach(function (id) {
+  ['btnSetupAuto', 'btnDailyAuto', 'btnSyncAll'].forEach(function (id) {
     var b = document.getElementById(id);
     if (b) b.disabled = disabled;
   });
@@ -360,9 +403,44 @@ async function setupAuto() {
     show('Setup done — QR should be gone. Then run B. Daily pull.');
   } finally { macroRunning = false; setMacroButtons(false); }
 }
-async function dailyAuto() {
+// One day-offset round for a day-data type (sport 08 / HR 03): START at the
+// given offset, wait for the reply, STOP. Offset 0 = today (proven
+// 2026-10-13); larger offsets should walk back in time. Returns the number
+// of NEW dates captured by this round (0 = duplicate or empty).
+async function pullDayOffset(dataType, off, label) {
+  var before = (dataType === 8 ? capSportDays : capHrDays).length;
+  if (dataType === 8) lastSportItems = -1; else lastHrItems = -1;
+  log(label + ' (offset ' + off + ')...');
+  await wr(writeChar, '0x0AF6', buildV3Start04(dataType, off));
+  await waitFor(function () {
+    return (dataType === 8 ? lastSportItems : lastHrItems) >= 0;
+  }, 12000, label + ' reply');
+  await wr(writeChar, '0x0AF6', buildV3Stop04(dataType));
+  await wait(3000);
+  var after = (dataType === 8 ? capSportDays : capHrDays).length;
+  return after - before;
+}
+async function dailyAuto(opts) {
+  opts = opts || {};
   if (macroRunning) { log('A macro is already running — wait for it to finish.'); return; }
   macroRunning = true; setMacroButtons(true); resetCaptures();
+  // Incremental window: at least opts.days (dashboard: 7), stretched to
+  // cover the gap since the last successful sync, capped at 30. First-ever
+  // sync (no stamp) just takes opts.days — the Pull-page button covers all.
+  var wantDays = opts.days || 7;
+  var lastDay = await getLastSyncDay();
+  if (lastDay) {
+    var gap = dayDiff(lastDay, todayStr());
+    if (gap + 1 > wantDays) {
+      wantDays = Math.min(gap + 1, 30);
+      log('Last sync ' + lastDay + ' (' + gap + 'd ago) — fetching ' + wantDays + ' day(s).');
+      if (gap + 1 > 30) log('Gap exceeds 30 days — oldest days need the full-history button.');
+    } else {
+      log('Last sync ' + lastDay + ' — fetching ' + wantDays + ' day(s).');
+    }
+  } else {
+    log('No previous sync stamp — fetching ' + wantDays + ' day(s).');
+  }
   try {
     log('[Pull 1/6] Live data...'); setProgress(1, 6, 'Live data');
     await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0]));
@@ -371,12 +449,15 @@ async function dailyAuto() {
     lastSizesTotal = -1;
     await wr(healthWriteChar, '0x0AF1', buildV3Sizes05());
     await waitFor(function () { return lastSizesTotal >= 0; }, 10000, 'sizes reply');
-    setProgress(3, 6, 'Sport summary'); log('[Pull 3/6] Sport summary...');
-    lastSportItems = -1;
-    await wr(writeChar, '0x0AF6', buildV3Start04(8, 0));
-    await waitFor(function () { return lastSportItems >= 0; }, 12000, 'sport reply');
-    await wr(writeChar, '0x0AF6', buildV3Stop04(8));
-    await wait(3000);
+    setProgress(3, 6, 'Sport days'); log('[Pull 3/6] Sport days (up to ' + wantDays + ', stops when empty)...');
+    var staleSport = 0;
+    for (var sd = 0; sd < wantDays; sd++) {
+      setProgress(3, 6, 'Sport day ' + (sd + 1));
+      var freshS = await pullDayOffset(8, sd, 'Sport round ' + (sd + 1) + '/' + wantDays);
+      if (lastSportItems === 0) { log('Sport history empty — paging done.'); break; }
+      staleSport = freshS ? 0 : staleSport + 1;
+      if (staleSport >= 2) { log('Sport repeats known days — paging done.'); break; }
+    }
     setProgress(4, 6, 'Sleep'); log('[Pull 4/6] Sleep nights (paged, stops when empty)...');
     for (var n = 0; n < 8; n++) {
       var off = (n === 0) ? 0 : 108;
@@ -388,12 +469,15 @@ async function dailyAuto() {
       await wait(3000);
       if (lastSleepItems === 0) { log('Sleep history empty — paging done.'); break; }
     }
-    setProgress(5, 6, 'Heart rate'); log('[Pull 5/6] Heart rate...');
-    lastHrItems = -1;
-    await wr(writeChar, '0x0AF6', buildV3Start04(3, 0));
-    await waitFor(function () { return lastHrItems >= 0; }, 12000, 'HR reply');
-    await wr(writeChar, '0x0AF6', buildV3Stop04(3));
-    await wait(3000);
+    setProgress(5, 6, 'HR days'); log('[Pull 5/6] Heart-rate days (up to ' + wantDays + ', stops when empty)...');
+    var staleHr = 0;
+    for (var hd = 0; hd < wantDays; hd++) {
+      setProgress(5, 6, 'HR day ' + (hd + 1));
+      var freshH = await pullDayOffset(3, hd, 'HR round ' + (hd + 1) + '/' + wantDays);
+      if (lastHrItems === 0) { log('HR history empty — paging done.'); break; }
+      staleHr = freshH ? 0 : staleHr + 1;
+      if (staleHr >= 2) { log('HR repeats known days — paging done.'); break; }
+    }
     setProgress(6, 6, 'Workouts'); log('[Pull 6/6] Workouts (paged, stops when empty)...');
     for (var wn = 0; wn < 8; wn++) {
       log('Workout round ' + (wn + 1) + '/8 (offset ' + wn + ')...'); setProgress(6, 6, 'Workout round ' + (wn + 1));
@@ -406,6 +490,62 @@ async function dailyAuto() {
     }
     await saveCaptured('daily ' + todayStr());
     show('Daily pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
+  } finally { macroRunning = false; setMacroButtons(false); }
+}
+// Full-history pull (Pull-page advanced button): sport/HR day offsets
+// 0..30, a wider sleep offset sweep, workouts 0..15. Each phase stops on
+// empty; duplicates overwrite the same store keys, so over-fetching is
+// harmless. Slow by design (~minutes) — dashboard stays on the 7-day path.
+async function syncAll() {
+  if (macroRunning) { log('A macro is already running — wait for it to finish.'); return; }
+  macroRunning = true; setMacroButtons(true); resetCaptures();
+  try {
+    log('[Full 1/5] Live data...'); setProgress(1, 5, 'Live data');
+    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0]));
+    await waitFor(function () { return capLive !== null; }, 8000, 'live reply');
+    setProgress(2, 5, 'Sport history'); log('[Full 2/5] Sport history (offsets 0..30)...');
+    var staleS = 0;
+    for (var sd = 0; sd <= 30; sd++) {
+      setProgress(2, 5, 'Sport offset ' + sd);
+      var freshS = await pullDayOffset(8, sd, 'Sport round offset ' + sd);
+      if (lastSportItems === 0) { log('Sport history empty — paging done.'); break; }
+      staleS = freshS ? 0 : staleS + 1;
+      if (staleS >= 3) { log('Sport repeats known days — paging done.'); break; }
+    }
+    setProgress(3, 5, 'Sleep history'); log('[Full 3/5] Sleep history (count offsets 0..7, then byte offsets)...');
+    var sleepOffs = [0, 1, 2, 3, 4, 5, 6, 7, 108, 216, 324, 432, 540, 648, 756, 864];
+    for (var sn = 0; sn < sleepOffs.length; sn++) {
+      setProgress(3, 5, 'Sleep offset ' + sleepOffs[sn]);
+      log('Sleep round ' + (sn + 1) + '/' + sleepOffs.length + ' (offset ' + sleepOffs[sn] + ')...');
+      lastSleepItems = -1;
+      await wr(writeChar, '0x0AF6', buildV3Start04(7, sleepOffs[sn]));
+      await waitFor(function () { return lastSleepItems >= 0; }, 12000, 'sleep reply');
+      await wr(writeChar, '0x0AF6', buildV3Stop04(7));
+      await wait(3000);
+      if (lastSleepItems === 0 && sn >= 8) { log('Sleep history empty — paging done.'); break; }
+    }
+    setProgress(4, 5, 'HR history'); log('[Full 4/5] HR history (offsets 0..30)...');
+    var staleH = 0;
+    for (var hd = 0; hd <= 30; hd++) {
+      setProgress(4, 5, 'HR offset ' + hd);
+      var freshH = await pullDayOffset(3, hd, 'HR round offset ' + hd);
+      if (lastHrItems === 0) { log('HR history empty — paging done.'); break; }
+      staleH = freshH ? 0 : staleH + 1;
+      if (staleH >= 3) { log('HR repeats known days — paging done.'); break; }
+    }
+    setProgress(5, 5, 'Workout history'); log('[Full 5/5] Workout history (offsets 0..15)...');
+    for (var wn = 0; wn <= 15; wn++) {
+      setProgress(5, 5, 'Workout offset ' + wn);
+      log('Workout round offset ' + wn + '...');
+      lastWorkoutItems = -1;
+      await wr(writeChar, '0x0AF6', buildV3Start04(4, wn));
+      await waitFor(function () { return lastWorkoutItems >= 0; }, 12000, 'workout reply');
+      await wr(writeChar, '0x0AF6', buildV3Stop04(4));
+      await wait(3000);
+      if (lastWorkoutItems === 0) { log('Workout history empty — paging done.'); break; }
+    }
+    await saveCaptured('full ' + todayStr());
+    show('Full pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
   } finally { macroRunning = false; setMacroButtons(false); }
 }
 function buildV3Stop04(dataType) {
@@ -473,6 +613,7 @@ function dispatchV3(buf) {
       displayKcal: h.length >= 28 ? (h[26] | (h[27] << 8)) : null,
       activeMin: h.length >= 24 ? u32le(h, 20) : null,
     };
+    upsertDay(capSportDays, capSport);
     show('SPORT dataType=8 items=' + itemCount + ': date=' + sportDate + ' steps=' + steps + ' kcal(raw)=' + kcal + ' distance(m)=' + dist +
       '  [watch: 5736 steps / 468 kcal]');
   } else if (dataType === 7 && itemCount === 0) {
@@ -514,6 +655,7 @@ function dispatchV3(buf) {
       date: yr + '-' + pad2(mo) + '-' + pad2(dy), startS: st,
       silent: silent, zones: zs.slice(), samples: hrPairs,
     };
+    upsertDay(capHrDays, capHr);
     show('HR ' + yr + '-' + mo + '-' + dy + ' start=' + hh + ':' + String(mm).padStart(2, '0') +
       ' silent=' + silent + ' zones=' + zs.join('/') + ' samples=' + vals.length + '/' + itemCount +
       ' min=' + mn + ' max=' + mx + ' bpms=' + vals.join(','));
@@ -609,7 +751,7 @@ function connectAndSync(opts) {
   if (device && device.gatt.connected && writeChar && notifyChar) {
     log('Already connected — reusing link.');
     if (opts.noAuto) return Promise.resolve();
-    return autoSyncAfterConnect();
+    return autoSyncAfterConnect(opts);
   }
   log('Requesting device (tap the ID208 in the picker, then Pair)...');
   return navigator.bluetooth.requestDevice({ filters: [{ services: [0x0AF0] }] })
@@ -662,7 +804,7 @@ function connectAndSync(opts) {
         enableIds(PAGE_FULL_BUTTONS);
         log('Ready.');
         if (opts.noAuto) { log('Link ready (auto-sync skipped).'); return; }
-        return autoSyncAfterConnect();
+        return autoSyncAfterConnect(opts);
       }, function (e) {
         log('Notify FAILED 0x0AF2: ' + e);
         log('Continuing with legacy only (buttons 2-3 work). For health: Android Settings > Bluetooth > Forget ID208, reboot watch, retry Connect — 0x0AF2 notify is refused on stale bonds.');

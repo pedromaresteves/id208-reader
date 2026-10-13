@@ -19,6 +19,7 @@ This page is for first-time setup, re-fetching single data types, and raw
 diagnostics. Ground truth 2026-10-01 18:31: <b>5736 steps / 468 kcal</b>,
 sleep <b>07h05m (23:47 → 06:52)</b>.</p>
 <button id="btnConnect">1. Connect (syncs automatically when bound)</button>
+<button id="btnSyncAll">B. Sync full history (all days on watch, slow)</button>
 <br>
 <details>
 <summary>Setup & advanced (first config, manual commands, diagnostics)</summary>
@@ -76,7 +77,7 @@ show decoded text here but don't reach the dashboard.
 // Fail fast on file skew (new page + old ble.js/store.js): halt with an
 // actionable banner instead of half-wired buttons that fail silently.
 (function checkAppFiles() {
-  var need = ['Store', 'connectAndSync', 'setupAuto', 'dailyAuto', 'wr',
+  var need = ['Store', 'connectAndSync', 'ensureLink', 'setupAuto', 'dailyAuto', 'syncAll', 'wr',
     'buildV3Start04', 'buildBindAuthPacket', 'buildAutoActivity', 'saveCaptured'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
@@ -96,6 +97,9 @@ function readOffset() {
 }
 document.getElementById('btnConnect').addEventListener('pointerup', function () {
   connectAndSync().then(null, function () {});
+});
+document.getElementById('btnSyncAll').addEventListener('pointerup', function () {
+  ensureLink().then(function () { syncAll(); }, function () {});
 });
 document.getElementById('btnInfo').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x01])); });
 document.getElementById('btnLive').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0])); });

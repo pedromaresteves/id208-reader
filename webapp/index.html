@@ -65,7 +65,7 @@ function syncUiBusy(busy, label) {
 document.getElementById('btnSync').addEventListener('click', async function () {
   syncUiBusy(true, 'Connecting…');
   try {
-    await connectAndSync();
+    await connectAndSync({ days: 7 });
     document.getElementById('syncLabel').textContent = 'Sync done.';
   } catch (e) {
     document.getElementById('syncLabel').textContent = 'Sync failed — see pull page log. Open Advanced for details.';
