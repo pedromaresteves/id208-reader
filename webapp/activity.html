@@ -9,20 +9,18 @@
 <body>
 <h1>Activity</h1>
 <p><a href="index.html">← Dashboard</a> <span id="status" class="muted"></span></p>
-<section id="secActivity"><h2>Steps & kcal</h2><div class="body muted">Loading…</div><canvas id="chActivity"></canvas><div id="weekAvg" class="muted"></div></section>
-<section id="secMonth"><h2>Month</h2>
-<p><button id="btnPrevM" title="Previous month" aria-label="Previous month">‹</button>
-<span id="monthLabel" class="month-label"></span>
-<button id="btnNextM" title="Next month" aria-label="Next month">›</button></p>
-<canvas id="chMonth"></canvas><div id="weekList" class="body muted"></div></section>
+<section id="secActivity"><h2>Steps & kcal</h2>
+<p><button id="btnPrevW" title="Previous 7 days" aria-label="Previous 7 days">‹ Prev 7</button>
+<span id="rangeLabel" class="month-label"></span>
+<button id="btnNextW" title="Next 7 days" aria-label="Next 7 days">Next 7 ›</button></p>
+<div class="body muted">Loading…</div><canvas id="chActivity"></canvas><div id="weekAvg" class="muted"></div></section>
 <script src="store.js"></script>
 <script src="ui.js"></script>
 <script>
 // Fail fast on file skew (see index.html): banner instead of silent hang.
 (function checkAppFiles() {
-  var need = ['Store', 'barChart', 'esc', 'num', 'kmOrDash', 'monthKey',
-    'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'DEFAULT_GOALS',
-    'wireMonthNav', 'isoWeek'];
+  var need = ['Store', 'barChart', 'esc', 'num', 'kmOrDash', 'hrStats', 'hrCell',
+    'addDays', 'DEFAULT_GOALS'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -32,7 +30,12 @@
   document.body.insertBefore(d, document.body.firstChild);
   throw new Error('halt: ' + missing.join(','));
 })();
-var STEPS = [], GOALS = DEFAULT_GOALS, SEL = null, CUR = null;
+var STEPS = [], HRMAP = {}, GOALS = DEFAULT_GOALS, END = phoneToday();
+function phoneToday() {
+  var n = new Date();
+  return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' +
+    String(n.getDate()).padStart(2, '0');
+}
 function met(v, g) {
   return v !== undefined && v !== null && v !== '' && Number(v) >= g;
 }
@@ -42,95 +45,86 @@ function goalCell(v, g) {
 function renderWeek() {
   var map = {};
   STEPS.forEach(function (r) { map[r.date] = r.payload; });
-  var days = [];
-  for (var i = 0; i < 7; i++) days.push(addDays(SEL.start, i));
-  var rows = days.slice().reverse().map(function (ds) {
+  // Rolling 7-day window ending at END (today first, then back).
+  var daysAsc = [];
+  for (var i = 6; i >= 0; i--) daysAsc.push(addDays(END, -i));
+  var start = daysAsc[0];
+  document.getElementById('rangeLabel').textContent = start.slice(5) + ' – ' + END.slice(5);
+  document.getElementById('btnNextW').disabled = END >= phoneToday();
+  var rows = daysAsc.slice().reverse().map(function (ds) {
     var s = map[ds];
+    var bpm = esc(hrCell(HRMAP[ds]));
     if (!s) {
-      return '<tr><td>' + esc(ds) + '</td><td>—</td><td>—</td><td>—</td></tr>';
+      return '<tr><td>' + esc(ds) + '</td><td>—</td><td>—</td><td>—</td><td>' + bpm + '</td></tr>';
     }
     return '<tr><td>' + esc(ds) + '</td><td>' + goalCell(s.steps, GOALS.steps) + '</td>' +
-      '<td>' + goalCell(s.kcal, GOALS.kcal) + '</td><td>' + esc(kmOrDash(s.distance_m)) + '</td></tr>';
+      '<td>' + goalCell(s.kcal, GOALS.kcal) + '</td><td>' + esc(kmOrDash(s.distance_m)) + '</td><td>' + bpm + '</td></tr>';
   }).join('');
   document.querySelector('#secActivity .body').innerHTML =
-    '<table><tr><th>Date</th><th>Steps / goal</th><th>Kcal / goal</th><th>Dist</th></tr>' + rows + '</table>';
-  barChart('chActivity', days.map(function (d) { return d.slice(5); }),
-    days.map(function (d) { return (map[d] && Number(map[d].steps)) || 0; }));
-  var withData = days.filter(function (d) { return map[d]; });
+    '<table><tr><th>Date</th><th>Steps / goal</th><th>Kcal / goal</th><th>Dist</th><th>BPM avg (min–max)</th></tr>' + rows + '</table>';
+  barChart('chActivity', daysAsc.map(function (d) { return d.slice(5); }),
+    daysAsc.map(function (d) { return (map[d] && Number(map[d].steps)) || 0; }));
+  var withData = daysAsc.filter(function (d) { return map[d]; });
   if (withData.length) {
-    var tSteps = 0, tKcal = 0, nKcal = 0;
+    var tSteps = 0, tKcal = 0, nKcal = 0, tBpm = 0, nBpm = 0, tRest = 0, nRest = 0;
     withData.forEach(function (d) {
       tSteps += Number(map[d].steps) || 0;
       if (map[d].kcal !== undefined && map[d].kcal !== null && map[d].kcal !== '') {
         tKcal += Number(map[d].kcal) || 0; nKcal++;
       }
+      var hs = hrStats(HRMAP[d]);
+      if (hs) {
+        tBpm += hs.avg; nBpm++;
+        if (hs.silent !== null && hs.silent !== undefined && hs.silent !== '') {
+          tRest += Number(hs.silent) || 0; nRest++;
+        }
+      }
     });
     document.getElementById('weekAvg').innerHTML =
-      '<div><b>Week ' + esc(SEL.start.slice(5)) + ' – ' + esc(SEL.end.slice(5)) + '</b>' +
+      '<div><b>7 days ' + esc(start.slice(5)) + ' – ' + esc(END.slice(5)) + '</b>' +
       ' (avg of ' + withData.length + ' days with data)</div>' +
       '<div>Steps <b>' + Math.round(tSteps / withData.length) + '</b>' +
-      (nKcal ? ' · Kcal <b>' + Math.round(tKcal / nKcal) + '</b>' : '') + '</div>' +
+      (nKcal ? ' · Kcal <b>' + Math.round(tKcal / nKcal) + '</b>' : '') +
+      (nBpm ? ' · BPM <b>' + Math.round(tBpm / nBpm) + '</b> avg (' + nBpm + 'd)' : '') +
+      (nRest ? ' · Rest <b>' + Math.round(tRest / nRest) + '</b>' : '') + '</div>' +
       '<div class="muted">Goals ' + esc(num(GOALS.steps)) + ' steps / ' + esc(num(GOALS.kcal)) +
       ' kcal (<a href="watch.html">edit in Settings</a>)</div>';
   } else {
-    document.getElementById('weekAvg').textContent = 'No data in week ' + SEL.start + ' – ' + SEL.end + '.';
+    document.getElementById('weekAvg').textContent = 'No data ' + start + ' – ' + END + '.';
   }
-}
-function renderMonth() {
-  document.getElementById('monthLabel').textContent = CUR;
-  var map = {};
-  STEPS.forEach(function (r) { map[r.date] = r.payload; });
-  var n = daysInMonth(CUR), labels = [], values = [];
-  for (var d = 1; d <= n; d++) {
-    var ds = CUR + '-' + String(d).padStart(2, '0');
-    labels.push(String(d));
-    values.push((map[ds] && Number(map[ds].steps)) || 0);
-  }
-  barChart('chMonth', [labels[0], labels[labels.length - 1]], values);
-  var rows = weeksOf(CUR).map(function (w) {
-    var total = 0;
-    for (var i = 0; i < 7; i++) {
-      var s = map[addDays(w.start, i)];
-      if (s) total += Number(s.steps) || 0;
-    }
-    var sel = SEL && w.start === SEL.start ? ' ›' : '';
-    return '<tr class="weekrow" data-start="' + w.start + '" data-end="' + w.end + '"><td>' +
-      'W' + isoWeek(w.start) + ' · ' + esc(w.start.slice(5)) + ' – ' + esc(w.end.slice(5)) + sel + '</td><td>' +
-      esc(num(total)) + ' steps</td><td>›</td></tr>';
-  }).join('');
-  document.getElementById('weekList').innerHTML =
-    '<table><tr><th>Week (tap to view)</th><th>Total</th><th></th></tr>' + rows + '</table>';
-  document.querySelectorAll('#weekList tr.weekrow').forEach(function (tr) {
-    tr.addEventListener('click', function () {
-      SEL = { start: tr.dataset.start, end: tr.dataset.end };
-      renderWeek();
-      renderMonth();
-    });
-  });
 }
 async function render() {
   try {
     STEPS = await Store.list('steps');
     try {
+      var hrs = await Store.list('hr');
+      HRMAP = {};
+      hrs.forEach(function (r) { HRMAP[r.date] = r.payload; });
+    } catch (e) { HRMAP = {}; }
+    try {
       var grec = await Store.get('goals', 'settings');
       if (grec && grec.payload) GOALS = grec.payload;
     } catch (e) {}
-    if (!STEPS.length) {
+    if (!STEPS.length && !Object.keys(HRMAP).length) {
       document.querySelector('#secActivity .body').textContent = 'No data yet — run a sync.';
-      document.getElementById('status').textContent = '';
-      return;
     }
-    var latest = STEPS[STEPS.length - 1].date;
-    CUR = monthKey(latest);
-    SEL = { start: mondayOf(latest), end: addDays(mondayOf(latest), 6) };
+    END = phoneToday(); // each visit re-anchors on today
     renderWeek();
-    renderMonth();
-    document.getElementById('status').textContent = STEPS.length + ' step days in store.';
+    document.getElementById('status').textContent = STEPS.length + ' step days, ' +
+      Object.keys(HRMAP).length + ' HR days in store.';
   } catch (e) {
     document.getElementById('status').textContent = 'Store unavailable: ' + e;
   }
 }
-wireMonthNav(function (n) { CUR = addMonths(CUR, n); renderMonth(); });
+document.getElementById('btnPrevW').addEventListener('click', function () {
+  END = addDays(END, -7);
+  renderWeek();
+});
+document.getElementById('btnNextW').addEventListener('click', function () {
+  var today = phoneToday();
+  END = addDays(END, 7) > today ? today : addDays(END, 7);
+  renderWeek();
+});
 render();
 </script>
 <nav class="tabs">

@@ -12,7 +12,7 @@
 <body>
 <h1>Workouts</h1>
 <p><a href="index.html">← Dashboard</a> <span id="status" class="muted"></span></p>
-<section id="secList"><h2 id="listHead">All workouts — tap one for details</h2><div class="body muted">Loading…</div><canvas id="chWorkoutDetail"></canvas><div id="workoutDetail" class="muted">Tap a row above.</div></section>
+<section id="secList"><h2 id="listHead">All workouts — tap one for details</h2><p class="muted"><label><input type="checkbox" id="chkHidden"> Show hidden empty records</label></p><div class="body muted">Loading…</div><canvas id="chWorkoutDetail"></canvas><div id="workoutDetail" class="muted">Tap a row above.</div></section>
 <section id="secMonth"><h2>Month</h2>
 <p><button id="btnPrevM" title="Previous month" aria-label="Previous month">‹</button>
 <span id="monthLabel" class="month-label"></span>
@@ -35,7 +35,21 @@
   document.body.insertBefore(d, document.body.firstChild);
   throw new Error('halt: ' + missing.join(','));
 })();
-var WORKOUTS = [], ALL = [], SEL = null, CUR = null;
+var WORKOUTS = [], ALL = [], SEL = null, CUR = null, SHOW_HIDDEN = false;
+function isEmptyWorkout(w) {
+  if (!w || typeof w !== 'object') return true;
+  if (!w.date || /^no-date-/.test(w.date)) return true; // dateless imports
+  var hasDur = Number(w.durationsS) > 0;
+  var hasKcal = Number(w.kcal) > 0;
+  var hasSamples = Array.isArray(w.samples) && w.samples.length > 0;
+  var hasHr = [w.avgHr, w.maxHr, w.minHr].some(function (v) {
+    return v !== undefined && v !== null && v !== '' && Number(v) > 0;
+  });
+  return !(hasDur || hasKcal || hasSamples || hasHr);
+}
+function visibleAll() {
+  return SHOW_HIDDEN ? ALL.slice() : ALL.filter(function (r) { return !isEmptyWorkout(r.payload); });
+}
 function inWeek(r) {
   var d = r.payload.date || '';
   return d >= SEL.start && d <= SEL.end;
@@ -100,13 +114,14 @@ function renderList() {
   showWorkout(0); // latest by default
 }
 function selectWeek() {
-  WORKOUTS = ALL.filter(inWeek).slice().reverse(); // latest first
+  WORKOUTS = visibleAll().filter(inWeek).slice().reverse(); // latest first
   renderList();
 }
 function renderMonth() {
   document.getElementById('monthLabel').textContent = CUR;
+  var vis = visibleAll();
   var kcalByDay = {};
-  ALL.forEach(function (r) {
+  vis.forEach(function (r) {
     var d = r.payload.date;
     if (d && d.slice(0, 7) === CUR) kcalByDay[d] = (kcalByDay[d] || 0) + (Number(r.payload.kcal) || 0);
   });
@@ -117,7 +132,7 @@ function renderMonth() {
   barChart('chMonth', ['1', String(n)], values);
   var rows = weeksOf(CUR).map(function (w) {
     var count = 0, kcal = 0;
-    ALL.forEach(function (r) {
+    vis.forEach(function (r) {
       var d = r.payload.date || '';
       if (d >= w.start && d <= w.end) { count++; kcal += Number(r.payload.kcal) || 0; }
     });
@@ -153,11 +168,21 @@ async function render() {
     SEL = { start: mondayOf(anchor), end: addDays(mondayOf(anchor), 6) };
     selectWeek();
     renderMonth();
-    document.getElementById('status').textContent = ALL.length + ' workouts in store.';
+    var hidden = ALL.length - visibleAll().length;
+    document.getElementById('status').textContent = visibleAll().length + ' shown' +
+      (hidden ? ', ' + hidden + ' hidden empties' : '') + ' (' + ALL.length + ' in store).';
   } catch (e) {
     document.getElementById('status').textContent = 'Store unavailable: ' + e;
   }
 }
+document.getElementById('chkHidden').addEventListener('change', function (e) {
+  SHOW_HIDDEN = !!e.target.checked;
+  selectWeek();
+  renderMonth();
+  var hidden = ALL.length - visibleAll().length;
+  document.getElementById('status').textContent = visibleAll().length + ' shown' +
+    (hidden ? ', ' + hidden + ' hidden empties' : '') + ' (' + ALL.length + ' in store).';
+});
 wireMonthNav(function (n) { CUR = addMonths(CUR, n); renderMonth(); });
 render();
 </script>

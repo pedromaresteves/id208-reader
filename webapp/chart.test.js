@@ -39,7 +39,7 @@ global.document = {
 
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ui.js'), 'utf8') +
-    '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, kmOrDash,' +
+    '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, kmOrDash, hrStats, hrCell,' +
     ' monthKey, addMonths, daysInMonth, addDays, mondayOf, weeksOf, sleepScore, DEFAULT_GOALS,' +
     ' wireMonthNav, isoWeek };'
 );
@@ -118,6 +118,16 @@ assert.strictEqual(balanced.label, 'Excellent', 'balanced night rates Excellent,
 const restless = U.sleepScore({ light_min: 400, deep_min: 10, rem_min: 10 });
 assert.strictEqual(restless.label, 'Poor', 'light-dominated night rates Poor, got ' + restless.label);
 assert.strictEqual(U.sleepScore({ light_min: 0, deep_min: 0, rem_min: 0 }), null, 'no sleep scores null');
+
+// hrStats/hrCell: daily HR join for the Activity page (type03 samples).
+assert.deepStrictEqual(
+  U.hrStats({ samples: [{ t: 1, bpm: 60 }, { t: 2, bpm: 80 }, { t: 3, bpm: 70 }], silent_hr: 61 }),
+  { avg: 70, min: 60, max: 80, count: 3, silent: 61 });
+assert.strictEqual(U.hrCell({ samples: [60, 80, 70] }), '70 (60–80)');
+assert.strictEqual(U.hrCell({ samples: [] }), '—');
+assert.strictEqual(U.hrCell(null), '—');
+assert.strictEqual(U.hrCell({ samples: [0, 255, 70] }), '70 (70–70)', 'out-of-range BPMs ignored');
+assert.strictEqual(U.hrStats({ samples: [] }), null, 'empty samples score null');
 
 // Goal defaults match the watch setup (8000 steps / 500 kcal).
 assert.deepStrictEqual(U.DEFAULT_GOALS, { steps: 8000, kcal: 500 });

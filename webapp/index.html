@@ -36,7 +36,7 @@
 // symbols halt here with an actionable banner instead of a silent hang.
 (function checkAppFiles() {
   var need = ['Store', 'fmtHM', 'sportName', 'num', 'esc', 'fmtDur', 'kmOrDash',
-    'connectAndSync', 'ensureLink'];
+    'hrStats', 'connectAndSync', 'ensureLink'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -80,13 +80,21 @@ async function render() {
     var steps = await Store.list('steps');
     var sleep = await Store.list('sleep');
     var workouts = await Store.list('workout');
+    var hrByDate = {};
+    try {
+      var hrs = await Store.list('hr');
+      hrs.forEach(function (r) { hrByDate[r.date] = r.payload; });
+    } catch (e) {}
 
-    // Activity: latest steps + kcal, linked to the 7-day page.
+    // Activity: latest steps + kcal + BPM, linked to the 7-day page.
     if (steps.length) {
       var last = steps[steps.length - 1].payload;
+      var hs = hrStats(hrByDate[last.date]);
+      var bpmBit = hs ? ' · ' + hs.avg + ' bpm avg' +
+        (hs.silent !== null && hs.silent !== '' ? ' (rest ' + hs.silent + ')' : '') : '';
       document.querySelector('#secSteps .body').innerHTML =
         '<div class="big">' + esc(num(last.steps)) + ' <span class="muted">steps · ' +
-        esc(num(last.kcal, ' kcal')) + '</span></div>' +
+        esc(num(last.kcal, ' kcal')) + esc(bpmBit) + '</span></div>' +
         '<div class="muted">' + esc(last.date) + ' · ' + esc(kmOrDash(last.distance_m)) + '</div>';
     } else {
       document.querySelector('#secSteps .body').textContent = 'No data yet — run a sync.';

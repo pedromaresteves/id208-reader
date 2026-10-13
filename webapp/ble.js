@@ -197,14 +197,15 @@ function refreshStoreStatus() {
       ' nights, ' + r[2].length + ' HR days, ' + r[3].length + ' workouts.';
   }, function (e) { el.textContent = 'Store unavailable: ' + e; });
 }
-// Persist captured records to the on-phone store. Sport date is today
-// (v3 sport headers carry no date — same rule as sync.py's live fallback).
+// Persist captured records to the on-phone store. Sport is keyed by its
+// header date (v3 type08 headers carry year/month/day — same rule as
+// workouts/sleep); live 02A0 stays phone-dated as the no-header fallback.
 async function saveCaptured(tag) {
   var saved = [];
   try {
     if (capSport) {
-      await Store.put(todayStr(), 'steps', {
-        date: todayStr(), steps: capSport.steps, distance_m: capSport.distanceM,
+      await Store.put(capSport.date, 'steps', {
+        date: capSport.date, steps: capSport.steps, distance_m: capSport.distanceM,
         kcal: capSport.displayKcal !== null ? capSport.displayKcal : '',
         active_min: capSport.activeMin !== null ? capSport.activeMin : '',
         source: 'v3 sport type08 pull.html ' + tag,
@@ -461,13 +462,18 @@ function dispatchV3(buf) {
   var h = p.slice(hs, he), d = p.slice(he, de);
   if (dataType === 8 && h.length >= 20) {
     var steps = u32le(h, 8), kcal = u32le(h, 12), dist = u32le(h, 16);
+    // Header carries the day (bytes 1-2 year LE, [3] month, [4] day —
+    // same layout as sync.py captures.py; proven 2026-10-13 in
+    // health-capture.jsonl). Fall back to phone date only when absent.
+    var sportDate = (h.length >= 5 && (h[1] | h[2])) ?
+      (u16le(h, 1) + '-' + pad2(h[3]) + '-' + pad2(h[4])) : todayStr();
     capSport = {
-      date: todayStr(), steps: steps, distanceM: dist,
+      date: sportDate, steps: steps, distanceM: dist,
       rawCalories: kcal,
       displayKcal: h.length >= 28 ? (h[26] | (h[27] << 8)) : null,
       activeMin: h.length >= 24 ? u32le(h, 20) : null,
     };
-    show('SPORT dataType=8 items=' + itemCount + ': steps=' + steps + ' kcal(raw)=' + kcal + ' distance(m)=' + dist +
+    show('SPORT dataType=8 items=' + itemCount + ': date=' + sportDate + ' steps=' + steps + ' kcal(raw)=' + kcal + ' distance(m)=' + dist +
       '  [watch: 5736 steps / 468 kcal]');
   } else if (dataType === 7 && itemCount === 0) {
     // Empty-history marker (zeroed header, not a night): same phantom

@@ -123,6 +123,28 @@ function kmOrDash(m) {
   return (Number(m) / 1000).toFixed(2) + 'km';
 }
 
+// Daily HR summary from type03 samples ([{t,bpm}] or plain numbers).
+// Returns null when no valid samples; silent is kept separate (resting,
+// not an average input). Pure, phone-safe.
+function hrStats(d) {
+  var samples = (d && d.samples) || [];
+  var vals = [];
+  for (var i = 0; i < samples.length; i++) {
+    var b = (samples[i] && typeof samples[i] === 'object') ? samples[i].bpm : samples[i];
+    if (typeof b === 'number' && b >= 30 && b <= 220) vals.push(b);
+  }
+  if (!vals.length) return null;
+  var sum = 0, mn = vals[0], mx = vals[0], j;
+  for (j = 0; j < vals.length; j++) { sum += vals[j]; if (vals[j] < mn) mn = vals[j]; if (vals[j] > mx) mx = vals[j]; }
+  return { avg: Math.round(sum / vals.length), min: mn, max: mx, count: vals.length,
+    silent: (d && d.silent_hr !== undefined) ? d.silent_hr : (d && d.silent !== undefined ? d.silent : null) };
+}
+// One narrow column for the Activity table: "68 (43–120)".
+function hrCell(d) {
+  var s = hrStats(d);
+  if (!s) return '—';
+  return s.avg + ' (' + s.min + '–' + s.max + ')';
+}
 // --- Month/week date helpers (YYYY-MM-DD strings, Monday-start weeks) ---
 function monthKey(ds) { return String(ds).slice(0, 7); }
 function isoDay(y, m, d) {

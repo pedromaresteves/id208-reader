@@ -63,6 +63,8 @@ const CHUNKS = [
   assert.ok('distance_m' in r, 'distance_m key present (was dropped by key mismatch)');
   assert.strictEqual(r.distance_m, 7641, 'distance decoded');
   assert.strictEqual(r.kcal, 631, 'display kcal decoded');
+  assert.strictEqual(r.date, '2026-10-03', 'sport header date stamped, got ' + r.date);
+  assert.strictEqual(rows[0].date, '2026-10-03', 'store key uses header date, got ' + rows[0].date);
   console.log('capture.test.js: all assertions passed');
 
   // Workout log line renders distance with 2 decimals (was "1.469km").
