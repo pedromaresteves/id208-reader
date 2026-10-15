@@ -508,6 +508,63 @@ def parse_sleep_summary(header: bytes) -> dict[str, int]:
     }
 
 
+def parse_swim_summary(header: bytes, data: bytes) -> dict[str, object]:
+    """Parse a dataType 0x06 swim record (34-byte header + 15-byte/min data).
+
+    Ground truth anchor (Pool Swim 2026-10-14, watch screen):
+    start 17:39:28, duration 2409 s (40m09s), calories 358, distance
+    1650 m, laps 66 (25 m pool: 66x25=1650), strokes 1652, rate 48 spm,
+    main stroke freestyle (1), avg pace 146 s/100m (2'26"), SWOLF 113.
+    Header layout (all LE): year u16 [0:2], mon/day/hh/mm/ss u8 [2:7],
+    stroke u8 [8] (1=freestyle), kcal u16 [9:11], distance_m u16 [11:13],
+    laps u8 [15], duration_s u16 [17:19], swolf u8 [19], strokes u16
+    [21:23], pool_length_m u8 [24], pace_s/100m u16 [26:28],
+    rate_spm u16 [28:30]. Bytes [7], [13:14], [16], [20], [23], [25]
+    are reserved/unknown (usually 0/1); tail [30:34] mirrors dataSize.
+    Data: one 15-byte item per minute (items=40 for 40m09s); per item
+    byte[0]=HR bpm, byte[1]=stroke, byte[2]=strokes/length-ish,
+    byte[4]=rate spm, byte[6]=distance_m that minute (sums to header
+    distance), byte[8]=pace-ish, byte[10]=minute index. Only distance
+    sums exactly; other per-minute semantics stay provisional until a
+    second swim anchors them.
+    """
+    if len(header) < 34:
+        raise ValueError("swim header too short")
+    start_time_s = header[4] * 3600 + header[5] * 60 + header[6]
+    minutes: list[dict[str, int]] = []
+    item_len = 15
+    count = len(data) // item_len
+    for i in range(count):
+        chunk = data[i * item_len : (i + 1) * item_len]
+        if len(chunk) < item_len:
+            break
+        minutes.append(
+            {
+                "hr": chunk[0],
+                "stroke": chunk[1],
+                "rate_spm": chunk[4],
+                "distance_m": int.from_bytes(chunk[6:8], "little"),
+            }
+        )
+    return {
+        "year": int.from_bytes(header[0:2], "little"),
+        "month": header[2],
+        "day": header[3],
+        "start_time_s": start_time_s,
+        "main_stroke": header[8],
+        "calories": int.from_bytes(header[9:11], "little"),
+        "distance_m": int.from_bytes(header[11:13], "little"),
+        "laps": header[15],
+        "durations_s": int.from_bytes(header[17:19], "little"),
+        "swolf": header[19],
+        "strokes": int.from_bytes(header[21:23], "little"),
+        "pool_length_m": header[24],
+        "avg_pace_s": int.from_bytes(header[26:28], "little"),
+        "stroke_rate_spm": header[28],
+        "minutes": minutes,
+    }
+
+
 def parse_workout_summary(header: bytes, data: bytes) -> dict[str, object]:
     """Parse a dataType 0x04 workout record (100-byte header + data blob).
 

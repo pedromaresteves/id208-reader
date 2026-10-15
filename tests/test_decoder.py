@@ -33,6 +33,7 @@ from ido.decoder import (
     parse_live_data,
     parse_sleep_summary,
     parse_sport_summary,
+    parse_swim_summary,
     parse_v3_health_common,
     parse_workout_summary,
 )
@@ -479,3 +480,32 @@ def test_parse_workout_summary_walk_pins_distance_pace() -> None:
     assert out["avg_pace_s"] == 749
     assert out["fast_pace_s"] == 469
     assert out["hr_samples"] == [90, 95]
+
+
+def test_parse_swim_summary_matches_pool_swim_oct14() -> None:
+    # Pool Swim 2026-10-14 (watch screen + health-capture (5).jsonl seq 0x71):
+    # 17:39:28, 40m09s (2409 s), 358 kcal, 1650 m, 66 laps x 25 m,
+    # 1652 strokes, 48 spm, freestyle (1), 2'26"/100m (146 s), SWOLF 113.
+    header = bytes.fromhex(
+        "EA070A0E11271C010166017206000042006909710074060119009200300058020000"
+    )
+    data = bytes(15 * 40)
+    out = parse_swim_summary(header, data)
+    assert (out["year"], out["month"], out["day"]) == (2026, 10, 14)
+    assert out["start_time_s"] == 17 * 3600 + 39 * 60 + 28
+    assert out["main_stroke"] == 1
+    assert out["calories"] == 358
+    assert out["distance_m"] == 1650
+    assert out["laps"] == 66
+    assert out["durations_s"] == 2409
+    assert out["swolf"] == 113
+    assert out["strokes"] == 1652
+    assert out["pool_length_m"] == 25
+    assert out["avg_pace_s"] == 146
+    assert out["stroke_rate_spm"] == 48
+    assert len(out["minutes"]) == 40
+
+
+def test_parse_swim_summary_rejects_short_header() -> None:
+    with pytest.raises(ValueError):
+        parse_swim_summary(bytes(33), bytes(10))

@@ -101,3 +101,39 @@ def test_collect_health_harvests_raw_workout() -> None:
     assert row["hr_samples"] == [0x41, 0x42, 0x43]
     assert row["head_hex"] == head.hex()
     assert row["source"] == "test"
+
+
+def test_collect_health_harvests_swim() -> None:
+    # dataType 0x06 with the Oct-14 pool-swim header: lands in workout rows
+    # as kind=swim with per-minute distances summing to 1650 m.
+    head = bytes.fromhex(
+        "EA070A0E11271C010166017206000042006909710074060119009200300058020000"
+    )
+    minute = bytes((80, 1, 20, 0, 48, 0, 25, 0, 24, 100, 0, 0, 0, 0, 0))
+    payload = (
+        bytes((0x00, 0x06, 0x00, 0x00, 0x00, 0x02, 0x00))
+        + len(head).to_bytes(2, "little")
+        + (30).to_bytes(4, "little")
+        + bytes((0x00,))
+        + head
+        + minute * 2
+    )
+    logical = _frame_bytes(0x0004, 0x71, payload)
+    lines = [
+        {
+            "ts": "t",
+            "char": "0x0AF7",
+            "dir": "RX",
+            "hex": (bytes((0x33,)) + logical).hex(),
+        }
+    ]
+    sport, sleep, hr, workouts = collect_health(lines, "test")
+    assert sport == [] and sleep == [] and hr == []
+    assert len(workouts) == 1
+    row = workouts[0]
+    assert row["date"] == "2026-10-14"
+    assert row["kind"] == "swim"
+    assert row["kcal"] == 358
+    assert row["distanceM"] == 1650
+    assert row["laps"] == 66
+    assert row["durationsS"] == 2409

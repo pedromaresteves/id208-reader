@@ -76,6 +76,17 @@ function showWorkout(i) {
     formRows += '<div><div class="k">Pace</div><div class="v">' +
       Math.floor(w.avgPaceS / 60) + "'" + (w.avgPaceS % 60) + '"/km</div></div>';
   }
+  if (w.laps) {
+    formRows += '<div><div class="k">Laps</div><div class="v">' +
+      esc(w.laps) + (w.poolLengthM ? ' × ' + esc(w.poolLengthM) + 'm' : '') + '</div></div>';
+  }
+  if (w.strokes) {
+    formRows += '<div><div class="k">Strokes</div><div class="v">' +
+      esc(w.strokes) + (w.strokeRateSpm ? ' · ' + esc(w.strokeRateSpm) + ' spm' : '') + '</div></div>';
+  }
+  if (w.swolf) {
+    formRows += '<div><div class="k">SWOLF</div><div class="v">' + esc(w.swolf) + '</div></div>';
+  }
   document.getElementById('workoutDetail').innerHTML =
     '<div class="big">' + esc(sportName(w)) + '</div>' +
     '<div class="muted">' + esc(w.date || '') + ' · start ' + startHM + '</div>' +

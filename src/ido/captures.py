@@ -15,6 +15,7 @@ from ido.decoder import (
     parse_live_data,
     parse_sleep_summary,
     parse_sport_summary,
+    parse_swim_summary,
     parse_v3_health_common,
     parse_workout_summary,
 )
@@ -144,6 +145,39 @@ def collect_health(
                             f"{summary['day']:02d}"
                         ),
                         **summary,
+                        "source": source,
+                    }
+                )
+            elif common["data_type"] == 0x06 and len(head) >= 34:
+                try:
+                    summary = parse_swim_summary(head, data)
+                except ValueError:
+                    continue
+                workout_rows.append(
+                    {
+                        "date": (
+                            f"{summary['year']:04d}-{summary['month']:02d}-"
+                            f"{summary['day']:02d}"
+                        ),
+                        "kind": "swim",
+                        "version": None,
+                        "startS": summary["start_time_s"],
+                        "sportType": None,
+                        "main_stroke": summary["main_stroke"],
+                        "durationsS": summary["durations_s"],
+                        "kcal": summary["calories"],
+                        "distanceM": summary["distance_m"],
+                        "laps": summary["laps"],
+                        "strokes": summary["strokes"],
+                        "stroke_rate_spm": summary["stroke_rate_spm"],
+                        "pool_length_m": summary["pool_length_m"],
+                        "avgPaceS": summary["avg_pace_s"],
+                        "swolf": summary["swolf"],
+                        "samples": [
+                            m["hr"] for m in summary["minutes"] if 30 <= m["hr"] <= 220
+                        ],
+                        "minutes": summary["minutes"],
+                        "head_hex": head.hex(),
                         "source": source,
                     }
                 )

@@ -46,6 +46,8 @@ sleep <b>07h05m (23:47 → 06:52)</b>.</p>
 <p>
 <button id="btnWorkout" disabled>16. Workout START (v3 0x04 type 04)</button>
 <button id="btnWorkoutStop" disabled>17. Workout STOP (type 04)</button>
+<button id="btnSwim" disabled>20. Swim START (v3 0x04 type 06)</button>
+<button id="btnSwimStop" disabled>21. Swim STOP (type 06)</button>
 </p>
 <p>
 <button id="btnAutoOff" disabled>18. Auto-detect OFF (03 49, stops walk prompts)</button>
@@ -90,7 +92,7 @@ show decoded text here but don't reach the dashboard.
 })();
 // Page wiring: ble.js holds all protocol code; here only DOM bindings.
 PAGE_BASIC_BUTTONS = ['btnInfo', 'btnLive', 'btnSetupAuto'];
-PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop', 'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth', 'btnWorkout', 'btnWorkoutStop', 'btnAutoOff', 'btnAutoWalkRun'];
+PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop', 'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth', 'btnWorkout', 'btnWorkoutStop', 'btnSwim', 'btnSwimStop', 'btnAutoOff', 'btnAutoWalkRun'];
 function readOffset() {
   var v = parseInt(document.getElementById('offset').value, 10);
   return (isNaN(v) || v < 0) ? 0 : (v > 65535 ? 65535 : v);
@@ -121,6 +123,8 @@ document.getElementById('btnWorkoutStop').addEventListener('pointerup', async fu
   await wait(3000);
   await saveCaptured('workout ' + todayStr());
 });
+document.getElementById('btnSwim').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(6, readOffset())); });
+document.getElementById('btnSwimStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(6)); });
 document.getElementById('btnAutoOff').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildAutoActivity(null)); });
 document.getElementById('btnAutoWalkRun').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildAutoActivity([1, 1])); });
 document.getElementById('btnSetupAuto').addEventListener('pointerup', function () { setupAuto(); });

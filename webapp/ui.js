@@ -108,6 +108,7 @@ function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 // entries only from observed watch-icon → record pairs.
 var SPORT_NAMES = {};
 function sportName(w) {
+  if (w && w.kind === 'swim') return 'Pool Swim';
   if (w && SPORT_NAMES[w.sportType] !== undefined) return SPORT_NAMES[w.sportType];
   return 'Workout';
 }

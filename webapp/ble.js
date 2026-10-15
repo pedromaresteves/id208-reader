@@ -175,7 +175,7 @@ function handleLegacy(arr) {
 // Last item_count seen on START replies (operate 0x00) per type; STOP acks
 // (operate 0x01) don't touch these. The daily macro uses lastSleepItems === 0
 // as its paging stop rule (same as the old manual repeat-until-empty).
-var lastSleepItems = -1, lastSportItems = -1, lastHrItems = -1, lastWorkoutItems = -1, lastPair = -1;
+var lastSleepItems = -1, lastSportItems = -1, lastHrItems = -1, lastWorkoutItems = -1, lastSwimItems = -1, lastPair = -1;
 var lastSizesTotal = -1; // set when the v3 sizes (0x0005) reply lands, else stays -1
 // Captured decoded records for the on-phone store (reset at each macro start).
 // Sport/HR accumulate one entry per header date across day-offset rounds;
@@ -488,6 +488,16 @@ async function dailyAuto(opts) {
       await wait(3000);
       if (lastWorkoutItems === 0) { log('Workout history empty — paging done.'); break; }
     }
+    setProgress(6, 6, 'Swims'); log('[Pull 6/6] Swims (paged, stops when empty)...');
+    for (var sw = 0; sw < 8; sw++) {
+      log('Swim round ' + (sw + 1) + '/8 (offset ' + sw + ')...'); setProgress(6, 6, 'Swim round ' + (sw + 1));
+      lastSwimItems = -1;
+      await wr(writeChar, '0x0AF6', buildV3Start04(6, sw));
+      await waitFor(function () { return lastSwimItems >= 0; }, 12000, 'swim reply');
+      await wr(writeChar, '0x0AF6', buildV3Stop04(6));
+      await wait(3000);
+      if (lastSwimItems === 0) { log('Swim history empty — paging done.'); break; }
+    }
     await saveCaptured('daily ' + todayStr());
     show('Daily pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
   } finally { macroRunning = false; setMacroButtons(false); }
@@ -543,6 +553,17 @@ async function syncAll() {
       await wr(writeChar, '0x0AF6', buildV3Stop04(4));
       await wait(3000);
       if (lastWorkoutItems === 0) { log('Workout history empty — paging done.'); break; }
+    }
+    setProgress(5, 5, 'Swim history'); log('[Full 5/5] Swim history (offsets 0..15)...');
+    for (var sw2 = 0; sw2 <= 15; sw2++) {
+      setProgress(5, 5, 'Swim offset ' + sw2);
+      log('Swim round offset ' + sw2 + '...');
+      lastSwimItems = -1;
+      await wr(writeChar, '0x0AF6', buildV3Start04(6, sw2));
+      await waitFor(function () { return lastSwimItems >= 0; }, 12000, 'swim reply');
+      await wr(writeChar, '0x0AF6', buildV3Stop04(6));
+      await wait(3000);
+      if (lastSwimItems === 0) { log('Swim history empty — paging done.'); break; }
     }
     await saveCaptured('full ' + todayStr());
     show('Full pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
@@ -697,6 +718,40 @@ function dispatchV3(buf) {
     if (wrec) capWorkouts.push(wrec);
     show('WORKOUT dataType=4 items=' + itemCount + ' headSize=' + headSize + ' dataSize=' + dataSize +
       ' dur=' + wdur + ' ' + wkcal + ' HR ' + whr + wdist + ' headHex=' + hexStr(h.slice(0, Math.min(h.length, 16))));
+  } else if (dataType === 6) {
+    // Swim records (type 06, 34-byte header + 15-byte/min data).
+    // Layout anchored 2026-10-14 pool swim (see parse_swim_summary):
+    // date [0:4], start hh/mm/ss [4:7], stroke [8], kcal u16 [9],
+    // distance u16 [11], laps [15], duration u16 [17], swolf [19],
+    // strokes u16 [21], pool m [24], pace/100m u16 [26], rate [28].
+    if (itemCount === 0) {
+      lastSwimItems = 0;
+      log('SWIM dataType=6 items=0: empty-history marker, ignored (not a swim).');
+    } else if (h.length >= 34) {
+      lastSwimItems = itemCount;
+      var swimDate = u16le(h, 0) + '-' + String(h[2]).padStart(2, '0') + '-' + String(h[3]).padStart(2, '0');
+      var swimStartS = h[4] * 3600 + h[5] * 60 + h[6];
+      var swimDur = u16le(h, 17), swimKcal = u16le(h, 9), swimDist = u16le(h, 11);
+      var swimHr = [];
+      for (var m = 0; m < itemCount && (m + 1) * 15 <= d.length; m++) {
+        var bpm = d[m * 15];
+        if (bpm >= 30 && bpm <= 220) swimHr.push(bpm);
+      }
+      capWorkouts.push({
+        date: swimDate, kind: 'swim',
+        startS: swimStartS, durationsS: swimDur, kcal: swimKcal, distanceM: swimDist,
+        avgPaceS: u16le(h, 26),
+        laps: h[15], strokes: u16le(h, 21), strokeRateSpm: u16le(h, 28),
+        poolLengthM: h[24], swolf: h[19], mainStroke: h[8],
+        samples: swimHr,
+      });
+      show('SWIM dataType=6 items=' + itemCount + ' date=' + swimDate +
+        ' dur=' + Math.floor(swimDur / 60) + 'm' + (swimDur % 60) + 's' +
+        ' ' + swimKcal + 'kcal ' + (swimDist / 1000).toFixed(2) + 'km laps=' + h[15]);
+    } else {
+      show('SWIM dataType=6 items=' + itemCount + ' headSize=' + headSize + ' dataSize=' + dataSize +
+        ' headHex=' + hexStr(h) + ' (short header, logged only)');
+    }
   } else {
     show('dataType=' + dataType + ' items=' + itemCount + ' headSize=' + headSize + ' dataSize=' + dataSize + ' (logged, not decoded)');
   }
