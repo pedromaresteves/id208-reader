@@ -182,9 +182,10 @@ function handleLegacy(arr) {
 // (operate 0x01) don't touch these. The daily macro uses lastSleepItems === 0
 // as its paging stop rule (same as the old manual repeat-until-empty).
 var lastSleepItems = -1, lastSportItems = -1, lastHrItems = -1, lastWorkoutItems = -1, lastSwimItems = -1, lastPair = -1;
-// Record size (headSize+dataSize) of the last START reply for day-data types;
-// the byte step used to page to the previous day (see buildV3Start04 note).
-var lastSportRec = 0, lastHrRec = 0;
+// Record size (headSize+dataSize) of the last START reply per type; the byte
+// step used to page to the next record (see buildV3Start04 note). saveOffset
+// is a BYTE position in the type's stored stream, not a record index.
+var lastSportRec = 0, lastHrRec = 0, lastSleepRec = 0, lastWorkoutRec = 0, lastSwimRec = 0;
 var lastSizesTotal = -1; // set when the v3 sizes (0x0005) reply lands, else stays -1
 // Captured decoded records for the on-phone store (reset at each macro start).
 // Sport/HR accumulate one entry per header date across day-offset rounds;
@@ -477,15 +478,16 @@ async function dailyAuto(opts) {
       sportOff = nextDaySaveOffset(sportOff, lastSportRec); // byte-step to the previous day's record
     }
     setProgress(4, 7, 'Sleep'); log('[Pull 4/7] Sleep nights (paged, stops when empty)...');
+    var sleepOff = 0;
     for (var n = 0; n < 8; n++) {
-      var off = (n === 0) ? 0 : 108;
-      log('Sleep round ' + (n + 1) + '/8 (offset ' + off + ')...'); setProgress(4, 7, 'Sleep round ' + (n + 1));
-      lastSleepItems = -1;
-      await wr(writeChar, '0x0AF6', buildV3Start04(7, off));
+      log('Sleep round ' + (n + 1) + '/8 (byte offset ' + sleepOff + ')...'); setProgress(4, 7, 'Sleep round ' + (n + 1));
+      lastSleepItems = -1; lastSleepRec = 0;
+      await wr(writeChar, '0x0AF6', buildV3Start04(7, sleepOff));
       await waitFor(function () { return lastSleepItems >= 0; }, 12000, 'sleep reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(7));
       await wait(3000);
       if (lastSleepItems === 0) { log('Sleep history empty — paging done.'); break; }
+      sleepOff = nextDaySaveOffset(sleepOff, lastSleepRec);
     }
     setProgress(5, 7, 'HR days'); log('[Pull 5/7] Heart-rate days (up to ' + wantDays + ', byte-paged, stops when empty)...');
     var staleHr = 0, hrOff = 0;
@@ -497,25 +499,29 @@ async function dailyAuto(opts) {
       if (staleHr >= 2) { log('HR repeats known days — paging done.'); break; }
       hrOff = nextDaySaveOffset(hrOff, lastHrRec); // byte-step to the previous day's record
     }
-    setProgress(6, 7, 'Workouts'); log('[Pull 6/7] Workouts (paged, stops when empty)...');
+    setProgress(6, 7, 'Workouts'); log('[Pull 6/7] Workouts (byte-paged, stops when empty)...');
+    var workoutOff = 0;
     for (var wn = 0; wn < 8; wn++) {
-      log('Workout round ' + (wn + 1) + '/8 (offset ' + wn + ')...'); setProgress(6, 7, 'Workout round ' + (wn + 1));
-      lastWorkoutItems = -1;
-      await wr(writeChar, '0x0AF6', buildV3Start04(4, wn));
+      log('Workout round ' + (wn + 1) + '/8 (byte offset ' + workoutOff + ')...'); setProgress(6, 7, 'Workout round ' + (wn + 1));
+      lastWorkoutItems = -1; lastWorkoutRec = 0;
+      await wr(writeChar, '0x0AF6', buildV3Start04(4, workoutOff));
       await waitFor(function () { return lastWorkoutItems >= 0; }, 12000, 'workout reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(4));
       await wait(3000);
       if (lastWorkoutItems === 0) { log('Workout history empty — paging done.'); break; }
+      workoutOff = nextDaySaveOffset(workoutOff, lastWorkoutRec);
     }
-    setProgress(7, 7, 'Swims'); log('[Pull 7/7] Swims (paged, stops when empty)...');
+    setProgress(7, 7, 'Swims'); log('[Pull 7/7] Swims (byte-paged, stops when empty)...');
+    var swimOff = 0;
     for (var sw = 0; sw < 8; sw++) {
-      log('Swim round ' + (sw + 1) + '/8 (offset ' + sw + ')...'); setProgress(7, 7, 'Swim round ' + (sw + 1));
-      lastSwimItems = -1;
-      await wr(writeChar, '0x0AF6', buildV3Start04(6, sw));
+      log('Swim round ' + (sw + 1) + '/8 (byte offset ' + swimOff + ')...'); setProgress(7, 7, 'Swim round ' + (sw + 1));
+      lastSwimItems = -1; lastSwimRec = 0;
+      await wr(writeChar, '0x0AF6', buildV3Start04(6, swimOff));
       await waitFor(function () { return lastSwimItems >= 0; }, 12000, 'swim reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(6));
       await wait(3000);
       if (lastSwimItems === 0) { log('Swim history empty — paging done.'); break; }
+      swimOff = nextDaySaveOffset(swimOff, lastSwimRec);
     }
     await saveCaptured('daily ' + todayStr());
     show('Daily pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
@@ -545,17 +551,18 @@ async function syncAll() {
       if (staleS >= 3) { log('Sport repeats known days — paging done.'); break; }
       sportOff = nextDaySaveOffset(sportOff, lastSportRec);
     }
-    setProgress(3, 6, 'Sleep history'); log('[Full 3/6] Sleep history (count offsets 0..7, then byte offsets)...');
-    var sleepOffs = [0, 1, 2, 3, 4, 5, 6, 7, 108, 216, 324, 432, 540, 648, 756, 864];
-    for (var sn = 0; sn < sleepOffs.length; sn++) {
-      setProgress(3, 6, 'Sleep offset ' + sleepOffs[sn]);
-      log('Sleep round ' + (sn + 1) + '/' + sleepOffs.length + ' (offset ' + sleepOffs[sn] + ')...');
-      lastSleepItems = -1;
-      await wr(writeChar, '0x0AF6', buildV3Start04(7, sleepOffs[sn]));
+    setProgress(3, 6, 'Sleep history'); log('[Full 3/6] Sleep history (byte-paged, up to 16 rounds)...');
+    var sleepOff2 = 0;
+    for (var sn = 0; sn < 16; sn++) {
+      setProgress(3, 6, 'Sleep round ' + sn);
+      log('Sleep round ' + (sn + 1) + '/16 (byte offset ' + sleepOff2 + ')...');
+      lastSleepItems = -1; lastSleepRec = 0;
+      await wr(writeChar, '0x0AF6', buildV3Start04(7, sleepOff2));
       await waitFor(function () { return lastSleepItems >= 0; }, 12000, 'sleep reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(7));
       await wait(3000);
-      if (lastSleepItems === 0 && sn >= 8) { log('Sleep history empty — paging done.'); break; }
+      if (lastSleepItems === 0) { log('Sleep history empty — paging done.'); break; }
+      sleepOff2 = nextDaySaveOffset(sleepOff2, lastSleepRec);
     }
     setProgress(4, 6, 'HR history'); log('[Full 4/6] HR history (byte-paged, up to 30 days)...');
     var staleH = 0, hrOff = 0;
@@ -567,27 +574,31 @@ async function syncAll() {
       if (staleH >= 3) { log('HR repeats known days — paging done.'); break; }
       hrOff = nextDaySaveOffset(hrOff, lastHrRec);
     }
-    setProgress(5, 6, 'Workout history'); log('[Full 5/6] Workout history (offsets 0..15)...');
+    setProgress(5, 6, 'Workout history'); log('[Full 5/6] Workout history (byte-paged, up to 16 rounds)...');
+    var workoutOff2 = 0;
     for (var wn = 0; wn <= 15; wn++) {
-      setProgress(5, 6, 'Workout offset ' + wn);
-      log('Workout round offset ' + wn + '...');
-      lastWorkoutItems = -1;
-      await wr(writeChar, '0x0AF6', buildV3Start04(4, wn));
+      setProgress(5, 6, 'Workout round ' + wn);
+      log('Workout round ' + wn + ' (byte offset ' + workoutOff2 + ')...');
+      lastWorkoutItems = -1; lastWorkoutRec = 0;
+      await wr(writeChar, '0x0AF6', buildV3Start04(4, workoutOff2));
       await waitFor(function () { return lastWorkoutItems >= 0; }, 12000, 'workout reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(4));
       await wait(3000);
       if (lastWorkoutItems === 0) { log('Workout history empty — paging done.'); break; }
+      workoutOff2 = nextDaySaveOffset(workoutOff2, lastWorkoutRec);
     }
-    setProgress(6, 6, 'Swim history'); log('[Full 6/6] Swim history (offsets 0..15)...');
+    setProgress(6, 6, 'Swim history'); log('[Full 6/6] Swim history (byte-paged, up to 16 rounds)...');
+    var swimOff2 = 0;
     for (var sw2 = 0; sw2 <= 15; sw2++) {
-      setProgress(6, 6, 'Swim offset ' + sw2);
-      log('Swim round offset ' + sw2 + '...');
-      lastSwimItems = -1;
-      await wr(writeChar, '0x0AF6', buildV3Start04(6, sw2));
+      setProgress(6, 6, 'Swim round ' + sw2);
+      log('Swim round ' + sw2 + ' (byte offset ' + swimOff2 + ')...');
+      lastSwimItems = -1; lastSwimRec = 0;
+      await wr(writeChar, '0x0AF6', buildV3Start04(6, swimOff2));
       await waitFor(function () { return lastSwimItems >= 0; }, 12000, 'swim reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(6));
       await wait(3000);
       if (lastSwimItems === 0) { log('Swim history empty — paging done.'); break; }
+      swimOff2 = nextDaySaveOffset(swimOff2, lastSwimRec);
     }
     await saveCaptured('full ' + todayStr());
     show('Full pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
@@ -630,10 +641,10 @@ function dispatchV3(buf) {
   if (cmd !== 0x0004 || p.length < 14) return;
   var dataType = p[1], itemCount = u16le(p, 5), headSize = u16le(p, 7), dataSize = u32le(p, 9);
   if (p[0] === 0x00) { // START reply only; STOP acks must not reset the trackers
-    if (dataType === 7) lastSleepItems = itemCount;
+    if (dataType === 7) { lastSleepItems = itemCount; lastSleepRec = headSize + dataSize; }
     else if (dataType === 8) { lastSportItems = itemCount; lastSportRec = headSize + dataSize; }
     else if (dataType === 3) { lastHrItems = itemCount; lastHrRec = headSize + dataSize; }
-    else if (dataType === 4) lastWorkoutItems = itemCount;
+    else if (dataType === 4) { lastWorkoutItems = itemCount; lastWorkoutRec = headSize + dataSize; }
     // Post-reset empty stores can answer with an unknown data_type and zero
     // items (seen: 65 B reply to sleep START). During sleep paging that still
     // means "no more nights", so stop instead of looping 8 times.
@@ -753,6 +764,7 @@ function dispatchV3(buf) {
       log('SWIM dataType=6 items=0: empty-history marker, ignored (not a swim).');
     } else if (h.length >= 34) {
       lastSwimItems = itemCount;
+      lastSwimRec = headSize + dataSize;
       var swimDate = u16le(h, 0) + '-' + String(h[2]).padStart(2, '0') + '-' + String(h[3]).padStart(2, '0');
       var swimStartS = h[4] * 3600 + h[5] * 60 + h[6];
       var swimDur = u16le(h, 17), swimKcal = u16le(h, 9), swimDist = u16le(h, 11);
