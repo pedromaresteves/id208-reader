@@ -130,8 +130,13 @@ cd webapp && python3 -m http.server 8080
   watch behavior.** If asked to test against the watch, say so upfront:
   "I can't connect to Bluetooth from this environment. I can verify code
   logic with mocks, or you can run the probe on your phone."
-- Playwright is installed at `/tmp` (chromium). The webapp can be served
-  locally with `python3 -m http.server 8080` from `webapp/`.
+- **To test against the real watch, use the Windows machine.** See
+  `scripts/playwright-watch/README.md`. The script opens the webapp in
+  headed Chrome; `navigator.bluetooth.requestDevice()` opens a NATIVE OS
+  picker that Playwright cannot click — **the user must click the watch
+  in the picker**. The script prints a clear prompt and waits.
+- Playwright is installed at `/tmp` (chromium) in this sandbox. The webapp
+  can be served locally with `python3 -m http.server 8080` from `webapp/`.
 - The Playwright MCP server is configured in `~/.vibe/config.toml` but its
   tools require a session restart to load.
 
