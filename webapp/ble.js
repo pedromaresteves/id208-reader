@@ -431,11 +431,16 @@ async function setupAuto() {
 // The watch uses the 0x05 offset to set its internal resume position for that
 // type; the following 0x04 START must carry the SAME offset (VeryFit pattern).
 // Silence is OK (low-power watch skips 0x05) — we proceed to 0x04 anyway.
+// Guard: if 0x0AF1 is missing (healthWriteChar null) or the write fails, skip
+// priming and just send 0x04 — never let a missing health char kill the sync.
 async function primeOffset05(dataType, off) {
+  if (!healthWriteChar) { log('0x0AF1 unavailable — skipping 0x05 prime for type ' + dataType); return; }
   var map = {}; map[dataType] = off;
   lastSizesTotal = -1;
-  await wr(healthWriteChar, '0x0AF1', buildV3Sizes05(map));
-  await waitFor(function () { return lastSizesTotal >= 0; }, 5000, 'sizes@' + off);
+  try {
+    await wr(healthWriteChar, '0x0AF1', buildV3Sizes05(map));
+    await waitFor(function () { return lastSizesTotal >= 0; }, 5000, 'sizes@' + off);
+  } catch (e) { log('0x05 prime failed (type ' + dataType + '): ' + e.message + ' — continuing with 0x04'); }
 }
 // One byte-offset round for a day-data type (sport 08 / HR 03): prime 0x05 with
 // the offset, START at the same saveOffset (byte position; 0 = today), wait for
@@ -630,6 +635,28 @@ async function syncAll() {
     await saveCaptured('full ' + todayStr());
     show('Full pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
   } finally { macroRunning = false; setMacroButtons(false); }
+}
+// Diagnostic: send sport (type 08) START at many byte offsets, with 0x05 prime
+// before each, and log what the watch returns. Reveals whether the watch honors
+// byte offsets for day-data (returns different days) or always returns today.
+async function probeSportOffsets() {
+  if (macroRunning) { log('A macro is already running — wait for it.'); return; }
+  macroRunning = true;
+  var offsets = [0, 100, 500, 1000, 2000, 5000, 10000, 20000, 50000];
+  log('=== Sport offset probe: ' + offsets.join(', ') + ' ===');
+  for (var i = 0; i < offsets.length; i++) {
+    var off = offsets[i];
+    lastSportItems = -1; lastSportRec = 0;
+    log('--- Probe sport @byte ' + off + ' ---');
+    await primeOffset05(8, off);
+    await wr(writeChar, '0x0AF6', buildV3Start04(8, off));
+    await waitFor(function () { return lastSportItems >= 0; }, 12000, 'probe@' + off);
+    await wr(writeChar, '0x0AF6', buildV3Stop04(8));
+    await wait(2000);
+    log('PROBE RESULT @' + off + ': items=' + lastSportItems + ' recSize=' + lastSportRec);
+  }
+  log('=== Probe done ===');
+  macroRunning = false;
 }
 function buildV3Stop04(dataType) {
   var pkt = buildV3Start04(dataType);

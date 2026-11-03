@@ -40,9 +40,11 @@ global.Store = {
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ble.js'), 'utf8') +
     '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay, dailyAuto, nextDaySaveOffset,' +
-    ' _stub: function (w, wf, wt) { wr = w; waitFor = wf; wait = wt; } };'
+    ' _stub: function (w, wf, wt) { wr = w; waitFor = wf; wait = wt; }, _setHealth: function (c) { healthWriteChar = c; } };'
 );
 const B = globalThis.B;
+// healthWriteChar must be set so primeOffset05 sends 0x05 (the mock wr handles it)
+B._setHealth({ writeValue: () => Promise.resolve() });
 
 // Real v3 sport reply, 2026-10-03: 10065 steps / 7641 m / 631 kcal (watch-verified).
 const CHUNKS = [

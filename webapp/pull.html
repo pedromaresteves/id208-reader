@@ -20,6 +20,7 @@ diagnostics. Ground truth 2026-10-01 18:31: <b>5736 steps / 468 kcal</b>,
 sleep <b>07h05m (23:47 → 06:52)</b>.</p>
 <button id="btnConnect">1. Connect (syncs automatically when bound)</button>
 <button id="btnSyncAll">B. Sync full history (all days on watch, slow)</button>
+<button id="btnProbe">C. Probe sport offsets (0,100,500,1k,2k,5k,10k,20k,50k)</button>
 <br>
 <details>
 <summary>Setup & advanced (first config, manual commands, diagnostics)</summary>
@@ -80,7 +81,7 @@ show decoded text here but don't reach the dashboard.
 // actionable banner instead of half-wired buttons that fail silently.
 (function checkAppFiles() {
   var need = ['Store', 'connectAndSync', 'ensureLink', 'setupAuto', 'dailyAuto', 'syncAll', 'wr',
-    'buildV3Start04', 'buildBindAuthPacket', 'buildAutoActivity', 'saveCaptured'];
+    'buildV3Start04', 'buildBindAuthPacket', 'buildAutoActivity', 'saveCaptured', 'probeSportOffsets'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -92,7 +93,7 @@ show decoded text here but don't reach the dashboard.
 })();
 // Page wiring: ble.js holds all protocol code; here only DOM bindings.
 PAGE_BASIC_BUTTONS = ['btnInfo', 'btnLive', 'btnSetupAuto'];
-PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop', 'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth', 'btnWorkout', 'btnWorkoutStop', 'btnSwim', 'btnSwimStop', 'btnAutoOff', 'btnAutoWalkRun'];
+PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop', 'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth', 'btnWorkout', 'btnWorkoutStop', 'btnSwim', 'btnSwimStop', 'btnAutoOff', 'btnAutoWalkRun', 'btnProbe'];
 function readOffset() {
   var v = parseInt(document.getElementById('offset').value, 10);
   return (isNaN(v) || v < 0) ? 0 : (v > 65535 ? 65535 : v);
@@ -102,6 +103,9 @@ document.getElementById('btnConnect').addEventListener('pointerup', function () 
 });
 document.getElementById('btnSyncAll').addEventListener('pointerup', function () {
   ensureLink().then(function () { syncAll(); }, function () {});
+});
+document.getElementById('btnProbe').addEventListener('pointerup', function () {
+  ensureLink().then(function () { probeSportOffsets(); }, function () {});
 });
 document.getElementById('btnInfo').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x01])); });
 document.getElementById('btnLive').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0])); });
