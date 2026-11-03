@@ -39,7 +39,8 @@ global.Store = {
 
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ble.js'), 'utf8') +
-    '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay };'
+    '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay, dailyAuto, nextDaySaveOffset,' +
+    ' _stub: function (w, wf, wt) { wr = w; waitFor = wf; wait = wt; } };'
 );
 const B = globalThis.B;
 
@@ -171,4 +172,66 @@ const CHUNKS = [
   const sleepRows = puts.slice(putsBeforeSleep).filter((p) => p.type === 'sleep');
   assert.strictEqual(sleepRows.length, 0, 'empty sleep reply saves no night, got ' + sleepRows.length);
   console.log('capture.test.js: sleep phantom guard passed');
+
+  // Byte-offset paging regression (the "day 1 missing on day 2" bug):
+  // saveOffset is a BYTE position in the sport stream anchored at today, so
+  // day-index offsets 0,1,2 all land inside today's record and the watch
+  // answers "today" every time. Simulated watch below serves a newest-first
+  // stream: [day-14 record (986 B), day-13 record (976 B)], empty past that.
+  assert.strictEqual(B.nextDaySaveOffset(0, 986), 986, 'byte step past today record');
+  assert.strictEqual(B.nextDaySaveOffset(986, 976), 1962, 'cumulative byte step');
+  assert.strictEqual(B.nextDaySaveOffset(50, 0), 50, 'zero-size record does not move the offset');
+
+  function sportDayFrame(day, steps, items, seq) {
+    const head = Buffer.alloc(36, 0);
+    head.writeUInt16LE(2026, 1); head[3] = 10; head[4] = day;
+    head.writeUInt32LE(steps, 8);
+    head.writeUInt32LE(999, 12);
+    head.writeUInt32LE(6000, 16);
+    head.writeUInt32LE(30, 20);
+    head.writeUInt16LE(400, 26);
+    const dataSize = items * 10;
+    const pay = Buffer.concat([
+      Buffer.from([0x00, 0x08, 0x00, 0x00, 0x00, items & 0xFF, (items >> 8) & 0xFF, 36, 0x00,
+        dataSize & 0xFF, (dataSize >> 8) & 0xFF, (dataSize >> 16) & 0xFF, (dataSize >> 24) & 0xFF, 0x00]),
+      head,
+      Buffer.alloc(dataSize, 0),
+    ]);
+    const buf = Buffer.concat([Buffer.from([0xDA, 0xAD, 0xDA, 0xAD, 0x01, 0, 0, 0x04, 0x00, seq & 0xFF, (seq >> 8) & 0xFF]), pay]);
+    buf.writeUInt16LE(buf.length, 5);
+    return new Uint8Array(Buffer.concat([Buffer.from([0x33]), buf]));
+  }
+  function emptySportFrame(seq) {
+    const pay = Buffer.from([0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0]);
+    const buf = Buffer.concat([Buffer.from([0xDA, 0xAD, 0xDA, 0xAD, 0x01, 0, 0, 0x04, 0x00, seq & 0xFF, (seq >> 8) & 0xFF]), pay]);
+    buf.writeUInt16LE(buf.length, 5);
+    return new Uint8Array(Buffer.concat([Buffer.from([0x33]), buf]));
+  }
+  const REC_TODAY = 36 + 95 * 10; // 986
+  const REC_YDAY = 36 + 94 * 10; // 976
+  let seqC = 0x80;
+  B._stub(
+    function (ch, name, bytes) { // wr: answer sport STARTs like the watch
+      if (bytes && bytes.length >= 17 && bytes[0] === 0x33 && bytes[8] === 0x04 && bytes[12] === 0x00 && bytes[13] === 0x08) {
+        const off = bytes[15] | (bytes[16] << 8);
+        let frame;
+        if (off < REC_TODAY) frame = sportDayFrame(14, 7000, 95, seqC++);
+        else if (off < REC_TODAY + REC_YDAY) frame = sportDayFrame(13, 5200, 94, seqC++);
+        else frame = emptySportFrame(seqC++);
+        setTimeout(() => B.handleV3(frame), 0);
+      }
+      return Promise.resolve();
+    },
+    function () { return new Promise((res) => setTimeout(res, 30)); }, // waitFor
+    function () { return new Promise((res) => setTimeout(res, 1)); } // wait
+  );
+  B.resetCaptures();
+  const putsBeforePaging = puts.length;
+  await B.dailyAuto({ days: 7 });
+  const paged = puts.slice(putsBeforePaging).filter((p) => p.type === 'steps');
+  assert.deepStrictEqual(paged.map((p) => p.date).sort(), ['2026-10-13', '2026-10-14'],
+    'byte-paged sync saves BOTH today and yesterday, got ' + JSON.stringify(paged.map((p) => p.date)));
+  assert.strictEqual(paged.filter((p) => p.date === '2026-10-13')[0].payload.steps, 5200, 'day-1 steps decoded');
+  assert.strictEqual(paged.filter((p) => p.date === '2026-10-14')[0].payload.steps, 7000, 'day-2 steps decoded');
+  console.log('capture.test.js: byte-offset day paging passed');
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

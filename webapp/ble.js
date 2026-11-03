@@ -63,7 +63,13 @@ function buildV3Sizes05() {
   return pkt;
 }
 // v3 0x04 START per type: 19 B wire. byte14 = 0x01 day-data (01,02,03,08), 0x00 count-data (04,06,07).
-// bytes 15-16 LE = saveOffset: resume position in that type's stream (0 = oldest).
+// bytes 15-16 LE = saveOffset: a BYTE position in that type's stored stream
+// (d3nd3/toobur-veryfit-research LATEST_SYNC_PARSING.md; VeryFit resumes sport
+// at byte offsets like 0x4E). Day-data streams anchor at today (offset 0 =
+// today's record), so paging back in time steps by each record's
+// headSize+dataSize — NOT by day index (offsets 0..3 all land inside today's
+// ~1 KB record and the watch returns today every time). Count-data streams
+// anchor at the oldest record (sleep offset 0 = oldest night).
 var BYTE14 = { 1: 1, 2: 1, 3: 1, 4: 0, 6: 0, 7: 0, 8: 1 };
 function buildV3Start04(dataType, offset) {
   var pkt = new Uint8Array(19);
@@ -176,12 +182,19 @@ function handleLegacy(arr) {
 // (operate 0x01) don't touch these. The daily macro uses lastSleepItems === 0
 // as its paging stop rule (same as the old manual repeat-until-empty).
 var lastSleepItems = -1, lastSportItems = -1, lastHrItems = -1, lastWorkoutItems = -1, lastSwimItems = -1, lastPair = -1;
+// Record size (headSize+dataSize) of the last START reply for day-data types;
+// the byte step used to page to the previous day (see buildV3Start04 note).
+var lastSportRec = 0, lastHrRec = 0;
 var lastSizesTotal = -1; // set when the v3 sizes (0x0005) reply lands, else stays -1
 // Captured decoded records for the on-phone store (reset at each macro start).
 // Sport/HR accumulate one entry per header date across day-offset rounds;
 // capSport/capHr alias the latest (offset-0) entry for the live fallback.
 var capLive = null, capSport = null, capHr = null, capSleepNights = [], capWorkouts = [];
 var capSportDays = [], capHrDays = [];
+// Next saveOffset for day-data paging (sport 08 / HR 03): saveOffset is a
+// byte position in the type's stream anchored at today, so step past the
+// record just returned (headSize+dataSize) to reach the previous day.
+function nextDaySaveOffset(off, recSize) { return off + (recSize > 0 ? recSize : 0); }
 // Whole days between two YYYY-MM-DD dates (pure, phone-safe).
 function dayDiff(a, b) {
   function dayNum(ds) {
@@ -403,13 +416,14 @@ async function setupAuto() {
     show('Setup done — QR should be gone. Then run B. Daily pull.');
   } finally { macroRunning = false; setMacroButtons(false); }
 }
-// One day-offset round for a day-data type (sport 08 / HR 03): START at the
-// given offset, wait for the reply, STOP. Offset 0 = today (proven
-// 2026-10-13); larger offsets should walk back in time. Returns the number
-// of NEW dates captured by this round (0 = duplicate or empty).
+// One byte-offset round for a day-data type (sport 08 / HR 03): START at the
+// given saveOffset (byte position; 0 = today), wait for the reply, STOP.
+// Callers step the offset with nextDaySaveOffset(off, lastXRec) to walk back
+// one day per round. Returns the number of NEW dates captured by this round
+// (0 = duplicate or empty).
 async function pullDayOffset(dataType, off, label) {
   var before = (dataType === 8 ? capSportDays : capHrDays).length;
-  if (dataType === 8) lastSportItems = -1; else lastHrItems = -1;
+  if (dataType === 8) { lastSportItems = -1; lastSportRec = 0; } else { lastHrItems = -1; lastHrRec = 0; }
   log(label + ' (offset ' + off + ')...');
   await wr(writeChar, '0x0AF6', buildV3Start04(dataType, off));
   await waitFor(function () {
@@ -452,14 +466,15 @@ async function dailyAuto(opts) {
     lastSizesTotal = -1;
     await wr(healthWriteChar, '0x0AF1', buildV3Sizes05());
     await waitFor(function () { return lastSizesTotal >= 0; }, 10000, 'sizes reply');
-    setProgress(3, 7, 'Sport days'); log('[Pull 3/7] Sport days (up to ' + wantDays + ', stops when empty)...');
-    var staleSport = 0;
+    setProgress(3, 7, 'Sport days'); log('[Pull 3/7] Sport days (up to ' + wantDays + ', byte-paged, stops when empty)...');
+    var staleSport = 0, sportOff = 0;
     for (var sd = 0; sd < wantDays; sd++) {
       setProgress(3, 7, 'Sport day ' + (sd + 1));
-      var freshS = await pullDayOffset(8, sd, 'Sport round ' + (sd + 1) + '/' + wantDays);
+      var freshS = await pullDayOffset(8, sportOff, 'Sport round ' + (sd + 1) + '/' + wantDays + ' @byte ' + sportOff);
       if (lastSportItems === 0) { log('Sport history empty — paging done.'); break; }
       staleSport = freshS ? 0 : staleSport + 1;
       if (staleSport >= 2) { log('Sport repeats known days — paging done.'); break; }
+      sportOff = nextDaySaveOffset(sportOff, lastSportRec); // byte-step to the previous day's record
     }
     setProgress(4, 7, 'Sleep'); log('[Pull 4/7] Sleep nights (paged, stops when empty)...');
     for (var n = 0; n < 8; n++) {
@@ -472,14 +487,15 @@ async function dailyAuto(opts) {
       await wait(3000);
       if (lastSleepItems === 0) { log('Sleep history empty — paging done.'); break; }
     }
-    setProgress(5, 7, 'HR days'); log('[Pull 5/7] Heart-rate days (up to ' + wantDays + ', stops when empty)...');
-    var staleHr = 0;
+    setProgress(5, 7, 'HR days'); log('[Pull 5/7] Heart-rate days (up to ' + wantDays + ', byte-paged, stops when empty)...');
+    var staleHr = 0, hrOff = 0;
     for (var hd = 0; hd < wantDays; hd++) {
       setProgress(5, 7, 'HR day ' + (hd + 1));
-      var freshH = await pullDayOffset(3, hd, 'HR round ' + (hd + 1) + '/' + wantDays);
+      var freshH = await pullDayOffset(3, hrOff, 'HR round ' + (hd + 1) + '/' + wantDays + ' @byte ' + hrOff);
       if (lastHrItems === 0) { log('HR history empty — paging done.'); break; }
       staleHr = freshH ? 0 : staleHr + 1;
       if (staleHr >= 2) { log('HR repeats known days — paging done.'); break; }
+      hrOff = nextDaySaveOffset(hrOff, lastHrRec); // byte-step to the previous day's record
     }
     setProgress(6, 7, 'Workouts'); log('[Pull 6/7] Workouts (paged, stops when empty)...');
     for (var wn = 0; wn < 8; wn++) {
@@ -505,10 +521,10 @@ async function dailyAuto(opts) {
     show('Daily pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
   } finally { macroRunning = false; setMacroButtons(false); }
 }
-// Full-history pull (Pull-page advanced button): sport/HR day offsets
-// 0..30, a wider sleep offset sweep, workouts 0..15. Each phase stops on
-// empty; duplicates overwrite the same store keys, so over-fetching is
-// harmless. Slow by design (~minutes) — dashboard stays on the 7-day path.
+// Full-history pull (Pull-page advanced button): sport/HR byte-paged back
+// up to 30 days, a wider sleep offset sweep, workouts 0..15. Each phase
+// stops on empty; duplicates overwrite the same store keys, so over-fetching
+// is harmless. Slow by design (~minutes) — dashboard stays on the 7-day path.
 async function syncAll() {
   if (macroRunning) { log('A macro is already running — wait for it to finish.'); return; }
   macroRunning = true; setMacroButtons(true); resetCaptures();
@@ -519,14 +535,15 @@ async function syncAll() {
     log('[Full 1/6] Live data...'); setProgress(1, 6, 'Live data');
     await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0]));
     await waitFor(function () { return capLive !== null; }, 8000, 'live reply');
-    setProgress(2, 6, 'Sport history'); log('[Full 2/6] Sport history (offsets 0..30)...');
-    var staleS = 0;
+    setProgress(2, 6, 'Sport history'); log('[Full 2/6] Sport history (byte-paged, up to 30 days)...');
+    var staleS = 0, sportOff = 0;
     for (var sd = 0; sd <= 30; sd++) {
-      setProgress(2, 6, 'Sport offset ' + sd);
-      var freshS = await pullDayOffset(8, sd, 'Sport round offset ' + sd);
+      setProgress(2, 6, 'Sport day ' + (sd + 1));
+      var freshS = await pullDayOffset(8, sportOff, 'Sport round ' + (sd + 1) + ' @byte ' + sportOff);
       if (lastSportItems === 0) { log('Sport history empty — paging done.'); break; }
       staleS = freshS ? 0 : staleS + 1;
       if (staleS >= 3) { log('Sport repeats known days — paging done.'); break; }
+      sportOff = nextDaySaveOffset(sportOff, lastSportRec);
     }
     setProgress(3, 6, 'Sleep history'); log('[Full 3/6] Sleep history (count offsets 0..7, then byte offsets)...');
     var sleepOffs = [0, 1, 2, 3, 4, 5, 6, 7, 108, 216, 324, 432, 540, 648, 756, 864];
@@ -540,14 +557,15 @@ async function syncAll() {
       await wait(3000);
       if (lastSleepItems === 0 && sn >= 8) { log('Sleep history empty — paging done.'); break; }
     }
-    setProgress(4, 6, 'HR history'); log('[Full 4/6] HR history (offsets 0..30)...');
-    var staleH = 0;
+    setProgress(4, 6, 'HR history'); log('[Full 4/6] HR history (byte-paged, up to 30 days)...');
+    var staleH = 0, hrOff = 0;
     for (var hd = 0; hd <= 30; hd++) {
-      setProgress(4, 6, 'HR offset ' + hd);
-      var freshH = await pullDayOffset(3, hd, 'HR round offset ' + hd);
+      setProgress(4, 6, 'HR day ' + (hd + 1));
+      var freshH = await pullDayOffset(3, hrOff, 'HR round ' + (hd + 1) + ' @byte ' + hrOff);
       if (lastHrItems === 0) { log('HR history empty — paging done.'); break; }
       staleH = freshH ? 0 : staleH + 1;
       if (staleH >= 3) { log('HR repeats known days — paging done.'); break; }
+      hrOff = nextDaySaveOffset(hrOff, lastHrRec);
     }
     setProgress(5, 6, 'Workout history'); log('[Full 5/6] Workout history (offsets 0..15)...');
     for (var wn = 0; wn <= 15; wn++) {
@@ -613,8 +631,8 @@ function dispatchV3(buf) {
   var dataType = p[1], itemCount = u16le(p, 5), headSize = u16le(p, 7), dataSize = u32le(p, 9);
   if (p[0] === 0x00) { // START reply only; STOP acks must not reset the trackers
     if (dataType === 7) lastSleepItems = itemCount;
-    else if (dataType === 8) lastSportItems = itemCount;
-    else if (dataType === 3) lastHrItems = itemCount;
+    else if (dataType === 8) { lastSportItems = itemCount; lastSportRec = headSize + dataSize; }
+    else if (dataType === 3) { lastHrItems = itemCount; lastHrRec = headSize + dataSize; }
     else if (dataType === 4) lastWorkoutItems = itemCount;
     // Post-reset empty stores can answer with an unknown data_type and zero
     // items (seen: 65 B reply to sleep START). During sleep paging that still

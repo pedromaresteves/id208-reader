@@ -374,11 +374,16 @@ def build_v3_sizes_05(seq: int) -> bytes:
 def build_v3_start_04(data_type: int, seq: int, save_offset: int = 0) -> bytes:
     """Build a 19-byte v3 cmd 0x04 START for one health data_type.
 
-    save_offset (bytes 15-16 LE) is the resume position in that type's
-    stored stream: 0 = oldest record. Paging example: sleep START with
-    offset 0 returned the Sep-28 night; larger offsets should return
-    newer nights (exact granularity TBD on-watch: try 1, item counts,
-    then byte sizes like 54 / 94 / 108).
+    save_offset (bytes 15-16 LE) is a BYTE position in that type's stored
+    stream (d3nd3/toobur-veryfit-research LATEST_SYNC_PARSING.md; VeryFit
+    resumes sport at byte offsets like 0x4E) — not a day index. Day-data
+    types (byte14=1: 01,02,03,08) anchor at today: offset 0 = today's
+    record, and paging back in time steps by each record's
+    head_size+data_size (a sport day is 36 + 10*items bytes, so offsets
+    0..3 all land inside today's record and return today). Count-data
+    types (byte14=0: 04,06,07) anchor at the oldest record: sleep START
+    offset 0 returned the Sep-28 night, larger byte offsets newer nights
+    (observed working steps: 1, 27, 108).
     """
     if data_type not in V3_BYTE14:
         raise ValueError(f"unknown v3 data_type: {data_type:#x}")
