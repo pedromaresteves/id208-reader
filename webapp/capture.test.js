@@ -210,15 +210,32 @@ const CHUNKS = [
   const REC_TODAY = 36 + 95 * 10; // 986
   const REC_YDAY = 36 + 94 * 10; // 976
   let seqC = 0x80;
+  const txLog = []; // track all TX frames: {cmd, type, off}
   B._stub(
     function (ch, name, bytes) { // wr: answer sport STARTs like the watch
-      if (bytes && bytes.length >= 17 && bytes[0] === 0x33 && bytes[8] === 0x04 && bytes[12] === 0x00 && bytes[13] === 0x08) {
-        const off = bytes[15] | (bytes[16] << 8);
-        let frame;
-        if (off < REC_TODAY) frame = sportDayFrame(14, 7000, 95, seqC++);
-        else if (off < REC_TODAY + REC_YDAY) frame = sportDayFrame(13, 5200, 94, seqC++);
-        else frame = emptySportFrame(seqC++);
-        setTimeout(() => B.handleV3(frame), 0);
+      if (bytes && bytes.length >= 17 && bytes[0] === 0x33) {
+        const cmd = bytes[8] | (bytes[9] << 8);
+        if (cmd === 0x04 && bytes[12] === 0x00) {
+          const off = bytes[15] | (bytes[16] << 8);
+          txLog.push({ cmd: 0x04, type: bytes[13], off });
+          if (bytes[13] === 0x08) {
+            let frame;
+            if (off < REC_TODAY) frame = sportDayFrame(14, 7000, 95, seqC++);
+            else if (off < REC_TODAY + REC_YDAY) frame = sportDayFrame(13, 5200, 94, seqC++);
+            else frame = emptySportFrame(seqC++);
+            setTimeout(() => B.handleV3(frame), 0);
+          }
+        } else if (cmd === 0x05) {
+          // parse sport (type 08) offset from the 7 type+offset records
+          let sportOff = 0;
+          for (let i = 0; i < 7; i++) {
+            const o = 12 + i * 5;
+            if (o + 5 <= bytes.length && bytes[o] === 0x08) {
+              sportOff = bytes[o+1] | (bytes[o+2] << 8) | (bytes[o+3] << 16) | (bytes[o+4] << 24);
+            }
+          }
+          txLog.push({ cmd: 0x05, type: 0x08, off: sportOff });
+        }
       }
       return Promise.resolve();
     },
@@ -233,5 +250,21 @@ const CHUNKS = [
     'byte-paged sync saves BOTH today and yesterday, got ' + JSON.stringify(paged.map((p) => p.date)));
   assert.strictEqual(paged.filter((p) => p.date === '2026-10-13')[0].payload.steps, 5200, 'day-1 steps decoded');
   assert.strictEqual(paged.filter((p) => p.date === '2026-10-14')[0].payload.steps, 7000, 'day-2 steps decoded');
-  console.log('capture.test.js: byte-offset day paging passed');
+  // Verify 0x05 sizes query is sent with the SAME offset as the following 0x04 START for sport.
+  // Walk txLog in order; each sport 0x04 START must be preceded by a 0x05 with the same sport offset.
+  const sport04 = txLog.filter(t => t.cmd === 0x04 && t.type === 0x08).map(t => t.off);
+  assert.ok(sport04.length >= 2, 'sport 0x04 START sent at least twice, got ' + JSON.stringify(sport04));
+  assert.ok(sport04.includes(REC_TODAY), 'sport 0x04 START sent with offset ' + REC_TODAY + ', got ' + JSON.stringify(sport04));
+  // For each sport 0x04 START, find the most recent 0x05 before it and check sport offset matches
+  let last05sportOff = 0;
+  const pairs = [];
+  for (const t of txLog) {
+    if (t.cmd === 0x05) last05sportOff = t.off; // t.off is sport offset for 0x05
+    if (t.cmd === 0x04 && t.type === 0x08) pairs.push({ off04: t.off, off05: last05sportOff });
+  }
+  for (const p of pairs) {
+    assert.strictEqual(p.off04, p.off05,
+      '0x04 START offset ' + p.off04 + ' must match preceding 0x05 sport offset ' + p.off05);
+  }
+  console.log('capture.test.js: byte-offset day paging passed (0x05+0x04 offsets match: ' + JSON.stringify(pairs) + ')');
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

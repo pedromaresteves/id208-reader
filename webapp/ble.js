@@ -49,15 +49,25 @@ function crc16Ccitt(buf, off, len) {
   return crc;
 }
 // v3 0x05 sizes query: 137 B wire. 7 type+offset records (SpO2,pressure,HR,activity,swim,sleep,sport),
-// all offsets 0 for a full baseline; pad with zeros; CRC over [1..len-3].
-function buildV3Sizes05() {
+// pad with zeros; CRC over [1..len-3]. offsets maps dataType -> 32-bit byte offset (default 0).
+// VeryFit sends the SAME per-type offset in both 0x05 and the following 0x04 START — the watch
+// uses the 0x05 offset to set its internal resume position, so to page history we must re-send
+// 0x05 with the current byte offset before each 0x04 START (d3nd3/toobur-veryfit-research
+// sync_example.txt: sport offset 0x4E in both 0x05 and 0x04).
+function buildV3Sizes05(offsets) {
   var types = [0x01, 0x02, 0x03, 0x04, 0x06, 0x07, 0x08];
   var pkt = new Uint8Array(137);
   pkt[0] = 0x33; pkt[1] = 0xDA; pkt[2] = 0xAD; pkt[3] = 0xDA; pkt[4] = 0xAD;
   pkt[5] = 0x01; pkt[6] = 0x88; pkt[7] = 0x00; pkt[8] = 0x05; pkt[9] = 0x00;
   pkt[10] = v3Seq & 0xFF; pkt[11] = (v3Seq >> 8) & 0xFF; v3Seq++;
   var o = 12;
-  for (var i = 0; i < types.length; i++) { pkt[o++] = types[i]; pkt[o++] = 0; pkt[o++] = 0; pkt[o++] = 0; pkt[o++] = 0; }
+  for (var i = 0; i < types.length; i++) {
+    var t = types[i];
+    var off = (offsets && offsets[t]) || 0;
+    pkt[o++] = t;
+    pkt[o++] = off & 0xFF; pkt[o++] = (off >> 8) & 0xFF;
+    pkt[o++] = (off >> 16) & 0xFF; pkt[o++] = (off >> 24) & 0xFF;
+  }
   var crc = crc16Ccitt(pkt, 1, pkt.length - 3);
   pkt[pkt.length - 2] = crc & 0xFF; pkt[pkt.length - 1] = (crc >> 8) & 0xFF;
   return pkt;
@@ -417,15 +427,26 @@ async function setupAuto() {
     show('Setup done — QR should be gone. Then run B. Daily pull.');
   } finally { macroRunning = false; setMacroButtons(false); }
 }
-// One byte-offset round for a day-data type (sport 08 / HR 03): START at the
-// given saveOffset (byte position; 0 = today), wait for the reply, STOP.
-// Callers step the offset with nextDaySaveOffset(off, lastXRec) to walk back
-// one day per round. Returns the number of NEW dates captured by this round
-// (0 = duplicate or empty).
+// Send 0x05 sizes query with a per-type byte offset, wait briefly for the reply.
+// The watch uses the 0x05 offset to set its internal resume position for that
+// type; the following 0x04 START must carry the SAME offset (VeryFit pattern).
+// Silence is OK (low-power watch skips 0x05) — we proceed to 0x04 anyway.
+async function primeOffset05(dataType, off) {
+  var map = {}; map[dataType] = off;
+  lastSizesTotal = -1;
+  await wr(healthWriteChar, '0x0AF1', buildV3Sizes05(map));
+  await waitFor(function () { return lastSizesTotal >= 0; }, 5000, 'sizes@' + off);
+}
+// One byte-offset round for a day-data type (sport 08 / HR 03): prime 0x05 with
+// the offset, START at the same saveOffset (byte position; 0 = today), wait for
+// the reply, STOP. Callers step the offset with nextDaySaveOffset(off, lastXRec)
+// to walk back one day per round. Returns the number of NEW dates captured by
+// this round (0 = duplicate or empty).
 async function pullDayOffset(dataType, off, label) {
   var before = (dataType === 8 ? capSportDays : capHrDays).length;
   if (dataType === 8) { lastSportItems = -1; lastSportRec = 0; } else { lastHrItems = -1; lastHrRec = 0; }
   log(label + ' (offset ' + off + ')...');
+  await primeOffset05(dataType, off);
   await wr(writeChar, '0x0AF6', buildV3Start04(dataType, off));
   await waitFor(function () {
     return (dataType === 8 ? lastSportItems : lastHrItems) >= 0;
@@ -482,6 +503,7 @@ async function dailyAuto(opts) {
     for (var n = 0; n < 8; n++) {
       log('Sleep round ' + (n + 1) + '/8 (byte offset ' + sleepOff + ')...'); setProgress(4, 7, 'Sleep round ' + (n + 1));
       lastSleepItems = -1; lastSleepRec = 0;
+      await primeOffset05(7, sleepOff);
       await wr(writeChar, '0x0AF6', buildV3Start04(7, sleepOff));
       await waitFor(function () { return lastSleepItems >= 0; }, 12000, 'sleep reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(7));
@@ -504,6 +526,7 @@ async function dailyAuto(opts) {
     for (var wn = 0; wn < 8; wn++) {
       log('Workout round ' + (wn + 1) + '/8 (byte offset ' + workoutOff + ')...'); setProgress(6, 7, 'Workout round ' + (wn + 1));
       lastWorkoutItems = -1; lastWorkoutRec = 0;
+      await primeOffset05(4, workoutOff);
       await wr(writeChar, '0x0AF6', buildV3Start04(4, workoutOff));
       await waitFor(function () { return lastWorkoutItems >= 0; }, 12000, 'workout reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(4));
@@ -516,6 +539,7 @@ async function dailyAuto(opts) {
     for (var sw = 0; sw < 8; sw++) {
       log('Swim round ' + (sw + 1) + '/8 (byte offset ' + swimOff + ')...'); setProgress(7, 7, 'Swim round ' + (sw + 1));
       lastSwimItems = -1; lastSwimRec = 0;
+      await primeOffset05(6, swimOff);
       await wr(writeChar, '0x0AF6', buildV3Start04(6, swimOff));
       await waitFor(function () { return lastSwimItems >= 0; }, 12000, 'swim reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(6));
@@ -557,6 +581,7 @@ async function syncAll() {
       setProgress(3, 6, 'Sleep round ' + sn);
       log('Sleep round ' + (sn + 1) + '/16 (byte offset ' + sleepOff2 + ')...');
       lastSleepItems = -1; lastSleepRec = 0;
+      await primeOffset05(7, sleepOff2);
       await wr(writeChar, '0x0AF6', buildV3Start04(7, sleepOff2));
       await waitFor(function () { return lastSleepItems >= 0; }, 12000, 'sleep reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(7));
@@ -580,6 +605,7 @@ async function syncAll() {
       setProgress(5, 6, 'Workout round ' + wn);
       log('Workout round ' + wn + ' (byte offset ' + workoutOff2 + ')...');
       lastWorkoutItems = -1; lastWorkoutRec = 0;
+      await primeOffset05(4, workoutOff2);
       await wr(writeChar, '0x0AF6', buildV3Start04(4, workoutOff2));
       await waitFor(function () { return lastWorkoutItems >= 0; }, 12000, 'workout reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(4));
@@ -593,6 +619,7 @@ async function syncAll() {
       setProgress(6, 6, 'Swim round ' + sw2);
       log('Swim round ' + sw2 + ' (byte offset ' + swimOff2 + ')...');
       lastSwimItems = -1; lastSwimRec = 0;
+      await primeOffset05(6, swimOff2);
       await wr(writeChar, '0x0AF6', buildV3Start04(6, swimOff2));
       await waitFor(function () { return lastSwimItems >= 0; }, 12000, 'swim reply');
       await wr(writeChar, '0x0AF6', buildV3Stop04(6));
