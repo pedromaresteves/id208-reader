@@ -40,7 +40,7 @@ from ido.decoder import (
 )
 
 
-def test_service_constants_match_phase0() -> None:
+def test_service_constants() -> None:
     assert SERVICE_UUID == 0x0AF0
     assert (CHAR_WRITE, CHAR_NOTIFY, CHAR_HEALTH_WRITE, CHAR_HEALTH_NOTIFY) == (
         0x0AF6,

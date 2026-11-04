@@ -187,11 +187,11 @@ wheels = [
 name = "id208-reader"
 version = "0.1.0"
 source = { virtual = "." }
-dependencies = [
-    { name = "bleak" },
-]
 
 [package.optional-dependencies]
+ble = [
+    { name = "bleak" },
+]
 dev = [
     { name = "pytest" },
     { name = "ruff" },
@@ -199,11 +199,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bleak", specifier = ">=0.21" },
+    { name = "bleak", marker = "extra == 'ble'", specifier = ">=0.21" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "ble"]
 
 [[package]]
 name = "iniconfig"

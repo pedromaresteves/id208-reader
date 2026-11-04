@@ -29,8 +29,8 @@ Live app (GitHub Pages): [`webapp/`](https://pedromaresteves.github.io/id208-rea
 ## Requirements
 
 - Python 3.10+; decoding itself is stdlib-only.
-- `bleak` is optional (used only for a best-effort BLE scan; skipped
-  cleanly without an adapter).
+- `bleak` is optional, only for a best-effort BLE scan (`pip install -e ".[ble]"`;
+  skipped cleanly without an adapter).
 - Dev: `pytest`, `ruff` (`pip install -e ".[dev]"`).
 
 ```bash

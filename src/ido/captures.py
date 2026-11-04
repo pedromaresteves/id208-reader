@@ -1,6 +1,6 @@
 """Offline capture helpers: load phone JSONL, reassemble v3 frames, extract records.
 
-Phone captures (phase0/health.html Download JSONL) hold one frame per line:
+Phone captures (pull.html "Download JSONL") hold one frame per line:
 {"ts": ..., "char": "0x0AF7", "dir": "RX"|"TX", "hex": ...}.
 Legacy replies (02 01 / 02 A0) arrive whole; v3 health replies (33 DA AD DA AD...)
 may span several notifications: first chunk carries the total length at
