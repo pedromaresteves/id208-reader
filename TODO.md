@@ -66,6 +66,20 @@
   reboots. History = our store accumulating forward from 2026-10-13 via
   daily syncs (stamp + gap-stretch shipped). Revisit only if a firmware
   update or a new watch changes BLE behavior.
+- 2026-11-04 LIVE RE-TEST (Windows Playwright + phone ADB; full evidence in
+  docs/WATCH-HISTORY-2026-11-04.md): conclusion CONFIRMED and sharpened.
+  `0x0AF6` saveOffset is ignored at every byte offset 0..18226 (replies
+  byte-identical except the seq echo) on BOTH bonds; byte14=1 returns
+  today, byte14=0 returns the single OLDEST record (2026-10-30, 23048
+  steps) at any offset. `0x0AF1` is a black hole on this firmware: refused
+  at ATT level on the Windows bond (even after app bind 04 01/04 05), and
+  on the phone bond writes are accepted (write request AND write command,
+  single 137B AND 20B-chunked) but never answered — no 0x0AF2 reply exists
+  in any capture. Count-data (04/06/07) empty at all offsets. `0x05` on
+  `0x0AF6` replies totalBytes≈18.2KB (~6 day-records Oct 30→Nov 4) but the
+  middle days are not addressable over BLE. `syncAll` now also pulls the
+  one reachable oldest record per day-data type (`pullOldestDay`, byte14=0
+  @0). History = our store accumulating forward + that oldest record.
 
 ## 4. Sleep page: missing night of the 12th (implement first)
 - Symptom: no record with `night 2026-10-12`; watch shows no previous

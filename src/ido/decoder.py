@@ -356,8 +356,16 @@ def _finish_v3(packet: bytearray) -> bytes:
     return bytes(packet)
 
 
-def build_v3_sizes_05(seq: int) -> bytes:
-    """Build a 137-byte v3 cmd 0x05 health-sizes query (all types, offset 0)."""
+def build_v3_sizes_05(seq: int, offsets: dict[int, int] | None = None) -> bytes:
+    """Build a 137-byte v3 cmd 0x05 health-sizes query.
+
+    offsets maps data_type -> 32-bit byte offset (default 0 for all types).
+    VeryFit's pattern is that the watch uses the per-type offset as a resume
+    position and the following 0x04 START carries the SAME offset — but LIVE
+    2026-11-04 on the ID208 Plus: on 0x0AF6 the prime gets a reply yet has no
+    side effect (0x04 saveOffset is ignored there), and 0x0AF1 never answers,
+    so on this firmware the offsets only shape the reply's totalBytes.
+    """
     pkt = bytearray(137)
     pkt[0:5] = V3_PREAMBLE
     pkt[5] = 0x01
@@ -367,23 +375,30 @@ def build_v3_sizes_05(seq: int) -> bytes:
     off = 12
     for data_type in V3_DATA_TYPES:
         pkt[off] = data_type
-        off += 5  # type + 4-byte LE offset 0
+        o = (offsets or {}).get(data_type, 0)
+        pkt[off + 1 : off + 5] = (o & 0xFFFFFFFF).to_bytes(4, "little")
+        off += 5  # type + 4-byte LE offset
     return _finish_v3(pkt)
 
 
-def build_v3_start_04(data_type: int, seq: int, save_offset: int = 0) -> bytes:
+def build_v3_start_04(
+    data_type: int, seq: int, save_offset: int = 0, byte14: int | None = None
+) -> bytes:
     """Build a 19-byte v3 cmd 0x04 START for one health data_type.
 
     save_offset (bytes 15-16 LE) is a BYTE position in that type's stored
     stream (d3nd3/toobur-veryfit-research LATEST_SYNC_PARSING.md; VeryFit
-    resumes sport at byte offsets like 0x4E) — not a day index. Day-data
-    types (byte14=1: 01,02,03,08) anchor at today: offset 0 = today's
-    record, and paging back in time steps by each record's
-    head_size+data_size (a sport day is 36 + 10*items bytes, so offsets
-    0..3 all land inside today's record and return today). Count-data
-    types (byte14=0: 04,06,07) anchor at the oldest record: sleep START
-    offset 0 returned the Sep-28 night, larger byte offsets newer nights
-    (observed working steps: 1, 27, 108).
+    resumes sport at byte offsets like 0x4E) — not a day index.
+
+    byte14: 0x01 day-data (01,02,03,08), 0x00 count-data (04,06,07); pass
+    explicitly to override the per-type default (probeViaF1 does this).
+
+    LIVE 2026-11-04 (Windows bond, writes only possible on 0x0AF6): save_offset
+    is IGNORED for day-data on 0x0AF6 — byte14=1 returns today's record at ANY
+    offset, byte14=0 returns the same single oldest record (2026-10-30) at any
+    offset; 0x05 primes on 0x0AF6 get a reply but no side effect; repeated
+    STARTs do not advance a cursor. Offsets are expected to be honored only on
+    the bulk channel 0x0AF1 (refused on the Windows bond at ATT level).
     """
     if data_type not in V3_BYTE14:
         raise ValueError(f"unknown v3 data_type: {data_type:#x}")
@@ -395,7 +410,7 @@ def build_v3_start_04(data_type: int, seq: int, save_offset: int = 0) -> bytes:
     pkt[10:12] = (seq & 0xFFFF).to_bytes(2, "little")
     pkt[12] = 0x00  # operate START
     pkt[13] = data_type
-    pkt[14] = V3_BYTE14[data_type]
+    pkt[14] = V3_BYTE14[data_type] if byte14 is None else byte14
     pkt[15:17] = (save_offset & 0xFFFF).to_bytes(2, "little")
     return _finish_v3(pkt)
 

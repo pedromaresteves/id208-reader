@@ -12,6 +12,11 @@ build/
 captures/*.jsonl
 captures/*.jpeg
 captures/README.md
+# Live watch-session artifacts (regenerable; may contain device identifiers):
+scripts/playwright-watch/*.jsonl
+scripts/playwright-watch/*-log.txt
+scripts/playwright-watch/*-store.json
+scripts/playwright-watch/*-decoded.html
 phase0/idowatch.html
 PLAN.md
 PLAN-WEBAPP.md

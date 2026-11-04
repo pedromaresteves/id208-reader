@@ -8,6 +8,7 @@ from ido.decoder import (
     CHAR_NOTIFY,
     CHAR_WRITE,
     SERVICE_UUID,
+    V3_DATA_TYPES,
     build_auto_activity,
     build_bind_auth,
     build_bind_auth_probe,
@@ -175,6 +176,17 @@ def test_v3_builders_framing_and_crc() -> None:
     assert int.from_bytes(sizes[8:10], "little") == 0x0005
     assert crc16_ccitt(sizes[1:-2]) == int.from_bytes(sizes[-2:], "little")
 
+    # Per-type offsets land LE in each 5-byte record; default stays all-zero
+    # (byte-identical to the no-arg call).
+    assert build_v3_sizes_05(0x60) == build_v3_sizes_05(0x60, None)
+    paged = build_v3_sizes_05(0x60, {0x08: 0x4E})
+    off = 12 + V3_DATA_TYPES.index(0x08) * 5
+    assert paged[off] == 0x08
+    assert int.from_bytes(paged[off + 1 : off + 5], "little") == 0x4E
+    other = 12 + V3_DATA_TYPES.index(0x07) * 5
+    assert int.from_bytes(paged[other + 1 : other + 5], "little") == 0
+    assert crc16_ccitt(paged[1:-2]) == int.from_bytes(paged[-2:], "little")
+
     sport = build_v3_start_04(0x08, 0x61)
     assert len(sport) == 19
     assert sport[12] == 0x00 and sport[13] == 0x08 and sport[14] == 0x01
@@ -213,6 +225,21 @@ def test_v3_start_04_workout_type_uses_count_byte14() -> None:
     assert len(workout) == 19
     assert workout[12] == 0x00 and workout[13] == 0x04 and workout[14] == 0x00
     assert crc16_ccitt(workout[1:-2]) == int.from_bytes(workout[-2:], "little")
+
+
+def test_v3_start_04_byte14_override() -> None:
+    # Default keeps the per-type BYTE14; explicit override lands at pkt[14].
+    default = build_v3_start_04(0x08, 0x73)
+    assert default[14] == 0x01
+    hist = build_v3_start_04(0x08, 0x72, 996, byte14=0x00)
+    assert len(hist) == 19
+    assert hist[12] == 0x00 and hist[13] == 0x08 and hist[14] == 0x00
+    assert hist[15:17] == (996).to_bytes(2, "little")
+    assert crc16_ccitt(hist[1:-2]) == int.from_bytes(hist[-2:], "little")
+    # Byte-identical with the JS builder (webapp/capture.test.js guards this
+    # against the same vectors).
+    assert hist.hex().upper() == "33DAADDAAD01100004007200000800E4038874"
+    assert default.hex().upper() == "33DAADDAAD011000040073000008010000CC17"
 
 
 def test_parse_sport_summary_matches_watch_steps() -> None:

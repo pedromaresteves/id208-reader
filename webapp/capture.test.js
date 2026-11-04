@@ -40,11 +40,33 @@ global.Store = {
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ble.js'), 'utf8') +
     '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay, dailyAuto, nextDaySaveOffset,' +
-    ' _stub: function (w, wf, wt) { wr = w; waitFor = wf; wait = wt; }, _setHealth: function (c) { healthWriteChar = c; } };'
+    ' buildV3Start04, pullOldestDay,' +
+    ' _stub: function (w, wf, wt) { wr = w; waitFor = wf; wait = wt;' +
+    '   wrOk = function (ch, name, bytes) { return Promise.resolve(w(ch, name, bytes)).then(function () { return true; }); }; },' +
+    ' _setHealth: function (c) { healthWriteChar = c; },' +
+    ' _setSeq: function (s) { v3Seq = s; } };',
 );
 const B = globalThis.B;
 // healthWriteChar must be set so primeOffset05 sends 0x05 (the mock wr handles it)
 B._setHealth({ writeValue: () => Promise.resolve() });
+
+// Byte-identical builder guard (must match src/ido/decoder.py build_v3_start_04;
+// vectors also pinned in tests/test_decoder.py):
+//   build_v3_start_04(0x08, 0x72, 996, byte14=0x00) -> 33DAADDAAD01100004007200000800E4038874
+//   build_v3_start_04(0x08, 0x73)                   -> 33DAADDAAD011000040073000008010000CC17
+B._setSeq(0x72);
+assert.strictEqual(
+  Buffer.from(B.buildV3Start04(0x08, 996, 0x00)).toString('hex').toUpperCase(),
+  '33DAADDAAD01100004007200000800E4038874',
+  'JS buildV3Start04 b14 override must be byte-identical with decoder.py',
+);
+B._setSeq(0x73);
+assert.strictEqual(
+  Buffer.from(B.buildV3Start04(0x08, 0)).toString('hex').toUpperCase(),
+  '33DAADDAAD011000040073000008010000CC17',
+  'JS buildV3Start04 default b14 must be byte-identical with decoder.py',
+);
+console.log('capture.test.js: buildV3Start04 byte14 vectors match decoder.py');
 
 // Real v3 sport reply, 2026-10-03: 10065 steps / 7641 m / 631 kcal (watch-verified).
 const CHUNKS = [
@@ -219,7 +241,7 @@ const CHUNKS = [
         const cmd = bytes[8] | (bytes[9] << 8);
         if (cmd === 0x04 && bytes[12] === 0x00) {
           const off = bytes[15] | (bytes[16] << 8);
-          txLog.push({ cmd: 0x04, type: bytes[13], off });
+          txLog.push({ cmd: 0x04, type: bytes[13], off, b14: bytes[14], char: name });
           if (bytes[13] === 0x08) {
             let frame;
             if (off < REC_TODAY) frame = sportDayFrame(14, 7000, 95, seqC++);
@@ -269,4 +291,22 @@ const CHUNKS = [
       '0x04 START offset ' + p.off04 + ' must match preceding 0x05 sport offset ' + p.off05);
   }
   console.log('capture.test.js: byte-offset day paging passed (0x05+0x04 offsets match: ' + JSON.stringify(pairs) + ')');
+
+  // byte14=0 oldest-record pull (2026-11-04 live finding on ID208 Plus): the
+  // extra syncAll round must send 0x04 with byte14=0 at offset 0 on the LEGACY
+  // char 0x0AF6 (not the 0x0AF1 black hole), and the fed reply is captured.
+  const txBeforeOldest = txLog.length;
+  B.resetCaptures();
+  await B.pullOldestDay(8, 'Sport');
+  const oldestTx = txLog.slice(txBeforeOldest).filter((t) => t.cmd === 0x04 && t.type === 0x08);
+  assert.ok(
+    oldestTx.some((t) => t.b14 === 0 && t.off === 0 && t.char === '0x0AF6'),
+    'oldest-record pull sends 0x04 byte14=0 @0 on 0x0AF6, got ' + JSON.stringify(oldestTx),
+  );
+  const putsBeforeOldest = puts.length;
+  await B.saveCaptured('oldest');
+  const oldestRows = puts.slice(putsBeforeOldest).filter((p) => p.type === 'steps');
+  assert.strictEqual(oldestRows.length, 1, 'oldest b14=0 reply saved as one steps record');
+  assert.strictEqual(oldestRows[0].payload.date, '2026-10-14', 'oldest record keyed by its header date');
+  console.log('capture.test.js: byte14=0 oldest-record pull passed');
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

@@ -130,15 +130,28 @@ cd webapp && python3 -m http.server 8080
   watch behavior.** If asked to test against the watch, say so upfront:
   "I can't connect to Bluetooth from this environment. I can verify code
   logic with mocks, or you can run the probe on your phone."
-- **To test against the real watch, use the Windows machine.** See
-  `scripts/playwright-watch/README.md`. The script opens the webapp in
-  headed Chrome; `navigator.bluetooth.requestDevice()` opens a NATIVE OS
-  picker that Playwright cannot click — **the user must click the watch
-  in the picker**. The script prints a clear prompt and waits.
-- Playwright is installed at `/tmp` (chromium) in this sandbox. The webapp
-  can be served locally with `python3 -m http.server 8080` from `webapp/`.
+- **To test against the real watch, use the Windows machine via WSL.**
+  Python Playwright is already installed on Windows:
+  - Windows Python: `/mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe`
+  - Browsers: `/mnt/c/Users/pedro/AppData/Local/ms-playwright/chromium-1248/`
+  - Run: `WINPY=/mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe`
+    then `$WINPY scripts/playwright-watch/watch_test.py` (serve webapp on :8080 first).
+  - The script opens headed Windows Chrome; `navigator.bluetooth.requestDevice()`
+    opens a NATIVE Windows picker that Playwright cannot click — **the user
+    must click the watch in the picker**. The script prints a clear prompt.
+  - See `scripts/playwright-watch/README.md` for details.
+- Playwright (Node) is also installed at `/tmp` (chromium) in this sandbox.
+  The webapp can be served locally with `python3 -m http.server 8080` from `webapp/`.
 - The Playwright MCP server is configured in `~/.vibe/config.toml` but its
   tools require a session restart to load.
+
+## Git workflow — READ BEFORE COMMITTING
+
+- **Do NOT commit unless the user explicitly asks.** Make the changes,
+  run the tests, report what changed — then wait. The user decides when
+  to commit and what message to use.
+- Exception: the user may say "commit" or "add and commit" — that is
+  explicit authorization for that change set only.
 
 ## Communication style
 
