@@ -24,6 +24,7 @@ from ido.decoder import (
     build_v3_1a,
     build_v3_sizes_05,
     build_v3_start_04,
+    build_v3_stop_04,
     build_weather_off,
     crc16_ccitt,
     parse_basic_info,
@@ -240,6 +241,21 @@ def test_v3_start_04_byte14_override() -> None:
     # against the same vectors).
     assert hist.hex().upper() == "33DAADDAAD01100004007200000800E4038874"
     assert default.hex().upper() == "33DAADDAAD011000040073000008010000CC17"
+
+
+def test_v3_stop_04_byte14_override() -> None:
+    # STOP must close the session with the SAME byte14 the START opened:
+    # b14=0 advances the completed-day cursor, b14=1 closes today.
+    stop_hist = build_v3_stop_04(0x08, 0x74, 0, byte14=0x00)
+    assert len(stop_hist) == 19
+    assert stop_hist[12] == 0x01 and stop_hist[13] == 0x08 and stop_hist[14] == 0x00
+    assert crc16_ccitt(stop_hist[1:-2]) == int.from_bytes(stop_hist[-2:], "little")
+    stop_today = build_v3_stop_04(0x08, 0x75)
+    assert stop_today[12] == 0x01 and stop_today[14] == 0x01
+    # Byte-identical with webapp/ble.js buildV3Stop04 (same vectors in
+    # webapp/capture.test.js).
+    assert stop_hist.hex().upper() == "33DAADDAAD011000040074000108000000E993"
+    assert stop_today.hex().upper() == "33DAADDAAD011000040075000108010000B81C"
 
 
 def test_parse_sport_summary_matches_watch_steps() -> None:

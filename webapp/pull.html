@@ -88,7 +88,7 @@ show decoded text here but don't reach the dashboard.
 // actionable banner instead of half-wired buttons that fail silently.
 (function checkAppFiles() {
   var need = ['Store', 'connectAndSync', 'ensureLink', 'setupAuto', 'dailyAuto', 'syncAll', 'wr',
-    'buildV3Start04', 'buildBindAuthPacket', 'buildAutoActivity', 'saveCaptured', 'probeAllOffsets', 'pageType', 'probeViaF1', 'pullOldestDay'];
+    'buildV3Start04', 'buildV3Stop04', 'buildBindAuthPacket', 'buildAutoActivity', 'saveCaptured', 'probeAllOffsets', 'pageType', 'probeViaF1', 'pullToday', 'pageDayHistory'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');

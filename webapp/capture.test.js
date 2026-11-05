@@ -40,7 +40,7 @@ global.Store = {
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ble.js'), 'utf8') +
     '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay, dailyAuto, nextDaySaveOffset,' +
-    ' buildV3Start04, pullOldestDay,' +
+    ' buildV3Start04, buildV3Stop04, pullToday, pageDayHistory,' +
     ' _stub: function (w, wf, wt) { wr = w; waitFor = wf; wait = wt;' +
     '   wrOk = function (ch, name, bytes) { return Promise.resolve(w(ch, name, bytes)).then(function () { return true; }); }; },' +
     ' _setHealth: function (c) { healthWriteChar = c; },' +
@@ -197,18 +197,32 @@ const CHUNKS = [
   assert.strictEqual(sleepRows.length, 0, 'empty sleep reply saves no night, got ' + sleepRows.length);
   console.log('capture.test.js: sleep phantom guard passed');
 
-  // Byte-offset paging regression (the "day 1 missing on day 2" bug):
-  // saveOffset is a BYTE position in the sport stream anchored at today, so
-  // day-index offsets 0,1,2 all land inside today's record and the watch
-  // answers "today" every time. Simulated watch below serves a newest-first
-  // stream: [day-14 record (986 B), day-13 record (976 B)], empty past that.
-  assert.strictEqual(B.nextDaySaveOffset(0, 986), 986, 'byte step past today record');
+  // Cursor paging (live 2026-11-05, ID208 Plus FW v1.01.17): completed-day
+  // history is a PERSISTENT cursor, oldest first. Each round is
+  // START(b14=0) + matching STOP(b14=0); today comes from a separate b14=1
+  // pull and is NOT part of that stream. saveOffset is ignored.
+  assert.strictEqual(B.nextDaySaveOffset(0, 986), 986, 'byte step past a count-data record');
   assert.strictEqual(B.nextDaySaveOffset(986, 976), 1962, 'cumulative byte step');
   assert.strictEqual(B.nextDaySaveOffset(50, 0), 50, 'zero-size record does not move the offset');
 
-  function sportDayFrame(day, steps, items, seq) {
+  // STOP builder: byte14 must be settable and match the START that opened
+  // the session (same vectors pinned in tests/test_decoder.py).
+  B._setSeq(0x74);
+  assert.strictEqual(
+    Buffer.from(B.buildV3Stop04(0x08, 0)).toString('hex').toUpperCase(),
+    '33DAADDAAD011000040074000108000000E993',
+    'JS buildV3Stop04 b14=0 must be byte-identical with decoder.py',
+  );
+  B._setSeq(0x75);
+  assert.strictEqual(
+    Buffer.from(B.buildV3Stop04(0x08)).toString('hex').toUpperCase(),
+    '33DAADDAAD011000040075000108010000B81C',
+    'JS buildV3Stop04 default b14 must be byte-identical with decoder.py',
+  );
+
+  function sportDayFrame(month, day, steps, items, seq) {
     const head = Buffer.alloc(36, 0);
-    head.writeUInt16LE(2026, 1); head[3] = 10; head[4] = day;
+    head.writeUInt16LE(2026, 1); head[3] = month; head[4] = day;
     head.writeUInt32LE(steps, 8);
     head.writeUInt32LE(999, 12);
     head.writeUInt32LE(6000, 16);
@@ -226,41 +240,43 @@ const CHUNKS = [
     return new Uint8Array(Buffer.concat([Buffer.from([0x33]), buf]));
   }
   function emptySportFrame(seq) {
-    const pay = Buffer.from([0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0]);
+    const pay = Buffer.concat([
+      Buffer.from([0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 36, 0x00, 0, 0, 0, 0, 0]),
+      Buffer.alloc(36, 0),
+    ]);
     const buf = Buffer.concat([Buffer.from([0xDA, 0xAD, 0xDA, 0xAD, 0x01, 0, 0, 0x04, 0x00, seq & 0xFF, (seq >> 8) & 0xFF]), pay]);
     buf.writeUInt16LE(buf.length, 5);
     return new Uint8Array(Buffer.concat([Buffer.from([0x33]), buf]));
   }
-  const REC_TODAY = 36 + 95 * 10; // 986
-  const REC_YDAY = 36 + 94 * 10; // 976
+  function emptyHrFrame(seq) {
+    const pay = Buffer.concat([
+      Buffer.from([0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 31, 0x00, 0, 0, 0, 0, 0]),
+      Buffer.alloc(31, 0),
+    ]);
+    const buf = Buffer.concat([Buffer.from([0xDA, 0xAD, 0xDA, 0xAD, 0x01, 0, 0, 0x04, 0x00, seq & 0xFF, (seq >> 8) & 0xFF]), pay]);
+    buf.writeUInt16LE(buf.length, 5);
+    return new Uint8Array(Buffer.concat([Buffer.from([0x33]), buf]));
+  }
+
   let seqC = 0x80;
-  const txLog = []; // track all TX frames: {cmd, type, off}
+  // Completed days the mock watch will serve, oldest first, then empty.
+  const histQueue = [
+    sportDayFrame(10, 31, 27193, 96, seqC++),
+    sportDayFrame(11, 1, 38043, 96, seqC++),
+  ];
+  const txLog = []; // all 0x04 TX frames: {cmd, type, oper, off, b14, char}
   B._stub(
-    function (ch, name, bytes) { // wr: answer sport STARTs like the watch
-      if (bytes && bytes.length >= 17 && bytes[0] === 0x33) {
-        const cmd = bytes[8] | (bytes[9] << 8);
-        if (cmd === 0x04 && bytes[12] === 0x00) {
-          const off = bytes[15] | (bytes[16] << 8);
-          txLog.push({ cmd: 0x04, type: bytes[13], off, b14: bytes[14], char: name });
-          if (bytes[13] === 0x08) {
-            let frame;
-            if (off < REC_TODAY) frame = sportDayFrame(14, 7000, 95, seqC++);
-            else if (off < REC_TODAY + REC_YDAY) frame = sportDayFrame(13, 5200, 94, seqC++);
-            else frame = emptySportFrame(seqC++);
-            setTimeout(() => B.handleV3(frame), 0);
-          }
-        } else if (cmd === 0x05) {
-          // parse sport (type 08) offset from the 7 type+offset records
-          let sportOff = 0;
-          for (let i = 0; i < 7; i++) {
-            const o = 12 + i * 5;
-            if (o + 5 <= bytes.length && bytes[o] === 0x08) {
-              sportOff = bytes[o+1] | (bytes[o+2] << 8) | (bytes[o+3] << 16) | (bytes[o+4] << 24);
-            }
-          }
-          txLog.push({ cmd: 0x05, type: 0x08, off: sportOff });
-        }
-      }
+    function (ch, name, bytes) { // wr: serve today (b14=1) or pop the next completed day
+      if (!(bytes && bytes.length >= 17 && bytes[0] === 0x33)) return Promise.resolve();
+      const cmd = bytes[8] | (bytes[9] << 8);
+      if (cmd !== 0x04) return Promise.resolve();
+      const oper = bytes[12], type = bytes[13], b14 = bytes[14], off = bytes[15] | (bytes[16] << 8);
+      txLog.push({ cmd, type, oper, off, b14, char: name });
+      if (type !== 0x08 || oper !== 0x00) return Promise.resolve();
+      let frame;
+      if (b14 === 1) frame = sportDayFrame(11, 5, 95, 31, seqC++);
+      else frame = histQueue.length ? histQueue.shift() : emptySportFrame(seqC++);
+      setTimeout(() => B.handleV3(frame), 0);
       return Promise.resolve();
     },
     function () { return new Promise((res) => setTimeout(res, 30)); }, // waitFor
@@ -270,43 +286,40 @@ const CHUNKS = [
   const putsBeforePaging = puts.length;
   await B.dailyAuto({ days: 7 });
   const paged = puts.slice(putsBeforePaging).filter((p) => p.type === 'steps');
-  assert.deepStrictEqual(paged.map((p) => p.date).sort(), ['2026-10-13', '2026-10-14'],
-    'byte-paged sync saves BOTH today and yesterday, got ' + JSON.stringify(paged.map((p) => p.date)));
-  assert.strictEqual(paged.filter((p) => p.date === '2026-10-13')[0].payload.steps, 5200, 'day-1 steps decoded');
-  assert.strictEqual(paged.filter((p) => p.date === '2026-10-14')[0].payload.steps, 7000, 'day-2 steps decoded');
-  // Verify 0x05 sizes query is sent with the SAME offset as the following 0x04 START for sport.
-  // Walk txLog in order; each sport 0x04 START must be preceded by a 0x05 with the same sport offset.
-  const sport04 = txLog.filter(t => t.cmd === 0x04 && t.type === 0x08).map(t => t.off);
-  assert.ok(sport04.length >= 2, 'sport 0x04 START sent at least twice, got ' + JSON.stringify(sport04));
-  assert.ok(sport04.includes(REC_TODAY), 'sport 0x04 START sent with offset ' + REC_TODAY + ', got ' + JSON.stringify(sport04));
-  // For each sport 0x04 START, find the most recent 0x05 before it and check sport offset matches
-  let last05sportOff = 0;
-  const pairs = [];
-  for (const t of txLog) {
-    if (t.cmd === 0x05) last05sportOff = t.off; // t.off is sport offset for 0x05
-    if (t.cmd === 0x04 && t.type === 0x08) pairs.push({ off04: t.off, off05: last05sportOff });
-  }
-  for (const p of pairs) {
-    assert.strictEqual(p.off04, p.off05,
-      '0x04 START offset ' + p.off04 + ' must match preceding 0x05 sport offset ' + p.off05);
-  }
-  console.log('capture.test.js: byte-offset day paging passed (0x05+0x04 offsets match: ' + JSON.stringify(pairs) + ')');
-
-  // byte14=0 oldest-record pull (2026-11-04 live finding on ID208 Plus): the
-  // extra syncAll round must send 0x04 with byte14=0 at offset 0 on the LEGACY
-  // char 0x0AF6 (not the 0x0AF1 black hole), and the fed reply is captured.
-  const txBeforeOldest = txLog.length;
-  B.resetCaptures();
-  await B.pullOldestDay(8, 'Sport');
-  const oldestTx = txLog.slice(txBeforeOldest).filter((t) => t.cmd === 0x04 && t.type === 0x08);
-  assert.ok(
-    oldestTx.some((t) => t.b14 === 0 && t.off === 0 && t.char === '0x0AF6'),
-    'oldest-record pull sends 0x04 byte14=0 @0 on 0x0AF6, got ' + JSON.stringify(oldestTx),
+  assert.deepStrictEqual(
+    paged.map((p) => p.date).sort(),
+    ['2026-10-31', '2026-11-01', '2026-11-05'],
+    'cursor sync saves today (b14=1) + both completed days (b14=0), got ' + JSON.stringify(paged.map((p) => p.date)),
   );
-  const putsBeforeOldest = puts.length;
-  await B.saveCaptured('oldest');
-  const oldestRows = puts.slice(putsBeforeOldest).filter((p) => p.type === 'steps');
-  assert.strictEqual(oldestRows.length, 1, 'oldest b14=0 reply saved as one steps record');
-  assert.strictEqual(oldestRows[0].payload.date, '2026-10-14', 'oldest record keyed by its header date');
-  console.log('capture.test.js: byte14=0 oldest-record pull passed');
+  assert.strictEqual(paged.filter((p) => p.date === '2026-10-31')[0].payload.steps, 27193, 'completed day 10-31 decoded');
+  assert.strictEqual(paged.filter((p) => p.date === '2026-11-01')[0].payload.steps, 38043, 'completed day 11-01 decoded');
+  assert.strictEqual(paged.filter((p) => p.date === '2026-11-05')[0].payload.steps, 95, 'today decoded');
+
+  const histStarts = txLog.filter((t) => t.type === 0x08 && t.oper === 0x00 && t.b14 === 0x00);
+  const histStops = txLog.filter((t) => t.type === 0x08 && t.oper === 0x01 && t.b14 === 0x00);
+  const todayStarts = txLog.filter((t) => t.type === 0x08 && t.oper === 0x00 && t.b14 === 0x01);
+  const todayStops = txLog.filter((t) => t.type === 0x08 && t.oper === 0x01 && t.b14 === 0x01);
+  assert.ok(histStarts.length >= 3, 'completed-day paging sent >=3 START(b14=0), got ' + histStarts.length);
+  assert.strictEqual(histStops.length, histStarts.length, 'every history START got a matching STOP(b14=0)');
+  assert.strictEqual(todayStarts.length, 1, 'one today START(b14=1), got ' + todayStarts.length);
+  assert.strictEqual(todayStops.length, 1, 'one today STOP(b14=1), got ' + todayStops.length);
+  assert.ok(txLog.every((t) => t.char === '0x0AF6'), 'all day-data 0x04 traffic stays on 0x0AF6');
+  console.log('capture.test.js: cursor day paging passed (today + 10-31 + 11-01, STOP b14 matches START)');
+
+  // Empty-history markers for sport (08) and HR (03) must be ignored too.
+  // The zeroed sport header falls back to the phone date, so without the guard
+  // the items=0 frame overwrote today's real record with zeros; HR stored a
+  // "0-0-0" day (seen live 2026-11-05).
+  B.resetCaptures();
+  B.handleV3(sportDayFrame(11, 5, 95, 31, seqC++));
+  B.handleV3(emptySportFrame(seqC++));
+  B.handleV3(emptyHrFrame(seqC++));
+  const putsBeforeEmpty = puts.length;
+  await B.saveCaptured('empty-markers');
+  const emptySteps = puts.slice(putsBeforeEmpty).filter((p) => p.type === 'steps');
+  assert.strictEqual(emptySteps.length, 1, 'empty sport marker saves no extra step day');
+  assert.strictEqual(emptySteps[0].payload.steps, 95, 'today steps survive the empty marker');
+  const emptyHr = puts.slice(putsBeforeEmpty).filter((p) => p.type === 'hr');
+  assert.strictEqual(emptyHr.length, 0, 'empty HR marker saves no 0-0-0 day');
+  console.log('capture.test.js: empty sport/HR markers ignored');
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

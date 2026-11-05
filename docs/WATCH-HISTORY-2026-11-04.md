@@ -164,3 +164,57 @@ the store accumulating forward via daily syncs, plus the oldest record.
   ADB (uiautomator taps + dumps; you click only the native BT picker),
   `adb reverse tcp:8080 tcp:8080` serves the webapp to the phone as
   localhost (secure context → WebBluetooth available).
+
+## 2026-11-05 addendum — the cursor DOES page; 11-04 verdict superseded
+
+`scripts/playwright-watch/history_probe.py` (Windows Playwright, headed Chrome,
+`0x0AF6` only) tested START(oper=0, byte14=0, off=0) followed by a **matching
+STOP(oper=1, byte14=0, off=0)** — the one combination the 11-04 matrix never
+sent, because `buildV3Stop04()` cloned the START default (byte14=1 for
+01/02/03/08).
+
+| type | rounds (date @ items) | end |
+|---|---|---|
+| 08 sport | 10-31 @96, 11-01 @96, 11-02 @96, 11-03 @96, 11-04 @96 | `items=0` |
+| 03 HR | 10-31 @1178, 11-01 @1446, 11-02 @1060, 11-03 @530, 11-04 @564 | `items=0` |
+| 01 SpO2 | 10-31 @28, 11-01 @20, 11-02 @29, 11-03 @22, 11-04 @25 | `items=0` |
+| 02 pressure | 10-31 @69, 11-01 @64, 11-02 @89, 11-03 @64, 11-04 @67 | `items=0` |
+
+- One **completed** day per START+STOP round, oldest first. `saveOffset`
+  stays ignored; no `0x05` prime is needed.
+- Today is not in that stream: `b14=1` returned 2026-11-05 (95 steps, 31
+  items) after the day rolled over, while `b14=0` still ended at 11-04.
+- Cursor lifecycle: a second session (new Chrome context, reconnect) got
+  `items=0` for every type immediately — the cursor persists. The
+  `--rewind` matrix (b14=1 today pull; `0x05` all-zero; `0x05` per-type 0;
+  bare STOP ×2) did not rewind it. `0x05` totalBytes fell 18226 → 989
+  (unsynced bytes). Reboot / day-rollover rewind untested.
+- Header layouts re-confirmed against the probe bytes: sport headSize 36
+  (steps @8, raw kcal @12, distance @16, activeMin @20, display kcal @26);
+  HR 31 (startS @4, silent @9, five zones @10+3z, dataSize @25); SpO2 and
+  pressure 13 (startS @4, dataSize @9). HR items are 2-byte (delta s, bpm)
+  with `(0xFF,0x00)` = a 255 s gap, so the decoder's 30–220 filter is right.
+
+### Shipped with this addendum
+
+- `ble.js`: `buildV3Stop04(dataType, b14Override)`, `pullToday`,
+  `pageDayHistory`; `dailyAuto`/`syncAll` pull today (b14=1) then drain the
+  completed-day cursor (b14=0); `pullOldestDay` removed.
+- `decoder.py`: `build_v3_stop_04` mirror; byte vectors pinned in
+  `webapp/capture.test.js` and `tests/test_decoder.py`.
+- `scripts/playwright-watch/history_probe.py`: the live probe (`--rewind`
+  for the cursor-lifecycle matrix).
+
+### 2026-11-05 follow-up — reboot does not rewind; empty-marker guards
+
+- A button reboot did **not** rewind the cursor: the next sync returned
+  `items=0` for all four day-data types. The BLE queue is one-shot for the
+  watch's lifetime (factory reset not tested). `b14=1` still returns today.
+- That sync exposed the terminal `items=0` frame being decoded as data:
+  sport's zeroed header fell back to the phone date and **overwrote today's
+  real record with zeros**, and HR stored a `0-0-0` day. Both types now
+  ignore `itemCount == 0` (like sleep/workouts/swim/SpO2/pressure), with
+  regression coverage in `webapp/capture.test.js`.
+- Recovery: `captures/history-probe-2026-11-05.jsonl` (gitignored) decodes
+  to `out/steps.csv` / `out/hr.json`; `out/import-2026-11-05.json` is the
+  combined import for pull.html (restores 10-31…11-04 into the store).

@@ -61,25 +61,45 @@
 - REBOOT TEST 2026-10-13 (Forget + watch reboot + rebind + Button B):
   no revival. Sport offsets 0–3 all today (items 94/95), HR offsets 0–3 all
   today (items up to 628), sleep offsets 0–7+108 all `items=0`, workouts
-  `items=0`. CLOSED: this watch/firmware serves today-only sport/HR and
-  zero sleep/workouts over BLE, to our app and VeryFit alike, across
-  reboots. History = our store accumulating forward from 2026-10-13 via
-  daily syncs (stamp + gap-stretch shipped). Revisit only if a firmware
-  update or a new watch changes BLE behavior.
-- 2026-11-04 LIVE RE-TEST (Windows Playwright + phone ADB; full evidence in
-  docs/WATCH-HISTORY-2026-11-04.md): conclusion CONFIRMED and sharpened.
-  `0x0AF6` saveOffset is ignored at every byte offset 0..18226 (replies
-  byte-identical except the seq echo) on BOTH bonds; byte14=1 returns
-  today, byte14=0 returns the single OLDEST record (2026-10-30, 23048
-  steps) at any offset. `0x0AF1` is a black hole on this firmware: refused
-  at ATT level on the Windows bond (even after app bind 04 01/04 05), and
-  on the phone bond writes are accepted (write request AND write command,
-  single 137B AND 20B-chunked) but never answered — no 0x0AF2 reply exists
-  in any capture. Count-data (04/06/07) empty at all offsets. `0x05` on
-  `0x0AF6` replies totalBytes≈18.2KB (~6 day-records Oct 30→Nov 4) but the
-  middle days are not addressable over BLE. `syncAll` now also pulls the
-  one reachable oldest record per day-data type (`pullOldestDay`, byte14=0
-  @0). History = our store accumulating forward + that oldest record.
+  `items=0`. SUPERSEDED for sport/HR/SpO2/pressure on 2026-11-05 (below):
+  those offsets were ignored and the STOP carried the wrong byte14. The
+  sleep/workout/swim `items=0` part still holds (count-data is empty over
+  BLE).
+- 2026-11-05 LIVE PROBE (`scripts/playwright-watch/history_probe.py`,
+  Windows Playwright): HISTORY IS FULLY PAGEABLE over BLE. On `0x0AF6`,
+  START(oper=0, b14=0, off=0) + matching STOP(oper=1, b14=0) returns ONE
+  COMPLETED DAY per round: sport 10-31→11-04 (96 items each), HR
+  10-31→11-04, SpO2 10-31→11-04, pressure 10-31→11-04, then `items=0`.
+  The 11-04 "only today + oldest" verdict was an artifact of
+  `buildV3Stop04()` cloning the START default (b14=1), so the historical
+  session was never closed with the matching flag. saveOffset is still
+  ignored; 0x05 priming does not move the cursor.
+- Today (in-progress) is NOT in the b14=0 stream: b14=1 returns it. The
+  probe saw the day roll over mid-run (b14=1 → 2026-11-05, 95 steps).
+- Cursor lifecycle: PERSISTS across disconnect/reconnect (a second session
+  returned `items=0` immediately). NOT rewound by a b14=1 today pull, 0x05
+  sizes (all-zero or per-type), or bare STOP (all tested). `0x05`
+  totalBytes drops 18226→989 after draining (= unsynced bytes). Watch
+  reboot / day-rollover rewind untested.
+- Shipped: `buildV3Stop04(dataType, b14Override)` + `build_v3_stop_04`
+  mirror (vectors in `capture.test.js` / `test_decoder.py`); `pullToday`
+  (b14=1) + `pageDayHistory` (b14=0 cursor pager) in `ble.js`;
+  `dailyAuto`/`syncAll` use them; `pullOldestDay` removed.
+- NOTE: the probe consumed 10-31..11-04 from the BLE queue. Those days may
+  not be in the phone store yet — reboot the watch (if that rewinds the
+  cursor) and run "B. Sync full history" to refill.
+- 2026-11-05 REBOOT TEST (button reboot, then patched `syncAll`): the cursor
+  did NOT rewind — every day-data type returned `items=0` immediately.
+  The BLE queue is one-shot for the watch's lifetime (factory reset
+  untested). Today still pulls fine via b14=1.
+- The same run exposed an empty-marker bug: the terminal `items=0` frame was
+  decoded as sport (zeroed header → phone-date fallback → OVERWROTE today's
+  real record with zeros) and as an HR day `0-0-0`. Both now have phantom
+  guards in `ble.js` (types 08/03), covered by `capture.test.js`.
+- Recovery path: probe bytes are saved in
+  `captures/history-probe-2026-11-05.jsonl` (gitignored) and decoded to
+  `out/steps.csv` / `out/hr.json`; `out/import-2026-11-05.json` is the
+  combined file for pull.html's Import control (restores 10-31..11-04).
 
 ## 4. Sleep page: missing night of the 12th (implement first)
 - Symptom: no record with `night 2026-10-12`; watch shows no previous

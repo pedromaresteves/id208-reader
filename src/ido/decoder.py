@@ -393,12 +393,13 @@ def build_v3_start_04(
     byte14: 0x01 day-data (01,02,03,08), 0x00 count-data (04,06,07); pass
     explicitly to override the per-type default (probeViaF1 does this).
 
-    LIVE 2026-11-04 (Windows bond, writes only possible on 0x0AF6): save_offset
-    is IGNORED for day-data on 0x0AF6 — byte14=1 returns today's record at ANY
-    offset, byte14=0 returns the same single oldest record (2026-10-30) at any
-    offset; 0x05 primes on 0x0AF6 get a reply but no side effect; repeated
-    STARTs do not advance a cursor. Offsets are expected to be honored only on
-    the bulk channel 0x0AF1 (refused on the Windows bond at ATT level).
+    LIVE 2026-11-05 (ID208 Plus, 0x0AF6): save_offset is IGNORED for day-data
+    at every byte offset. byte14=1 returns TODAY's in-progress record; byte14=0
+    returns the next COMPLETED day from a persistent sync cursor (oldest
+    first), and the matching STOP(byte14=0) advances it. One START+STOP round
+    per day: 2026-10-31 -> 11-01 -> ... -> 11-04 -> items=0. The cursor
+    survives disconnect/reconnect and is not rewound by b14=1, 0x05, or a bare
+    STOP. See build_v3_stop_04 and webapp/ble.js pageDayHistory.
     """
     if data_type not in V3_BYTE14:
         raise ValueError(f"unknown v3 data_type: {data_type:#x}")
@@ -412,6 +413,21 @@ def build_v3_start_04(
     pkt[13] = data_type
     pkt[14] = V3_BYTE14[data_type] if byte14 is None else byte14
     pkt[15:17] = (save_offset & 0xFFFF).to_bytes(2, "little")
+    return _finish_v3(pkt)
+
+
+def build_v3_stop_04(
+    data_type: int, seq: int, save_offset: int = 0, byte14: int | None = None
+) -> bytes:
+    """Build a 19-byte v3 cmd 0x04 STOP (operate 0x01) for one data_type.
+
+    byte14 must match the START that opened the session: 0x01 closes today's
+    (b14=1) pull, 0x00 closes a completed historical day and advances the
+    watch's sync cursor. Byte-identical mirror of webapp/ble.js
+    buildV3Stop04(dataType, b14Override).
+    """
+    pkt = bytearray(build_v3_start_04(data_type, seq, save_offset, byte14))
+    pkt[12] = 0x01  # operate STOP
     return _finish_v3(pkt)
 
 

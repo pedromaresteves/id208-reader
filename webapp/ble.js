@@ -499,13 +499,15 @@ async function primeOffset05(dataType, off) {
   // silence is a normal answer and a long wait per round would stall paging.
   await waitFor(function () { return lastSizesTotal >= 0; }, sawSizesReply ? 3000 : 500, 'sizes@' + off);
 }
-// Generic byte-paged pull for one data type. Day-data types (01,02,03,08):
-// offset 0 = today, step back by recSize per round. Count-data types
-// (04,06,07): offset 0 = oldest record, step forward by recSize. Each round
-// primes 0x05 with the offset, sends 0x04 START at the same saveOffset, waits
-// for the reply, sends STOP. Stops on items==0 or staleLimit consecutive
-// rounds with no new capture (freshFn counts captured records). onRound(r,
-// max) drives progress display. Returns the final byte offset reached.
+// Generic byte-paged pull for one data type. Used for the COUNT-data types
+// (04 workouts, 06 swims, 07 sleep), where offset 0 = oldest record and each
+// round steps forward by recSize. Day-data types (01,02,03,08) do NOT use this
+// anymore: their stream is driven by a persistent cursor, see pageDayHistory.
+// Each round primes 0x05 with the offset, sends 0x04 START at the same
+// saveOffset, waits for the reply, sends STOP. Stops on items==0 or staleLimit
+// consecutive rounds with no new capture (freshFn counts captured records).
+// onRound(r, max) drives progress display. Returns the final byte offset
+// reached.
 async function pageType(dataType, maxRounds, label, staleLimit, freshFn, onRound) {
   var off = 0, stale = 0;
   for (var r = 0; r < maxRounds; r++) {
@@ -525,22 +527,47 @@ async function pageType(dataType, maxRounds, label, staleLimit, freshFn, onRound
   }
   return off;
 }
-// One byte14=0 round at offset 0 on 0x0AF6: on the ID208 Plus (FW v1.01.17)
-// that returns the single OLDEST stored record for a day-data type (observed
-// 2026-10-30, 23048 steps) — byte14=1 returns today at ANY offset and
-// saveOffset is ignored on 0x0AF6 (replies byte-identical 0..18226), so this
-// is the only history record reachable over BLE. No 0x05 prime: the offset
-// is ignored anyway, and on the phone bond 0x0AF1 writes are accepted but
-// never answered (black hole — see probeViaF1).
-async function pullOldestDay(dataType, label) {
+// Today's record for a day-data type: START/STOP with byte14=1 at offset 0.
+// This is the ONLY way to get the in-progress day — the historical stream
+// (byte14=0) serves completed days only (oldest -> yesterday). b14=1 never
+// touches the historical cursor (live 2026-11-05).
+async function pullToday(dataType, label) {
   setItems(dataType, -1); setRec(dataType, 0);
-  log(label + ' oldest record (byte14=0 @0 on 0x0AF6)...');
-  await wr(writeChar, '0x0AF6', buildV3Start04(dataType, 0, 0));
-  await waitFor(function () { return getItems(dataType) >= 0; }, 12000, label + ' oldest reply');
-  await wr(writeChar, '0x0AF6', buildV3Stop04(dataType));
-  await wait(2000);
-  if (getItems(dataType) > 0) log(label + ' oldest: items=' + getItems(dataType) + ' recSize=' + getRec(dataType));
-  else log(label + ' oldest: empty — nothing older stored.');
+  await wr(writeChar, '0x0AF6', buildV3Start04(dataType, 0)); // byte14 default = 1
+  await waitFor(function () { return getItems(dataType) >= 0; }, 12000, label + ' today reply');
+  var items = getItems(dataType);
+  await wr(writeChar, '0x0AF6', buildV3Stop04(dataType)); // matching byte14=1
+  await wait(800);
+  log(label + ' today: items=' + items);
+}
+// Completed-day history paging for day-data types (08 sport, 03 HR, 01 SpO2,
+// 02 pressure) on 0x0AF6. LIVE 2026-11-05: the watch keeps a PERSISTENT sync
+// cursor over completed days, oldest first. Each round returns the next day:
+//   START oper=0 type T byte14=0 saveOffset=0
+//   STOP  oper=1 type T byte14=0 saveOffset=0   <- this advances the cursor
+// saveOffset is ignored on 0x0AF6, 0x05 priming does not move the cursor, and
+// the cursor survives disconnect/reconnect. It is NOT rewound by b14=1, 0x05,
+// or a bare STOP (all tested 2026-11-05); after items=0 it stays spent until
+// the watch resets it. Decoded days land in cap*Days/capSpo2/capPress keyed by
+// header date, so re-served days overwrite instead of duplicating.
+async function pageDayHistory(dataType, label, maxRounds, freshFn, onRound) {
+  var stale = 0;
+  for (var r = 0; r < maxRounds; r++) {
+    if (onRound) onRound(r + 1, maxRounds);
+    var before = freshFn ? freshFn() : 0;
+    setItems(dataType, -1); setRec(dataType, 0);
+    await wr(writeChar, '0x0AF6', buildV3Start04(dataType, 0, 0));
+    await waitFor(function () { return getItems(dataType) >= 0; }, 12000, label + ' history reply');
+    var items = getItems(dataType);
+    if (items < 0) { log(label + ' history: no reply — stopping (no STOP sent).'); break; }
+    await wr(writeChar, '0x0AF6', buildV3Stop04(dataType, 0)); // matching byte14=0
+    await wait(1000);
+    if (items === 0) { log(label + ' history: no more completed days — done.'); break; }
+    var fresh = freshFn ? freshFn() : 0;
+    log(label + ' history round ' + (r + 1) + ': items=' + items + ' (captured ' + fresh + ')');
+    stale = (fresh > before) ? 0 : stale + 1;
+    if (stale >= 2) { log(label + ' history repeats the same day — stopping.'); break; }
+  }
 }
 // One day-data round at a fixed offset (kept for manual/single pulls):
 // returns the number of NEW dates captured by this round (0 = duplicate/empty).
@@ -593,14 +620,16 @@ async function dailyAuto(opts) {
     if (!sizesOk && writeChar) sizesOk = await wrOk(writeChar, '0x0AF6', buildV3Sizes05());
     if (sizesOk) await waitFor(function () { return lastSizesTotal >= 0; }, 10000, 'sizes reply');
     else log('0x05 sizes query unwritable on both chars — continuing without it.');
-    setProgress(3, 9, 'Sport days'); log('[Pull 3/9] Sport days (up to ' + wantDays + ', byte-paged)...');
-    await pageType(8, wantDays, 'Sport', 2, function () { return capSportDays.length; },
+    setProgress(3, 9, 'Sport days'); log('[Pull 3/9] Sport days (today + up to ' + wantDays + ' completed days)...');
+    await pullToday(8, 'Sport');
+    await pageDayHistory(8, 'Sport', wantDays, function () { return capSportDays.length; },
       function (r) { setProgress(3, 9, 'Sport day ' + r); });
     setProgress(4, 9, 'Sleep'); log('[Pull 4/9] Sleep nights (up to 8 rounds, byte-paged)...');
     await pageType(7, 8, 'Sleep', 3, function () { return capSleepNights.length; },
       function (r) { setProgress(4, 9, 'Sleep round ' + r); });
-    setProgress(5, 9, 'HR days'); log('[Pull 5/9] Heart-rate days (up to ' + wantDays + ', byte-paged)...');
-    await pageType(3, wantDays, 'HR', 2, function () { return capHrDays.length; },
+    setProgress(5, 9, 'HR days'); log('[Pull 5/9] Heart-rate days (today + up to ' + wantDays + ' completed days)...');
+    await pullToday(3, 'HR');
+    await pageDayHistory(3, 'HR', wantDays, function () { return capHrDays.length; },
       function (r) { setProgress(5, 9, 'HR day ' + r); });
     setProgress(6, 9, 'Workouts'); log('[Pull 6/9] Workouts (up to 8 rounds, byte-paged)...');
     await pageType(4, 8, 'Workout', 3, function () { return capWorkouts.length; },
@@ -608,18 +637,21 @@ async function dailyAuto(opts) {
     setProgress(7, 9, 'Swims'); log('[Pull 7/9] Swims (up to 8 rounds, byte-paged)...');
     await pageType(6, 8, 'Swim', 3, function () { return capWorkouts.length; },
       function (r) { setProgress(7, 9, 'Swim round ' + r); });
-    setProgress(8, 9, 'SpO2'); log('[Pull 8/9] SpO2 days (up to ' + wantDays + ', byte-paged)...');
-    await pageType(1, wantDays, 'SpO2', 2, function () { return capSpo2.length; },
+    setProgress(8, 9, 'SpO2'); log('[Pull 8/9] SpO2 days (today + up to ' + wantDays + ' completed days)...');
+    await pullToday(1, 'SpO2');
+    await pageDayHistory(1, 'SpO2', wantDays, function () { return capSpo2.length; },
       function (r) { setProgress(8, 9, 'SpO2 day ' + r); });
-    setProgress(9, 9, 'Pressure'); log('[Pull 9/9] Pressure days (up to ' + wantDays + ', byte-paged)...');
-    await pageType(2, wantDays, 'Pressure', 2, function () { return capPress.length; },
+    setProgress(9, 9, 'Pressure'); log('[Pull 9/9] Pressure days (today + up to ' + wantDays + ' completed days)...');
+    await pullToday(2, 'Pressure');
+    await pageDayHistory(2, 'Pressure', wantDays, function () { return capPress.length; },
       function (r) { setProgress(9, 9, 'Pressure day ' + r); });
     await saveCaptured('daily ' + todayStr());
     show('Daily pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
   } finally { macroRunning = false; setMacroButtons(false); }
 }
-// Full-history pull (Pull-page advanced button): every type byte-paged deep
-// (sport/HR/SpO2/pressure up to 60 rounds, sleep/workouts/swims up to 30).
+// Full-history pull (Pull-page advanced button): day-data types pull today
+// (b14=1) then drain the completed-day cursor (b14=0) up to 60 days;
+// count-data types (sleep/workouts/swims) stay byte-paged up to 30 rounds.
 // Each phase stops on empty or repeated records; duplicates overwrite the
 // same store keys, so over-fetching is harmless. Slow by design (~minutes) —
 // dashboard stays on the 7-day path.
@@ -633,31 +665,31 @@ async function syncAll() {
     log('[Full 1/8] Live data...'); setProgress(1, 8, 'Live data');
     await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0]));
     await waitFor(function () { return capLive !== null; }, 8000, 'live reply');
-    setProgress(2, 8, 'Sport history'); log('[Full 2/8] Sport history (byte-paged, up to 60 rounds)...');
-    await pageType(8, 60, 'Sport', 3, function () { return capSportDays.length; },
+    setProgress(2, 8, 'Sport history'); log('[Full 2/8] Sport history (today + completed-day cursor, up to 60)...');
+    await pullToday(8, 'Sport');
+    await pageDayHistory(8, 'Sport', 60, function () { return capSportDays.length; },
       function (r) { setProgress(2, 8, 'Sport day ' + r); });
-    await pullOldestDay(8, 'Sport');
     setProgress(3, 8, 'Sleep history'); log('[Full 3/8] Sleep history (byte-paged, up to 30 rounds)...');
     await pageType(7, 30, 'Sleep', 3, function () { return capSleepNights.length; },
       function (r) { setProgress(3, 8, 'Sleep round ' + r); });
-    setProgress(4, 8, 'HR history'); log('[Full 4/8] HR history (byte-paged, up to 60 rounds)...');
-    await pageType(3, 60, 'HR', 3, function () { return capHrDays.length; },
+    setProgress(4, 8, 'HR history'); log('[Full 4/8] HR history (today + completed-day cursor, up to 60)...');
+    await pullToday(3, 'HR');
+    await pageDayHistory(3, 'HR', 60, function () { return capHrDays.length; },
       function (r) { setProgress(4, 8, 'HR day ' + r); });
-    await pullOldestDay(3, 'HR');
     setProgress(5, 8, 'Workout history'); log('[Full 5/8] Workout history (byte-paged, up to 30 rounds)...');
     await pageType(4, 30, 'Workout', 3, function () { return capWorkouts.length; },
       function (r) { setProgress(5, 8, 'Workout round ' + r); });
     setProgress(6, 8, 'Swim history'); log('[Full 6/8] Swim history (byte-paged, up to 30 rounds)...');
     await pageType(6, 30, 'Swim', 3, function () { return capWorkouts.length; },
       function (r) { setProgress(6, 8, 'Swim round ' + r); });
-    setProgress(7, 8, 'SpO2 history'); log('[Full 7/8] SpO2 history (byte-paged, up to 60 rounds)...');
-    await pageType(1, 60, 'SpO2', 3, function () { return capSpo2.length; },
+    setProgress(7, 8, 'SpO2 history'); log('[Full 7/8] SpO2 history (today + completed-day cursor, up to 60)...');
+    await pullToday(1, 'SpO2');
+    await pageDayHistory(1, 'SpO2', 60, function () { return capSpo2.length; },
       function (r) { setProgress(7, 8, 'SpO2 day ' + r); });
-    await pullOldestDay(1, 'SpO2');
-    setProgress(8, 8, 'Pressure history'); log('[Full 8/8] Pressure history (byte-paged, up to 60 rounds)...');
-    await pageType(2, 60, 'Pressure', 3, function () { return capPress.length; },
+    setProgress(8, 8, 'Pressure history'); log('[Full 8/8] Pressure history (today + completed-day cursor, up to 60)...');
+    await pullToday(2, 'Pressure');
+    await pageDayHistory(2, 'Pressure', 60, function () { return capPress.length; },
       function (r) { setProgress(8, 8, 'Pressure day ' + r); });
-    await pullOldestDay(2, 'Pressure');
     await saveCaptured('full ' + todayStr());
     show('Full pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
   } finally { macroRunning = false; setMacroButtons(false); }
@@ -802,8 +834,16 @@ async function probeViaF1() {
     log('=== F1PROBE done ===');
   } finally { macroRunning = false; }
 }
-function buildV3Stop04(dataType) {
-  var pkt = buildV3Start04(dataType);
+// v3 0x04 STOP. byte14 must MATCH the START that opened the session:
+//   byte14=1 closes "today" (the b14=1 pull),
+//   byte14=0 closes a historical day and ADVANCES the completed-day cursor.
+// LIVE 2026-11-05 (ID208 Plus, 0x0AF6): START(b14=0)+STOP(b14=0) returned
+// 2026-10-31 -> 11-01 -> 11-02 -> 11-03 -> 11-04 -> items=0, one completed day
+// per round, on every day-data type (08/03/01/02). The old STOP always used
+// the b14=1 default, so the historical session was never closed with the
+// matching flag and the cursor never advanced — that was the history bug.
+function buildV3Stop04(dataType, b14Override) {
+  var pkt = buildV3Start04(dataType, 0, b14Override);
   pkt = new Uint8Array(pkt);
   pkt[12] = 0x01; // operate STOP
   var crc = crc16Ccitt(pkt, 1, pkt.length - 3);
@@ -862,7 +902,12 @@ function dispatchV3(buf) {
   }
   var hs = 14, he = Math.min(p.length, hs + headSize), de = Math.min(p.length, he + dataSize);
   var h = p.slice(hs, he), d = p.slice(he, de);
-  if (dataType === 8 && h.length >= 20) {
+  if (dataType === 8 && itemCount === 0) {
+    // Empty-history marker (zeroed header, items=0) at the end of the cursor
+    // stream. Without this guard the header falls back to the phone date and
+    // OVERWRITES today's real sport record with zeros.
+    log('SPORT dataType=8 items=0: empty-history marker, ignored.');
+  } else if (dataType === 8 && h.length >= 20) {
     var steps = u32le(h, 8), kcal = u32le(h, 12), dist = u32le(h, 16);
     // Header carries the day (bytes 1-2 year LE, [3] month, [4] day —
     // same layout as sync.py captures.py; proven 2026-10-13 in
@@ -893,6 +938,10 @@ function dispatchV3(buf) {
     });
     show('SLEEP dataType=7 items=' + itemCount + ': total=' + tot + 'm wake=' + wake + 'm light=' + light + 'm REM=' + rem + 'm deep=' + deep +
       'm fallAsleep=' + fa + ' getUp=' + gu + '  [watch: 425m 23:47->06:52]');
+  } else if (dataType === 3 && itemCount === 0) {
+    // Empty-history marker at the end of the cursor stream (zeroed 31-byte
+    // header). Without this guard it was saved as a "0-0-0" HR day.
+    log('HR dataType=3 items=0: empty-history marker, ignored.');
   } else if (dataType === 3 && h.length >= 10) {
     var yr = h[0] | (h[1] << 8), mo = h[2], dy = h[3];
     var st = (h[4] | (h[5] << 8) | (h[6] << 16) | (h[7] << 24)) >>> 0;

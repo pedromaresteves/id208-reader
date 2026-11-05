@@ -97,18 +97,22 @@ cd webapp && python3 -m http.server 8080
 ### Health sync (cmd 0x04 / 0x05)
 - `0x05` sizes query: 137B, 7 type+offset records (type 1B + offset 4B LE).
   Types: 01=SpO2, 02=pressure, 03=HR, 04=activity/workout, 06=swim,
-  07=sleep, 08=sport.
+  07=sleep, 08=sport. The offsets do NOT change what the watch serves on
+  `0x0AF6`; `totalBytes` counts unsynced bytes.
 - `0x04` START/STOP: 19B. byte12=operate (00=START, 01=STOP),
   byte13=dataType, byte14=day-data flag (01 for 01/02/03/08, 00 for
-  04/06/07), bytes 15-16 = saveOffset (16-bit LE).
-- **The watch uses the 0x05 per-type offset to set its internal resume
-  position. The 0x04 START offset must match.** Always send 0x05 with the
-  offset before the 0x04 START (see `primeOffset05` in ble.js).
-- Day-data types (sport 08, HR 03): offset 0 = today's record. Paging back
-  steps by headSize+dataSize bytes per record.
+  04/06/07), bytes 15-16 = saveOffset (16-bit LE, ignored on `0x0AF6`).
+- **Day-data history (01/02/03/08) is a persistent cursor over COMPLETED
+  days, oldest first.** START(oper=0, b14=0, off=0) + matching
+  STOP(oper=1, b14=0) returns one day per round; `items=0` ends it.
+  STOP must echo the START's byte14 — a b14=1 STOP does not advance the
+  cursor. `b14=1` returns today (in-progress) only. See `pullToday` /
+  `pageDayHistory` in ble.js.
+- The cursor survives disconnect/reconnect and is NOT rewound by b14=1,
+  0x05, or a bare STOP (tested 2026-11-05). After `items=0` it stays spent
+  until the watch resets it (reboot/day rollover untested).
 - Count-data types (sleep 07, workouts 04, swims 06): offset 0 = oldest
-  record. The watch may use a "spent cursor" — repeated STARTs can return
-  successive records.
+  record, byte-paged by headSize+dataSize; may be empty over BLE.
 
 ### Known watch limitations (ID208 Plus, FW v1.01.17)
 - After a factory reset, the BLE-accessible history store is empty.
