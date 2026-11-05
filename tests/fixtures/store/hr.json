@@ -1,0 +1,23 @@
+[
+  {
+    "date": "2026-10-11",
+    "year": 2026,
+    "month": 10,
+    "day": 11,
+    "start_time_s": 136,
+    "silent_hr": 58,
+    "zones": [
+      { "thr": 100, "min": 0 },
+      { "thr": 120, "min": 0 },
+      { "thr": 140, "min": 0 },
+      { "thr": 160, "min": 0 },
+      { "thr": 180, "min": 0 }
+    ],
+    "samples": [
+      { "t_s": 136, "bpm": 73 },
+      { "t_s": 475, "bpm": 71 },
+      { "t_s": 804, "bpm": 77 }
+    ],
+    "source": "v3 type03 fixture"
+  }
+]

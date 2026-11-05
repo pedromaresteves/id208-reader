@@ -1,0 +1,32 @@
+[
+  {
+    "date": "2026-10-08",
+    "version": 16,
+    "year": 2026,
+    "month": 10,
+    "day": 8,
+    "start_time_s": 71149,
+    "sport_type": 5,
+    "durations_s": 1101,
+    "calories": 85,
+    "distance_m": 1469,
+    "avg_hr": 93,
+    "max_hr": 121,
+    "min_hr": 74,
+    "avg_cadence_spm": 111,
+    "max_cadence_spm": 156,
+    "avg_stride_cm": 72,
+    "max_stride_cm": 73,
+    "avg_speed_kmh": 4.83,
+    "max_speed_kmh": 7.66,
+    "avg_pace_s": 749,
+    "fast_pace_s": 469,
+    "end_year": 2026,
+    "end_month": 10,
+    "end_day": 8,
+    "end_hour": 20,
+    "end_min": 4,
+    "hr_samples": [90, 95],
+    "source": "v3 type04 fixture"
+  }
+]

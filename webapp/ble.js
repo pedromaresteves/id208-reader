@@ -360,9 +360,19 @@ async function autoSyncAfterConnect(opts) {
   await wait(3000);
   if (lastPair === 1) {
     log('Watch bound (pair=1) — starting automatic sync.');
-    await dailyAuto(opts);
+    await syncNow(opts);
+  } else if (opts.autoSetup) {
+    show('Watch not bound (pair=' + lastPair + ') — running first-time setup (bind + auth, ~90 s).');
+    setProgress(1, 1, 'First-time setup (~90 s)');
+    await setupAuto();
+    if (lastPair === 1) {
+      log('Setup complete (pair=1) — starting the first sync.');
+      await syncNow(opts);
+    } else {
+      throw new Error('Watch still reports pair=' + lastPair + ' after setup');
+    }
   } else {
-    show('Watch not bound (pair=' + lastPair + ') — run A. Setup watch first.');
+    show('Watch not bound (pair=' + lastPair + ') — open Settings → Set up watch first.');
   }
 }
 var macroRunning = false;
@@ -459,7 +469,7 @@ async function setupAuto() {
     log('[Setup 18/18] Device info (check pair=1 above)...');
     await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x01]));
     await wait(3000);
-    show('Setup done — QR should be gone. Then run B. Daily pull.');
+    show('Setup done — QR should be gone. Tap Sync on the dashboard.');
   } finally { macroRunning = false; setMacroButtons(false); }
 }
 // Send 0x05 sizes query with a per-type byte offset, wait briefly for the reply.
@@ -583,117 +593,64 @@ async function pullDayOffset(dataType, off, label) {
   var after = (dataType === 8 ? capSportDays : capHrDays).length;
   return after - before;
 }
-async function dailyAuto(opts) {
+// The one sync path (dashboard Sync, Pull Connect auto-sync, Pull B all use
+// it). Pulls today (b14=1) then drains the watch's completed-day cursor
+// (b14=0) until items=0, with a 60-round safety cap. The queue is finite, so
+// there is no day-window/gap logic: the last-sync stamp is logging only.
+// opts.deep widens count-data paging (sleep/workouts/swims) from 8 to 30
+// rounds. opts.days is accepted for old callers but no longer caps anything.
+async function syncNow(opts) {
   opts = opts || {};
   if (macroRunning) { log('A macro is already running — wait for it to finish.'); return; }
   macroRunning = true; setMacroButtons(true); resetCaptures();
-  // Incremental window: at least opts.days (dashboard: 7), stretched to
-  // cover the gap since the last successful sync, capped at 30. First-ever
-  // sync (no stamp) just takes opts.days — the Pull-page button covers all.
-  var wantDays = opts.days || 7;
   var lastDay = await getLastSyncDay();
   if (lastDay) {
-    var gap = dayDiff(lastDay, todayStr());
-    if (gap + 1 > wantDays) {
-      wantDays = Math.min(gap + 1, 30);
-      log('Last sync ' + lastDay + ' (' + gap + 'd ago) — fetching ' + wantDays + ' day(s).');
-      if (gap + 1 > 30) log('Gap exceeds 30 days — oldest days need the full-history button.');
-    } else {
-      log('Last sync ' + lastDay + ' — fetching ' + wantDays + ' day(s).');
-    }
+    log('Last sync ' + lastDay + ' (' + dayDiff(lastDay, todayStr()) + 'd ago) — draining the completed-day queue.');
   } else {
-    log('No previous sync stamp — fetching ' + wantDays + ' day(s).');
+    log('No previous sync stamp — pulling today + every queued completed day.');
   }
+  var historyCap = 60;
+  var countRounds = opts.deep ? 30 : 8;
   try {
-    log('[Pull 0/9] Sync time (phone clock)...');
+    log('[Sync 0/8] Sync time (phone clock)...');
     await wr(writeChar, '0x0AF6', buildSetTimeNow());
     await wait(2000);
-    log('[Pull 1/9] Live data...'); setProgress(1, 9, 'Live data');
+    setProgress(1, 8, 'Live data'); log('[Sync 1/8] Live data...');
     await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0]));
     await waitFor(function () { return capLive !== null; }, 8000, 'live reply');
-    setProgress(2, 9, 'Health sizes'); log('[Pull 2/9] Health sizes (silence is a normal answer)...');
-    lastSizesTotal = -1;
-    // 0x0AF1 missing or refusing writes (stale/foreign bond): must NOT kill
-    // the sync — try the legacy char too, and 0x04 STARTs go out on 0x0AF6
-    // regardless.
-    var sizesOk = healthWriteChar ? await wrOk(healthWriteChar, '0x0AF1', buildV3Sizes05()) : false;
-    if (!sizesOk && writeChar) sizesOk = await wrOk(writeChar, '0x0AF6', buildV3Sizes05());
-    if (sizesOk) await waitFor(function () { return lastSizesTotal >= 0; }, 10000, 'sizes reply');
-    else log('0x05 sizes query unwritable on both chars — continuing without it.');
-    setProgress(3, 9, 'Sport days'); log('[Pull 3/9] Sport days (today + up to ' + wantDays + ' completed days)...');
+    setProgress(2, 8, 'Sport days'); log('[Sync 2/8] Sport days (today + completed-day cursor)...');
     await pullToday(8, 'Sport');
-    await pageDayHistory(8, 'Sport', wantDays, function () { return capSportDays.length; },
-      function (r) { setProgress(3, 9, 'Sport day ' + r); });
-    setProgress(4, 9, 'Sleep'); log('[Pull 4/9] Sleep nights (up to 8 rounds, byte-paged)...');
-    await pageType(7, 8, 'Sleep', 3, function () { return capSleepNights.length; },
-      function (r) { setProgress(4, 9, 'Sleep round ' + r); });
-    setProgress(5, 9, 'HR days'); log('[Pull 5/9] Heart-rate days (today + up to ' + wantDays + ' completed days)...');
-    await pullToday(3, 'HR');
-    await pageDayHistory(3, 'HR', wantDays, function () { return capHrDays.length; },
-      function (r) { setProgress(5, 9, 'HR day ' + r); });
-    setProgress(6, 9, 'Workouts'); log('[Pull 6/9] Workouts (up to 8 rounds, byte-paged)...');
-    await pageType(4, 8, 'Workout', 3, function () { return capWorkouts.length; },
-      function (r) { setProgress(6, 9, 'Workout round ' + r); });
-    setProgress(7, 9, 'Swims'); log('[Pull 7/9] Swims (up to 8 rounds, byte-paged)...');
-    await pageType(6, 8, 'Swim', 3, function () { return capWorkouts.length; },
-      function (r) { setProgress(7, 9, 'Swim round ' + r); });
-    setProgress(8, 9, 'SpO2'); log('[Pull 8/9] SpO2 days (today + up to ' + wantDays + ' completed days)...');
-    await pullToday(1, 'SpO2');
-    await pageDayHistory(1, 'SpO2', wantDays, function () { return capSpo2.length; },
-      function (r) { setProgress(8, 9, 'SpO2 day ' + r); });
-    setProgress(9, 9, 'Pressure'); log('[Pull 9/9] Pressure days (today + up to ' + wantDays + ' completed days)...');
-    await pullToday(2, 'Pressure');
-    await pageDayHistory(2, 'Pressure', wantDays, function () { return capPress.length; },
-      function (r) { setProgress(9, 9, 'Pressure day ' + r); });
-    await saveCaptured('daily ' + todayStr());
-    show('Daily pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
-  } finally { macroRunning = false; setMacroButtons(false); }
-}
-// Full-history pull (Pull-page advanced button): day-data types pull today
-// (b14=1) then drain the completed-day cursor (b14=0) up to 60 days;
-// count-data types (sleep/workouts/swims) stay byte-paged up to 30 rounds.
-// Each phase stops on empty or repeated records; duplicates overwrite the
-// same store keys, so over-fetching is harmless. Slow by design (~minutes) —
-// dashboard stays on the 7-day path.
-async function syncAll() {
-  if (macroRunning) { log('A macro is already running — wait for it to finish.'); return; }
-  macroRunning = true; setMacroButtons(true); resetCaptures();
-  try {
-    log('[Full 0/8] Sync time (phone clock)...');
-    await wr(writeChar, '0x0AF6', buildSetTimeNow());
-    await wait(2000);
-    log('[Full 1/8] Live data...'); setProgress(1, 8, 'Live data');
-    await wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0]));
-    await waitFor(function () { return capLive !== null; }, 8000, 'live reply');
-    setProgress(2, 8, 'Sport history'); log('[Full 2/8] Sport history (today + completed-day cursor, up to 60)...');
-    await pullToday(8, 'Sport');
-    await pageDayHistory(8, 'Sport', 60, function () { return capSportDays.length; },
+    await pageDayHistory(8, 'Sport', historyCap, function () { return capSportDays.length; },
       function (r) { setProgress(2, 8, 'Sport day ' + r); });
-    setProgress(3, 8, 'Sleep history'); log('[Full 3/8] Sleep history (byte-paged, up to 30 rounds)...');
-    await pageType(7, 30, 'Sleep', 3, function () { return capSleepNights.length; },
+    setProgress(3, 8, 'Sleep'); log('[Sync 3/8] Sleep nights (byte-paged)...');
+    await pageType(7, countRounds, 'Sleep', 3, function () { return capSleepNights.length; },
       function (r) { setProgress(3, 8, 'Sleep round ' + r); });
-    setProgress(4, 8, 'HR history'); log('[Full 4/8] HR history (today + completed-day cursor, up to 60)...');
+    setProgress(4, 8, 'HR days'); log('[Sync 4/8] Heart-rate days (today + completed-day cursor)...');
     await pullToday(3, 'HR');
-    await pageDayHistory(3, 'HR', 60, function () { return capHrDays.length; },
+    await pageDayHistory(3, 'HR', historyCap, function () { return capHrDays.length; },
       function (r) { setProgress(4, 8, 'HR day ' + r); });
-    setProgress(5, 8, 'Workout history'); log('[Full 5/8] Workout history (byte-paged, up to 30 rounds)...');
-    await pageType(4, 30, 'Workout', 3, function () { return capWorkouts.length; },
+    setProgress(5, 8, 'Workouts'); log('[Sync 5/8] Workouts (byte-paged)...');
+    await pageType(4, countRounds, 'Workout', 3, function () { return capWorkouts.length; },
       function (r) { setProgress(5, 8, 'Workout round ' + r); });
-    setProgress(6, 8, 'Swim history'); log('[Full 6/8] Swim history (byte-paged, up to 30 rounds)...');
-    await pageType(6, 30, 'Swim', 3, function () { return capWorkouts.length; },
+    setProgress(6, 8, 'Swims'); log('[Sync 6/8] Swims (byte-paged)...');
+    await pageType(6, countRounds, 'Swim', 3, function () { return capWorkouts.length; },
       function (r) { setProgress(6, 8, 'Swim round ' + r); });
-    setProgress(7, 8, 'SpO2 history'); log('[Full 7/8] SpO2 history (today + completed-day cursor, up to 60)...');
+    setProgress(7, 8, 'SpO2'); log('[Sync 7/8] SpO2 days (today + completed-day cursor)...');
     await pullToday(1, 'SpO2');
-    await pageDayHistory(1, 'SpO2', 60, function () { return capSpo2.length; },
+    await pageDayHistory(1, 'SpO2', historyCap, function () { return capSpo2.length; },
       function (r) { setProgress(7, 8, 'SpO2 day ' + r); });
-    setProgress(8, 8, 'Pressure history'); log('[Full 8/8] Pressure history (today + completed-day cursor, up to 60)...');
+    setProgress(8, 8, 'Pressure'); log('[Sync 8/8] Pressure days (today + completed-day cursor)...');
     await pullToday(2, 'Pressure');
-    await pageDayHistory(2, 'Pressure', 60, function () { return capPress.length; },
+    await pageDayHistory(2, 'Pressure', historyCap, function () { return capPress.length; },
       function (r) { setProgress(8, 8, 'Pressure day ' + r); });
-    await saveCaptured('full ' + todayStr());
-    show('Full pull done — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
+    await saveCaptured((opts.deep ? 'full ' : 'daily ') + todayStr());
+    show((opts.deep ? 'Full sync done' : 'Daily sync done') +
+      ' — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
   } finally { macroRunning = false; setMacroButtons(false); }
 }
+// Back-compat name for the Pull page's full-history button: same path, wider
+// count-data paging.
+function syncAll() { return syncNow({ deep: true }); }
 // One probe round: prime 0x05, START at off, wait, STOP, log the result.
 async function probeRound(dataType, off, tag) {
   setItems(dataType, -1); setRec(dataType, 0);

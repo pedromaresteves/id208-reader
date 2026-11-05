@@ -1,0 +1,13 @@
+[
+  {
+    "night": "2026-09-28",
+    "fall_asleep": "2026-09-28 23:41",
+    "get_up": "2026-09-29 07:06",
+    "total_min": 445,
+    "wake_min": 21,
+    "light_min": 215,
+    "rem_min": 136,
+    "deep_min": 73,
+    "source": "v3 type07 fixture"
+  }
+]

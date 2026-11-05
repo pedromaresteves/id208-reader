@@ -37,8 +37,8 @@ SYNC_TIMEOUT = 1200   # full sync can page many rounds; each round is a few seco
 PROBE_TIMEOUT = 1200
 
 KEYWORDS = [
-    "PROBE", "F1PROBE", "round", "empty", "paging done", "Saved to store", "pull done",
-    "PAGEERROR", "MISSING", "0x05", "sizes reply", "SPORT", "SLEEP", "HR ",
+    "PROBE", "F1PROBE", "round", "empty", "paging done", "Saved to store", "sync done",
+    "daily sync done", "PAGEERROR", "MISSING", "0x05", "sizes reply", "SPORT", "SLEEP", "HR ",
     "WORKOUT", "SWIM", "SPO2", "PRESSURE", "BT error", "Ready", "Device Selected",
     "pair=", "0x0AF", "Notify", "GATT", "bound", "stamp", "Last sync",
 ]
@@ -192,7 +192,7 @@ def main():
         # ---- Auto daily sync (runs automatically after connect when bound) ----
         if not args.probe:
             log("Waiting for the automatic daily sync after connect (or 'not bound')...")
-            wait_for_log(page, "Daily pull done", SYNC_TIMEOUT, "auto daily sync")
+            wait_for_log(page, "Daily sync done", SYNC_TIMEOUT, "auto daily sync")
             wait_for_log(page, "not bound", 5, "bind check")
             save_page_state(page, "auto-sync")
 
@@ -200,7 +200,7 @@ def main():
         if not args.probe and not args.daily:
             log("Clicking 'B. Sync full history'...")
             page.click("#btnSyncAll")
-            wait_for_log(page, "Full pull done", SYNC_TIMEOUT, "full sync")
+            wait_for_log(page, "Full sync done", SYNC_TIMEOUT, "full sync")
             save_page_state(page, "full-sync")
             log("Full sync state saved to full-sync-log.txt / full-sync.jsonl / full-sync-store.json")
 

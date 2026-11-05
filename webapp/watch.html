@@ -9,32 +9,71 @@
 <body>
 <h1>Watch settings</h1>
 <p><a href="index.html">← Dashboard</a></p>
+<section id="secSetup"><h2>First run</h2><div class="body muted">Fresh or reset watch? This binds and authenticates it without the vendor app.</div>
+<p><button id="btnSetup">Set up watch</button>
+<span id="setupStatus" class="muted"></span></p></section>
 <section id="secAuto"><h2>Auto-detect</h2><div class="body muted">Walk/run auto-detect prompts on the watch (03 49).</div>
 <p><button id="btnAutoOff">Auto-detect OFF</button>
 <button id="btnAutoWalkRun">Auto-detect walk+run</button>
 <span id="watchStatus" class="muted"></span></p></section>
-<section id="secMore"><h2>More</h2><div class="body muted">Future on/off watch features land here, not on the dashboard.</div></section>
+<section id="secBackup"><h2>Backup & restore</h2><div class="body muted">The store lives only on this phone. Export it before clearing browser data or moving devices.</div>
+<p><button id="btnBackup">Backup store</button>
+<label for="fileImport" class="btn btn-sec small-text">Import backup</label>
+<input id="fileImport" type="file" accept=".json,.jsonl,.csv" style="display:none;">
+<span id="backupStatus" class="muted"></span></p></section>
 <section id="secGoals"><h2>App goals</h2><div class="body muted">Daily targets on this phone (not the watch). Shown against each day on the Activity page.</div>
 <p><label>Steps <input id="goalSteps" class="goal" type="number" min="0" step="500"></label>
-<label>Kcal <input id="goalKcal" class="goal" type="number" min="0" step="50"></label>
+<label>Kcal <input id="goalKcal" class="goal" type="number" min="0" step="500"></label>
 <button id="btnGoals">Save goals</button>
 <span id="goalStatus" class="muted"></span></p></section>
-<script src="store.js"></script>
-<script src="ble.js"></script>
-<script src="ui.js"></script>
+<section id="secMore"><h2>More</h2><div class="body muted">Future on/off watch features land here, not on the dashboard.</div></section>
+
+<script>
+// Cache-bust every local script when the page has ?v=<epoch> (see index.html).
+(function () {
+  var m = location.search.match(/[?&]v=([^&]+)/);
+  var q = m ? '?v=' + m[1] : '';
+  ['store.js', 'ble.js', 'ui.js'].forEach(function (f) {
+    document.write('<script src="' + f + q + '"><\/script>');
+  });
+})();
+</script>
 <script>
 // Fail fast on file skew (see index.html): banner instead of silent hang.
 (function checkAppFiles() {
-  var need = ['Store', 'DEFAULT_GOALS', 'ensureLink', 'wr', 'buildAutoActivity'];
+  var need = ['Store', 'DEFAULT_GOALS', 'ensureLink', 'wr', 'buildAutoActivity',
+    'setupAuto', 'downloadStoreBackup', 'importStoreFile'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
   d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
   d.textContent = 'App files out of sync (' + missing.join(', ') +
-    ' missing) — re-download all webapp files together (index/pull/store/ble/ui).';
+    ' missing) — force a fresh reload, or re-download all webapp files together.';
+  var b = document.createElement('button');
+  b.textContent = 'Force reload (fresh files)';
+  b.style.cssText = 'margin-top:8px;';
+  b.addEventListener('click', function () { location.replace(location.pathname + '?v=' + Date.now()); });
+  d.appendChild(document.createElement('br'));
+  d.appendChild(b);
   document.body.insertBefore(d, document.body.firstChild);
   throw new Error('halt: ' + missing.join(','));
 })();
+document.getElementById('btnSetup').addEventListener('click', async function () {
+  var el = document.getElementById('setupStatus');
+  var btn = document.getElementById('btnSetup');
+  btn.disabled = true;
+  el.textContent = 'Connecting…';
+  try {
+    await ensureLink();
+    el.textContent = 'Setting up (bind + auth, ~90 s)…';
+    await setupAuto();
+    el.textContent = 'Setup finished — return to the Dashboard and tap Sync.';
+  } catch (e) {
+    el.innerHTML = 'Setup failed (' + esc(e) + ') — <a href="pull.html">open Diagnostics</a>.';
+  } finally {
+    btn.disabled = false;
+  }
+});
 document.getElementById('btnAutoOff').addEventListener('click', async function () {
   await sendAutoDetect(null, 'Auto-detect OFF sent — walk prompts should stop.');
 });
@@ -48,8 +87,34 @@ async function sendAutoDetect(flags, okMsg) {
     await ensureLink();
     await wr(writeChar, '0x0AF6', buildAutoActivity(flags));
     el.textContent = okMsg;
-  } catch (e) { el.textContent = 'Failed: ' + e + ' (open Pull for details)'; }
+  } catch (e) {
+    el.innerHTML = 'Failed (' + esc(e) + ') — <a href="pull.html">open Diagnostics</a>.';
+  }
 }
+document.getElementById('btnBackup').addEventListener('click', async function () {
+  var el = document.getElementById('backupStatus');
+  try {
+    await downloadStoreBackup();
+    el.textContent = 'Backup downloaded.';
+  } catch (e) {
+    el.innerHTML = 'Backup failed (' + esc(e) + ') — <a href="pull.html">open Diagnostics</a>.';
+  }
+});
+document.getElementById('fileImport').addEventListener('change', async function (e) {
+  var f = e.target.files && e.target.files[0];
+  var el = document.getElementById('backupStatus');
+  if (!f) return;
+  try {
+    var c = await importStoreFile(f);
+    el.textContent = 'Imported steps ' + c.steps + ', sleep ' + c.sleep +
+      ', HR ' + c.hr + ', workouts ' + c.workout +
+      ', SpO2 ' + c.spo2 + ', pressure ' + c.pressure + '.';
+    loadGoals();
+  } catch (err) {
+    el.innerHTML = 'Import failed (' + esc(err.message || err) + ') — <a href="pull.html">open Diagnostics</a>.';
+  }
+  e.target.value = '';
+});
 // Daily goals live in the store under ('goals', 'settings'); unset falls
 // back to the watch defaults so the page works before the first save.
 async function loadGoals() {
@@ -78,7 +143,7 @@ loadGoals();
 <a href="sleep.html">Sleep</a>
 <a href="workout.html">Workouts</a>
 <a href="watch.html" aria-current="page">Watch</a>
-<a href="pull.html">Pull</a>
+<a href="pull.html">Diagnostics</a>
 </nav>
 </body>
 </html>

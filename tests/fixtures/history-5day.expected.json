@@ -1,0 +1,200 @@
+{
+  "steps": [
+    {
+      "date": "2026-10-31",
+      "steps": 27193,
+      "distance_m": 20401,
+      "kcal": 966,
+      "active_min": 70
+    },
+    {
+      "date": "2026-11-01",
+      "steps": 38043,
+      "distance_m": 28751,
+      "kcal": 1497,
+      "active_min": 206
+    },
+    {
+      "date": "2026-11-02",
+      "steps": 21912,
+      "distance_m": 16390,
+      "kcal": 865,
+      "active_min": 59
+    },
+    {
+      "date": "2026-11-03",
+      "steps": 3981,
+      "distance_m": 3010,
+      "kcal": 238,
+      "active_min": 50
+    },
+    {
+      "date": "2026-11-04",
+      "steps": 2199,
+      "distance_m": 1698,
+      "kcal": 339,
+      "active_min": 23
+    }
+  ],
+  "hr": [
+    {
+      "date": "2026-10-31",
+      "startS": 353,
+      "silent": 64,
+      "zones": [
+        98,
+        118,
+        138,
+        157,
+        177
+      ],
+      "sample_count": 1008,
+      "first": {
+        "t": 353,
+        "bpm": 56
+      },
+      "last": {
+        "t": 86092,
+        "bpm": 90
+      }
+    },
+    {
+      "date": "2026-11-01",
+      "startS": 44,
+      "silent": 64,
+      "zones": [
+        98,
+        118,
+        138,
+        157,
+        177
+      ],
+      "sample_count": 1304,
+      "first": {
+        "t": 44,
+        "bpm": 80
+      },
+      "last": {
+        "t": 86389,
+        "bpm": 113
+      }
+    },
+    {
+      "date": "2026-11-02",
+      "startS": 40,
+      "silent": 61,
+      "zones": [
+        98,
+        118,
+        138,
+        157,
+        177
+      ],
+      "sample_count": 875,
+      "first": {
+        "t": 40,
+        "bpm": 115
+      },
+      "last": {
+        "t": 86263,
+        "bpm": 58
+      }
+    },
+    {
+      "date": "2026-11-03",
+      "startS": 186,
+      "silent": 63,
+      "zones": [
+        98,
+        118,
+        138,
+        157,
+        177
+      ],
+      "sample_count": 251,
+      "first": {
+        "t": 186,
+        "bpm": 64
+      },
+      "last": {
+        "t": 86249,
+        "bpm": 69
+      }
+    },
+    {
+      "date": "2026-11-04",
+      "startS": 170,
+      "silent": 55,
+      "zones": [
+        98,
+        118,
+        138,
+        157,
+        177
+      ],
+      "sample_count": 293,
+      "first": {
+        "t": 170,
+        "bpm": 50
+      },
+      "last": {
+        "t": 86379,
+        "bpm": 56
+      }
+    }
+  ],
+  "spo2": [
+    {
+      "date": "2026-10-31",
+      "items": 28,
+      "sample_count": 28
+    },
+    {
+      "date": "2026-11-01",
+      "items": 20,
+      "sample_count": 20
+    },
+    {
+      "date": "2026-11-02",
+      "items": 29,
+      "sample_count": 29
+    },
+    {
+      "date": "2026-11-03",
+      "items": 22,
+      "sample_count": 21
+    },
+    {
+      "date": "2026-11-04",
+      "items": 25,
+      "sample_count": 23
+    }
+  ],
+  "pressure": [
+    {
+      "date": "2026-10-31",
+      "items": 69,
+      "sample_count": 69
+    },
+    {
+      "date": "2026-11-01",
+      "items": 64,
+      "sample_count": 64
+    },
+    {
+      "date": "2026-11-02",
+      "items": 89,
+      "sample_count": 89
+    },
+    {
+      "date": "2026-11-03",
+      "items": 64,
+      "sample_count": 64
+    },
+    {
+      "date": "2026-11-04",
+      "items": 67,
+      "sample_count": 67
+    }
+  ]
+}

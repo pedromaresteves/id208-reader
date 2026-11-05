@@ -228,3 +228,29 @@ function sleepScore(n) {
 // Daily goals: the watch ships 8000 steps / 500 kcal (setup sample + photos).
 // Editable in the settings page; pages fall back here when unset.
 var DEFAULT_GOALS = { steps: 8000, kcal: 500 };
+
+// --- Store backup / restore (used by Dashboard and Settings) ---
+// Resolves once the browser starts the download. Callers show their own status.
+function downloadStoreBackup(filename) {
+  return Store.exportJSON().then(function (text) {
+    var blob = new Blob([text], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename || 'id208-store-backup.json';
+    a.click();
+    return text;
+  });
+}
+
+// Read a user-picked backup / steps.csv / combined JSON and write it.
+// Resolves with the per-type counts from Store.importText.
+function importStoreFile(file) {
+  return new Promise(function (resolve, reject) {
+    var rd = new FileReader();
+    rd.onload = function () {
+      Store.importText(String(rd.result)).then(resolve, reject);
+    };
+    rd.onerror = function () { reject(rd.error || new Error('read failed')); };
+    rd.readAsText(file);
+  });
+}

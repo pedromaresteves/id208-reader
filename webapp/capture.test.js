@@ -39,7 +39,7 @@ global.Store = {
 
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ble.js'), 'utf8') +
-    '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay, dailyAuto, nextDaySaveOffset,' +
+    '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay, syncNow, nextDaySaveOffset,' +
     ' buildV3Start04, buildV3Stop04, pullToday, pageDayHistory,' +
     ' _stub: function (w, wf, wt) { wr = w; waitFor = wf; wait = wt;' +
     '   wrOk = function (ch, name, bytes) { return Promise.resolve(w(ch, name, bytes)).then(function () { return true; }); }; },' +
@@ -284,7 +284,7 @@ const CHUNKS = [
   );
   B.resetCaptures();
   const putsBeforePaging = puts.length;
-  await B.dailyAuto({ days: 7 });
+  await B.syncNow({ days: 7 });
   const paged = puts.slice(putsBeforePaging).filter((p) => p.type === 'steps');
   assert.deepStrictEqual(
     paged.map((p) => p.date).sort(),
@@ -305,6 +305,54 @@ const CHUNKS = [
   assert.strictEqual(todayStops.length, 1, 'one today STOP(b14=1), got ' + todayStops.length);
   assert.ok(txLog.every((t) => t.char === '0x0AF6'), 'all day-data 0x04 traffic stays on 0x0AF6');
   console.log('capture.test.js: cursor day paging passed (today + 10-31 + 11-01, STOP b14 matches START)');
+
+  // P1: one sync path drains the WHOLE completed-day queue. The old
+  // dailyAuto({days:7}) stopped after 7 days and left the rest for the
+  // full-history button; syncNow ignores the hint and pages to items=0
+  // (60-round safety cap).
+  let seqD = 0x100;
+  const nineDays = [];
+  for (let i = 0; i < 9; i++) {
+    nineDays.push(sportDayFrame(10, i + 1, 1000 + i, 96, seqD++));
+  }
+  const txAll = [];
+  B._stub(
+    function (ch, name, bytes) { // wr: serve today (b14=1) or pop the next completed day
+      const cmd = bytes && bytes.length >= 10 && bytes[0] === 0x33
+        ? (bytes[8] | (bytes[9] << 8))
+        : -1;
+      txAll.push({ cmd, name });
+      if (cmd !== 0x04) return Promise.resolve();
+      const oper = bytes[12], type = bytes[13], b14 = bytes[14];
+      if (type !== 0x08 || oper !== 0x00) return Promise.resolve();
+      let frame;
+      if (b14 === 1) frame = sportDayFrame(11, 5, 95, 31, seqD++);
+      else frame = nineDays.length ? nineDays.shift() : emptySportFrame(seqD++);
+      setTimeout(() => B.handleV3(frame), 0);
+      return Promise.resolve();
+    },
+    function () { return new Promise((res) => setTimeout(res, 30)); },
+    function () { return new Promise((res) => setTimeout(res, 1)); }
+  );
+  B.resetCaptures();
+  const putsBeforeNine = puts.length;
+  await B.syncNow({ days: 7 });
+  const savedNine = puts.slice(putsBeforeNine).filter((p) => p.type === 'steps');
+  assert.strictEqual(savedNine.length, 10, '9 queued days + today saved, got ' + savedNine.length);
+  assert.deepStrictEqual(
+    savedNine.map((p) => p.date).sort(),
+    ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05',
+      '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-11-05'],
+    'every queued completed day survives the old 7-day window',
+  );
+  const firstCmd4 = txAll.findIndex((t) => t.cmd === 4);
+  const firstCmd5 = txAll.findIndex((t) => t.cmd === 5);
+  assert.ok(
+    firstCmd5 === -1 || firstCmd5 > firstCmd4,
+    'sync no longer starts with the 0x05 sizes step (first 0x05 at ' + firstCmd5 +
+      ', first 0x04 at ' + firstCmd4 + ')',
+  );
+  console.log('capture.test.js: syncNow drains 9 queued days, no 0x05 sizes step');
 
   // Empty-history markers for sport (08) and HR (03) must be ignored too.
   // The zeroed sport header falls back to the phone date, so without the guard

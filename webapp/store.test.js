@@ -1,6 +1,6 @@
 // store.js import-routing tests. Plain node, no deps:
 //   node webapp/store.test.js
-// Uses the real decoded out/ files as fixtures.
+// Uses committed fixtures under tests/fixtures/store/ (never generated out/).
 
 'use strict';
 const fs = require('fs');
@@ -15,11 +15,12 @@ eval(
 );
 const Store = globalThis.Store;
 
-const readJSON = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, 'out', f), 'utf8'));
+const FIXTURES = path.join(ROOT, 'tests', 'fixtures', 'store');
+const readJSON = (f) => JSON.parse(fs.readFileSync(path.join(FIXTURES, f), 'utf8'));
 const sleep = readJSON('sleep.json');
 const hr = readJSON('hr.json');
 const workouts = readJSON('workouts.json');
-const stepsCsv = fs.readFileSync(path.join(ROOT, 'out', 'steps.csv'), 'utf8');
+const stepsCsv = fs.readFileSync(path.join(FIXTURES, 'steps.csv'), 'utf8');
 
 // classifyRecord spots each shape (phone + sync.py dialects).
 assert.strictEqual(Store.classifyRecord(sleep[0]), 'sleep');
@@ -64,6 +65,20 @@ assert.strictEqual(g.sleep.length, sleep.length);
 assert.strictEqual(g.workout.length, workouts.length);
 g = Store.routeInput({ rows: [{ date: '2026-10-08', type: 'sleep', payload: sleep[0] }] });
 assert.strictEqual(g.sleep.length, 1);
+// Backups carry every type; spo2/pressure must not be dropped on restore.
+g = Store.routeInput({
+  rows: [
+    { date: '2026-10-31', type: 'spo2', payload: { date: '2026-10-31', items: 1, samples: [] } },
+    { date: '2026-10-31', type: 'pressure', payload: { date: '2026-10-31', items: 1, samples: [] } },
+    { date: 'last-sync', type: 'meta', payload: { day: '2026-10-31' } },
+  ],
+});
+assert.strictEqual(g.spo2.length, 1);
+assert.strictEqual(g.pressure.length, 1);
+assert.strictEqual(g.other.length, 1);
+assert.strictEqual(g.other[0].type, 'meta');
+g = Store.routeInput({ spo2: [{ date: '2026-10-31' }], pressure: [{ date: '2026-10-31' }] });
+assert.deepStrictEqual([g.spo2.length, g.pressure.length], [1, 1]);
 
 // steps.csv parses; first data row matches the file.
 const rows = Store.parseCsvSteps(stepsCsv);

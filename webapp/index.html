@@ -16,10 +16,15 @@
 <body>
 <h1>ID208 Dashboard</h1>
 <p><button id="btnSync" class="btn-primary">Sync Data</button></p>
+<p id="lastSync" class="muted">Last sync: loading…</p>
 <p class="btn-row"><button id="btnRefresh" class="btn-sec icon" title="Refresh" aria-label="Refresh">↻</button>
 <a class="btn btn-sec icon" href="watch.html" title="Settings" aria-label="Settings">⚙</a>
-<a class="btn btn-sec small-text" href="pull.html">Advanced</a></p>
+<a class="btn btn-sec small-text" href="pull.html" title="Advanced diagnostics and recovery">Diagnostics</a></p>
+<p class="btn-row"><button id="btnBackup" class="btn-sec small-text">Backup store</button>
+<label for="fileImport" class="btn btn-sec small-text">Import backup</label>
+<input id="fileImport" type="file" accept=".json,.jsonl,.csv" style="display:none;"></p>
 <p><span id="status" class="muted"></span></p>
+<p id="storeStatus" class="muted"></p>
 <div id="syncBarWrap"><span class="spinner" id="syncSpinner" style="display:none;"></span>
 <span id="syncLabel">Idle</span>
 <div id="syncBarOuter"><div id="syncBarInner"></div></div></div>
@@ -28,21 +33,37 @@
 <section id="secWorkouts" onclick="location.href='workout.html'" style="cursor:pointer;"><h2>Workouts <span class="go">open ›</span></h2><div class="body muted">Loading…</div></section>
 <section id="secDebug"><h2>Debug</h2><div class="body muted">Raw store contents for troubleshooting — copy from here when reporting an issue.</div><details><summary>Show raw store JSON</summary><pre id="debugDump" style="font-size:0.7rem; max-height:40vh; overflow:auto;"></pre></details></section>
 
-<script src="store.js"></script>
-<script src="ble.js"></script>
-<script src="ui.js"></script>
+<script>
+// Load local scripts with the page's cache-bust token (?v=<epoch>). The skew
+// banner's Force reload uses the same mechanism, so stale Chrome profiles
+// cannot keep serving an old ble.js/ui.js/store.js.
+(function () {
+  var m = location.search.match(/[?&]v=([^&]+)/);
+  var q = m ? '?v=' + m[1] : '';
+  ['store.js', 'ble.js', 'ui.js'].forEach(function (f) {
+    document.write('<script src="' + f + q + '"><\/script>');
+  });
+})();
+</script>
 <script>
 // Fail fast on file skew (e.g. new page + old ui.js): missing shared
 // symbols halt here with an actionable banner instead of a silent hang.
 (function checkAppFiles() {
   var need = ['Store', 'fmtHM', 'sportName', 'num', 'esc', 'fmtDur', 'kmOrDash',
-    'hrStats', 'connectAndSync', 'ensureLink'];
+    'hrStats', 'connectAndSync', 'downloadStoreBackup', 'importStoreFile',
+    'refreshStoreStatus'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
   d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
   d.textContent = 'App files out of sync (' + missing.join(', ') +
-    ' missing) — re-download all webapp files together (index/pull/store/ble/ui).';
+    ' missing) — force a fresh reload, or re-download all webapp files together.';
+  var b = document.createElement('button');
+  b.textContent = 'Force reload (fresh files)';
+  b.style.cssText = 'margin-top:8px;';
+  b.addEventListener('click', function () { location.replace(location.pathname + '?v=' + Date.now()); });
+  d.appendChild(document.createElement('br'));
+  d.appendChild(b);
   document.body.insertBefore(d, document.body.firstChild);
   throw new Error('halt: ' + missing.join(','));
 })();
@@ -62,17 +83,60 @@ function syncUiBusy(busy, label) {
   if (!busy) document.getElementById('syncBarInner').style.width = '0%';
   if (label !== undefined) document.getElementById('syncLabel').textContent = label;
 }
+function statusLink(msg) {
+  document.getElementById('status').innerHTML = esc(msg) +
+    ' — <a href="pull.html">open Diagnostics</a>.';
+}
 document.getElementById('btnSync').addEventListener('click', async function () {
   syncUiBusy(true, 'Connecting…');
   try {
-    await connectAndSync({ days: 7 });
+    // autoSetup: a fresh/reset watch runs bind + auth instead of failing.
+    await connectAndSync({ autoSetup: true });
     document.getElementById('syncLabel').textContent = 'Sync done.';
   } catch (e) {
-    document.getElementById('syncLabel').textContent = 'Sync failed — see pull page log. Open Advanced for details.';
+    document.getElementById('syncLabel').textContent = 'Sync failed.';
+    statusLink('Sync failed (' + (e && e.message ? e.message : e) + ')');
   }
   syncUiBusy(false);
   render();
 });
+document.getElementById('btnBackup').addEventListener('click', async function () {
+  try {
+    await downloadStoreBackup();
+    document.getElementById('status').textContent = 'Backup downloaded.';
+  } catch (e) {
+    statusLink('Backup failed (' + e + ')');
+  }
+});
+document.getElementById('fileImport').addEventListener('change', async function (e) {
+  var f = e.target.files && e.target.files[0];
+  if (!f) return;
+  try {
+    var c = await importStoreFile(f);
+    await render();
+    document.getElementById('status').textContent = 'Imported steps ' + c.steps +
+      ', sleep ' + c.sleep + ', HR ' + c.hr + ', workouts ' + c.workout +
+      ', SpO2 ' + c.spo2 + ', pressure ' + c.pressure + '.';
+  } catch (err) {
+    statusLink('Import failed (' + (err && err.message ? err.message : err) + ')');
+  }
+  e.target.value = '';
+});
+async function renderLastSync() {
+  var el = document.getElementById('lastSync');
+  try {
+    var r = await Store.get('last-sync', 'meta');
+    if (r && r.payload && typeof r.payload.day === 'string') {
+      var at = r.payload.at ? new Date(r.payload.at) : null;
+      var when = at && !isNaN(at.getTime()) ? ' · ' + at.toLocaleString() : '';
+      el.textContent = 'Last sync: ' + r.payload.day + when;
+    } else {
+      el.textContent = 'Last sync: never — tap Sync Data.';
+    }
+  } catch (e) {
+    el.textContent = 'Last sync: unavailable (' + e + ')';
+  }
+}
 // Chart/format helpers live in ui.js (shared with detail pages).
 async function render() {
   document.getElementById('status').textContent = 'Loading…';
@@ -123,13 +187,14 @@ async function render() {
       document.querySelector('#secWorkouts .body').textContent = 'No workouts yet — record one, then pull.';
     }
 
-    var total = steps.length + sleep.length + workouts.length;
-    document.getElementById('status').textContent = total + ' records in store.';
+    document.getElementById('status').textContent = '';
     document.getElementById('debugDump').textContent = JSON.stringify({
       steps: steps, sleep: sleep, workouts: workouts,
     }, null, 1).slice(0, 20000);
+    renderLastSync();
+    refreshStoreStatus();
   } catch (e) {
-    document.getElementById('status').textContent = 'Store unavailable: ' + e;
+    statusLink('Store unavailable (' + e + ')');
   }
 }
 document.getElementById('btnRefresh').addEventListener('click', render);
@@ -141,7 +206,7 @@ render();
 <a href="sleep.html">Sleep</a>
 <a href="workout.html">Workouts</a>
 <a href="watch.html">Watch</a>
-<a href="pull.html">Pull</a>
+<a href="pull.html">Diagnostics</a>
 </nav>
 </body>
 </html>

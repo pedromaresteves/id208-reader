@@ -26,10 +26,18 @@ canvas { height: 140px; cursor: pointer; }
 <span id="monthLabel" class="month-label"></span>
 <button id="btnNextM" title="Next month" aria-label="Next month">›</button></p>
 <canvas id="chMonth"></canvas><div id="weekList" class="body muted"></div></section>
-<script src="store.js"></script>
-<script src="ui.js"></script>
 <script>
-// Fail fast on file skew (see index.html): banner instead of silent hang.
+// Cache-bust every local script when the page has ?v=<epoch> (see index.html).
+(function () {
+  var m = location.search.match(/[?&]v=([^&]+)/);
+  var q = m ? '?v=' + m[1] : '';
+  ['store.js', 'ui.js'].forEach(function (f) {
+    document.write('<script src="' + f + q + '"><\/script>');
+  });
+})();
+</script>
+<script>
+// Fail fast on file skew (see index.html): banner + fresh reload instead of silent hang.
 (function checkAppFiles() {
   var need = ['Store', 'stackedBarChart', 'barChart', 'barAt', 'esc', 'num', 'fmtHM',
     'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'sleepScore',
@@ -39,7 +47,13 @@ canvas { height: 140px; cursor: pointer; }
   var d = document.createElement('div');
   d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
   d.textContent = 'App files out of sync (' + missing.join(', ') +
-    ' missing) — re-download all webapp files together (index/pull/store/ble/ui).';
+    ' missing) — force a fresh reload, or re-download all webapp files together.';
+  var b = document.createElement('button');
+  b.textContent = 'Force reload (fresh files)';
+  b.style.cssText = 'margin-top:8px;';
+  b.addEventListener('click', function () { location.replace(location.pathname + '?v=' + Date.now()); });
+  d.appendChild(document.createElement('br'));
+  d.appendChild(b);
   document.body.insertBefore(d, document.body.firstChild);
   throw new Error('halt: ' + missing.join(','));
 })();
@@ -172,7 +186,7 @@ render();
 <a href="sleep.html" aria-current="page">Sleep</a>
 <a href="workout.html">Workouts</a>
 <a href="watch.html">Watch</a>
-<a href="pull.html">Pull</a>
+<a href="pull.html">Diagnostics</a>
 </nav>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ID208 Pull (advanced / recovery)</title>
+<title>ID208 Diagnostics (advanced / recovery)</title>
 <link rel="stylesheet" href="app.css">
 <style>
 #log { white-space: pre-wrap; font-family: monospace; font-size: 0.8rem; background: #f4f4f4; padding: 10px; max-height: 40vh; overflow: auto; }
@@ -13,7 +13,7 @@ summary { font-weight: bold; cursor: pointer; padding: 6px 0; }
 </style>
 </head>
 <body>
-<h1>ID208 Pull (advanced / recovery)</h1>
+<h1>ID208 Diagnostics (advanced / recovery)</h1>
 <p>Daily use lives on the <a href="index.html">dashboard</a> (one-tap sync).
 This page is for first-time setup, re-fetching single data types, and raw
 diagnostics. Ground truth 2026-10-01 18:31: <b>5736 steps / 468 kcal</b>,
@@ -81,20 +81,34 @@ show decoded text here but don't reach the dashboard.
 <p id="decoded"></p>
 <h2>Log (TX on write chars, RX on notify chars)</h2>
 <div id="log"></div>
-<script src="store.js"></script>
-<script src="ble.js"></script>
+<script>
+// Cache-bust every local script when the page has ?v=<epoch> (see index.html).
+(function () {
+  var m = location.search.match(/[?&]v=([^&]+)/);
+  var q = m ? '?v=' + m[1] : '';
+  ['store.js', 'ble.js'].forEach(function (f) {
+    document.write('<script src="' + f + q + '"><\/script>');
+  });
+})();
+</script>
 <script>
 // Fail fast on file skew (new page + old ble.js/store.js): halt with an
 // actionable banner instead of half-wired buttons that fail silently.
 (function checkAppFiles() {
-  var need = ['Store', 'connectAndSync', 'ensureLink', 'setupAuto', 'dailyAuto', 'syncAll', 'wr',
+  var need = ['Store', 'connectAndSync', 'ensureLink', 'setupAuto', 'syncNow', 'syncAll', 'wr',
     'buildV3Start04', 'buildV3Stop04', 'buildBindAuthPacket', 'buildAutoActivity', 'saveCaptured', 'probeAllOffsets', 'pageType', 'probeViaF1', 'pullToday', 'pageDayHistory'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
   d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
   d.textContent = 'App files out of sync (' + missing.join(', ') +
-    ' missing) — re-download all webapp files together (index/pull/store/ble/ui).';
+    ' missing) — force a fresh reload, or re-download all webapp files together.';
+  var b = document.createElement('button');
+  b.textContent = 'Force reload (fresh files)';
+  b.style.cssText = 'margin-top:8px;';
+  b.addEventListener('click', function () { location.replace(location.pathname + '?v=' + Date.now()); });
+  d.appendChild(document.createElement('br'));
+  d.appendChild(b);
   document.body.insertBefore(d, document.body.firstChild);
   throw new Error('halt: ' + missing.join(','));
 })();
@@ -199,7 +213,7 @@ else document.getElementById('storeStatus').textContent = 'store.js not found ne
 <a href="sleep.html">Sleep</a>
 <a href="workout.html">Workouts</a>
 <a href="watch.html">Watch</a>
-<a href="pull.html" aria-current="page">Pull</a>
+<a href="pull.html" aria-current="page">Diagnostics</a>
 </nav>
 </body>
 </html>

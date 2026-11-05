@@ -183,7 +183,7 @@ var Store = (function () {
 
   // Split a bare array of decoded records into per-type groups (pure).
   function groupRecords(records) {
-    var groups = { steps: [], sleep: [], hr: [], workout: [] };
+    var groups = { steps: [], sleep: [], hr: [], workout: [], spo2: [], pressure: [] };
     (records || []).forEach(function (r) {
       var t = classifyRecord(r);
       if (!t) return;
@@ -225,7 +225,7 @@ var Store = (function () {
   }
 
   function writeGroups(groups) {
-    var counts = { steps: 0, sleep: 0, hr: 0, workout: 0 };
+    var counts = { steps: 0, sleep: 0, hr: 0, workout: 0, spo2: 0, pressure: 0, other: 0 };
     var writes = [];
     function queue(type, date, payload) {
       counts[type] += 1;
@@ -234,8 +234,16 @@ var Store = (function () {
     groups.steps.forEach(function (r) { if (r.date) queue('steps', r.date, r); });
     groups.sleep.forEach(function (n) { if (n.night) queue('sleep', n.night, n); });
     groups.hr.forEach(function (d) { if (d.date) queue('hr', d.date, d); });
+    (groups.spo2 || []).forEach(function (r) { if (r.date) queue('spo2', r.date, r); });
+    (groups.pressure || []).forEach(function (r) { if (r.date) queue('pressure', r.date, r); });
     groups.workout.forEach(function (w, i) {
       queue('workout', w.date || ('no-date-' + i), w);
+    });
+    // Backup restore keeps non-health rows too (last-sync stamp, goals, meta).
+    (groups.other || []).forEach(function (row) {
+      if (!row || !row.date || !row.type) return;
+      counts.other += 1;
+      writes.push(put(row.date, row.type, row.payload || {}, (row.payload || {}).source));
     });
     return Promise.all(writes).then(function () { return counts; });
   }
@@ -245,9 +253,13 @@ var Store = (function () {
   // JSON array (classified per record). Throws on garbage.
   function routeInput(doc) {
     if (doc && Array.isArray(doc.rows)) {
-      var direct = { steps: [], sleep: [], hr: [], workout: [] };
+      var direct = {
+        steps: [], sleep: [], hr: [], workout: [], spo2: [], pressure: [], other: [],
+      };
       doc.rows.forEach(function (r) {
-        if (r && r.date && r.type && direct[r.type]) direct[r.type].push(r.payload || r);
+        if (!r || !r.date || !r.type) return;
+        if (direct[r.type]) direct[r.type].push(r.payload || r);
+        else direct.other.push({ date: r.date, type: r.type, payload: r.payload || r });
       });
       return direct;
     }
@@ -258,6 +270,8 @@ var Store = (function () {
         sleep: doc.sleep || [],
         hr: doc.hr || [],
         workout: doc.workouts || doc.workout || [],
+        spo2: doc.spo2 || [],
+        pressure: doc.pressure || [],
       };
     }
     throw new Error('unrecognized JSON');
