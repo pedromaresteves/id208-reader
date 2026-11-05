@@ -99,7 +99,7 @@
 - Recovery path: probe bytes are saved in
   `captures/history-probe-2026-11-05.jsonl` (gitignored) and decoded to
   `out/steps.csv` / `out/hr.json`; `out/import-2026-11-05.json` is the
-  combined file for pull.html's Import control (restores 10-31..11-04).
+  combined file for diagnostics.html's Import control (restores 10-31..11-04).
 
 ## 4. Sleep page: missing night of the 12th (implement first)
 - Symptom: no record with `night 2026-10-12`; watch shows no previous
@@ -142,7 +142,7 @@
 - Force-stop our page, open VeryFit, one full sync (Oct 14+ steps +
   night-of-12th on watch). Note screen numbers first.
 - `adb bugreport` / pull `btsnoop_hci.log`, filter `btatt` / `0xaf0` in
-  Wireshark + `pull.html → Download JSONL` of same state for diffing.
+  Wireshark + `diagnostics.html → Download JSONL` of same state for diffing.
 - Scrub full MAC (keep first 3 octets), drop in `captures/`.
 - Caution: after VeryFit bonds, our page loses `0x0AF2` notify until
   Forget ID208 in system BT + reboot watch; do VeryFit capture first,

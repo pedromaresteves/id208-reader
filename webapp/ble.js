@@ -1,4 +1,4 @@
-/* ID208 shared BLE core — included by pull.html and index.html.
+/* ID208 shared BLE core — included by diagnostics.html, index.html and watch.html.
  *
  * Holds ALL watch protocol code: GATT transport, packet builders, v3
  * reassembly, legato handlers, capture vars, one-tap macros, store saving.
@@ -79,10 +79,8 @@ function buildV3Sizes05(offsets) {
 // LIVE 2026-11-04 (Windows bond, writes only possible on 0x0AF6): saveOffset
 // is IGNORED for day-data on 0x0AF6 — byte14=1 returns today's record at ANY
 // offset (replies byte-identical except seq), byte14=0 returns the same single
-// oldest record (2026-10-30) at any offset, 0x05 primes on 0x0AF6 get a reply
-// but no side effect, and repeated STARTs do not advance a cursor. Offsets are
-// expected to be honored only on the bulk channel 0x0AF1 (refused on the
-// Windows bond at ATT level) — see probeViaF1.
+// oldest record (2026-10-30) at any offset, and repeated STARTs do not advance
+// a cursor. Day-data history is driven by the watch cursor (pageDayHistory).
 var BYTE14 = { 1: 1, 2: 1, 3: 1, 4: 0, 6: 0, 7: 0, 8: 1 };
 function buildV3Start04(dataType, offset, b14Override) {
   var pkt = new Uint8Array(19);
@@ -103,8 +101,6 @@ function v3TotalLen(first) { return first[6] | (first[7] << 8); }
 // User info from fresh-launch: 03 10 B4 40 1F 00 D6 07 03 01 (sample clears setup gate).
 function buildBindStart() { return new Uint8Array([0x04, 0x01, 0xF1, 0x01, 0x01, 0x02, 0x02, 0x01, 0x00]); }
 function buildBindStop() { return new Uint8Array([0x04, 0x02, 0xF1, 0x01, 0x01, 0x02, 0x02, 0x01, 0x00]); }
-// Bare 04 03 probe (watch stays silent on it — confirmed 2x, kept for probing).
-function buildBindAuthProbe() { return new Uint8Array([0x04, 0x03]); }
 // 03 23 02 00: VeryFit sends this between bind and auth (purpose unknown).
 function buildSet23Sample() { return new Uint8Array([0x03, 0x23, 0x02, 0x00]); }
 // 04 05 encrypted auth (16 B): the step that finalizes binding (solved
@@ -140,7 +136,6 @@ function buildUserInfoSample() { return new Uint8Array([0x03, 0x10, 0xB4, 0x40, 
 // QR setup screen until it gets units + goals + weather switch, not just bind.
 // Units 17B, calorie+distance goals 20B, weather-off 6B (all byte-identical).
 function buildUnitsSample() { return parseHex('03 11 01 01 01 00 02 01 00 00 00 01 01 01 01 00 00'); }
-function buildUnitsBind() { return parseHex('03 11 01 01 01 00 02 02 00 00 00 01 01 01 01 00 00'); }
 function buildGoalsSample() { return parseHex('03 43 F4 01 00 00 00 00 00 00 08 07 00 00 FA 00 0E 06 0C 00'); }
 function buildWeatherOff() { return new Uint8Array([0x03, 0x2D, 0x55, 0x00, 0x00, 0x00]); }
 // Auto activity/sport detection (SET 03 49, 11 B): flags walk, run,
@@ -193,21 +188,13 @@ function handleLegacy(arr) {
   }
 }
 // Last item_count seen on START replies (operate 0x00) per type; STOP acks
-// (operate 0x01) don't touch these. The daily macro uses lastSleepItems === 0
-// as its paging stop rule (same as the old manual repeat-until-empty).
+// (operate 0x01) don't touch these. The sync loop uses item_count == 0 as its
+// end-of-history stop rule.
 var lastSleepItems = -1, lastSportItems = -1, lastHrItems = -1, lastWorkoutItems = -1, lastSwimItems = -1, lastSpo2Items = -1, lastPressItems = -1, lastPair = -1;
-// Record size (headSize+dataSize) of the last START reply per type; the byte
-// step used to page to the next record (see buildV3Start04 note). saveOffset
-// is a BYTE position in the type's stored stream, not a record index.
-var lastSportRec = 0, lastHrRec = 0, lastSleepRec = 0, lastWorkoutRec = 0, lastSwimRec = 0, lastSpo2Rec = 0, lastPressRec = 0;
-var lastSizesTotal = -1; // set when the v3 sizes (0x0005) reply lands, else stays -1
-var sawSizesReply = false; // once a 0x05 reply arrives we wait for it; before that we don't (silence is normal and would stall every round)
 // Per-type accessors so the generic pager (pageType) can drive all 7 types
 // without seven copies of the same loop.
 function getItems(t) { return t === 8 ? lastSportItems : t === 3 ? lastHrItems : t === 7 ? lastSleepItems : t === 4 ? lastWorkoutItems : t === 6 ? lastSwimItems : t === 1 ? lastSpo2Items : lastPressItems; }
 function setItems(t, v) { if (t === 8) lastSportItems = v; else if (t === 3) lastHrItems = v; else if (t === 7) lastSleepItems = v; else if (t === 4) lastWorkoutItems = v; else if (t === 6) lastSwimItems = v; else if (t === 1) lastSpo2Items = v; else lastPressItems = v; }
-function getRec(t) { return t === 8 ? lastSportRec : t === 3 ? lastHrRec : t === 7 ? lastSleepRec : t === 4 ? lastWorkoutRec : t === 6 ? lastSwimRec : t === 1 ? lastSpo2Rec : lastPressRec; }
-function setRec(t, v) { if (t === 8) lastSportRec = v; else if (t === 3) lastHrRec = v; else if (t === 7) lastSleepRec = v; else if (t === 4) lastWorkoutRec = v; else if (t === 6) lastSwimRec = v; else if (t === 1) lastSpo2Rec = v; else lastPressRec = v; }
 // Best-effort date from a day-data header: sport layout (year u16 @[1:3],
 // month [3], day [4]) or HR layout (year u16 @[0:2], month [2], day [3]).
 function guessHeaderDate(h) {
@@ -226,10 +213,6 @@ var capSportDays = [], capHrDays = [];
 // Raw SpO2 (01) / pressure (02) day records — layout not yet anchored, so
 // keep the full header+data hex alongside any guessed date.
 var capSpo2 = [], capPress = [];
-// Next saveOffset for day-data paging (sport 08 / HR 03): saveOffset is a
-// byte position in the type's stream anchored at today, so step past the
-// record just returned (headSize+dataSize) to reach the previous day.
-function nextDaySaveOffset(off, recSize) { return off + (recSize > 0 ? recSize : 0); }
 // Whole days between two YYYY-MM-DD dates (pure, phone-safe).
 function dayDiff(a, b) {
   function dayNum(ds) {
@@ -294,7 +277,7 @@ async function saveCaptured(tag) {
           date: sd.date, steps: sd.steps, distance_m: sd.distanceM,
           kcal: sd.displayKcal !== null ? sd.displayKcal : '',
           active_min: sd.activeMin !== null ? sd.activeMin : '',
-          source: 'v3 sport type08 pull.html ' + tag,
+          source: 'v3 sport type08 diagnostics.html ' + tag,
         });
       }
       saved.push(capSportDays.length + ' step day(s)');
@@ -302,7 +285,7 @@ async function saveCaptured(tag) {
       await Store.put(todayStr(), 'steps', {
         date: todayStr(), steps: capLive.steps, distance_m: capLive.distanceM,
         kcal: '', active_min: '',
-        source: 'live 02A0 pull.html ' + tag,
+        source: 'live 02A0 diagnostics.html ' + tag,
       });
       saved.push('steps(live)');
     }
@@ -311,7 +294,7 @@ async function saveCaptured(tag) {
       await Store.put(n.night, 'sleep', {
         night: n.night, fall_asleep: n.fallAsleep, get_up: n.getUp,
         total_min: n.tot, wake_min: n.wake, light_min: n.light,
-        rem_min: n.rem, deep_min: n.deep, source: 'v3 type07 pull.html ' + tag,
+        rem_min: n.rem, deep_min: n.deep, source: 'v3 type07 diagnostics.html ' + tag,
       });
     }
     if (capSleepNights.length) saved.push(capSleepNights.length + ' night(s)');
@@ -321,7 +304,7 @@ async function saveCaptured(tag) {
         await Store.put(hd.date, 'hr', {
           date: hd.date, start_time_s: hd.startS, silent_hr: hd.silent,
           zones: hd.zones, samples: hd.samples,
-          source: 'v3 type03 pull.html ' + tag,
+          source: 'v3 type03 diagnostics.html ' + tag,
         });
       }
       saved.push(capHrDays.length + ' HR day(s)');
@@ -348,7 +331,7 @@ async function saveCaptured(tag) {
     // Stamped only when something landed, so failed syncs retry the gap.
     if (saved.length) await setLastSyncDay(todayStr(), tag);
 if (typeof Store !== 'undefined') refreshStoreStatus();
-else document.getElementById('storeStatus').textContent = 'store.js not found next to pull.html — keep both files together.';
+else document.getElementById('storeStatus').textContent = 'store.js not found next to diagnostics.html — keep both files together.';
   } catch (e) { log('Store save failed [' + tag + ']: ' + e); }
 }
 // After Connect: read the bind flag, then sync automatically when bound.
@@ -472,77 +455,33 @@ async function setupAuto() {
     show('Setup done — QR should be gone. Tap Sync on the dashboard.');
   } finally { macroRunning = false; setMacroButtons(false); }
 }
-// Send 0x05 sizes query with a per-type byte offset, wait briefly for the reply.
-// The watch uses the 0x05 offset to set its internal resume position for that
-// type; the following 0x04 START must carry the SAME offset (VeryFit pattern).
-// Silence is OK (low-power watch skips 0x05) — we proceed to 0x04 anyway.
-// Guard: if 0x0AF1 is missing (healthWriteChar null) or the write fails, skip
-// priming and just send 0x04 — never let a missing health char kill the sync.
-// Like wr() but resolves true/false so callers can fall back to another char.
-function wrOk(ch, name, bytes) {
-  if (!ch) return Promise.resolve(false);
-  record(name, 'TX', bytes);
-  return ch.writeValue(bytes).then(function () { return true; }, function (e) {
-    log('Write failed ' + name + ': ' + e);
-    return false;
-  });
-}
-async function primeOffset05(dataType, off) {
-  var map = {}; map[dataType] = off;
-  lastSizesTotal = -1;
-  var pkt = buildV3Sizes05(map);
-  // 0x0AF1 is the bulk channel, but some bonds refuse writes there
-  // (NotSupportedError) — fall back to write-without-response, then to a
-  // long write on the legacy 0x0AF6 char.
-  var ok = false;
-  if (healthWriteChar) {
-    ok = await wrOk(healthWriteChar, '0x0AF1', pkt);
-    if (!ok && healthWriteChar.writeValueWithoutResponse) {
-      record('0x0AF1', 'TX', pkt);
-      try { await healthWriteChar.writeValueWithoutResponse(pkt); ok = true; }
-      catch (e) { log('Write failed 0x0AF1 (no-response): ' + e); }
-    }
-  }
-  if (!ok && writeChar) ok = await wrOk(writeChar, '0x0AF6', pkt);
-  if (!ok) { log('0x05 prime unavailable (type ' + dataType + ') — sending 0x04 START only'); return; }
-  // Only wait for the 0x05 reply once we know the watch answers 0x05 at all;
-  // silence is a normal answer and a long wait per round would stall paging.
-  await waitFor(function () { return lastSizesTotal >= 0; }, sawSizesReply ? 3000 : 500, 'sizes@' + off);
-}
-// Generic byte-paged pull for one data type. Used for the COUNT-data types
-// (04 workouts, 06 swims, 07 sleep), where offset 0 = oldest record and each
-// round steps forward by recSize. Day-data types (01,02,03,08) do NOT use this
-// anymore: their stream is driven by a persistent cursor, see pageDayHistory.
-// Each round primes 0x05 with the offset, sends 0x04 START at the same
-// saveOffset, waits for the reply, sends STOP. Stops on items==0 or staleLimit
-// consecutive rounds with no new capture (freshFn counts captured records).
-// onRound(r, max) drives progress display. Returns the final byte offset
-// reached.
+// Generic cursor-paged pull for one COUNT-data type (04 workouts, 06 swims,
+// 07 sleep). The watch advances to the next record on STOP; offset 0 is the
+// oldest record. Each round sends START/STOP, waits for the reply, and stops
+// on items==0 or staleLimit consecutive rounds with no new capture (freshFn
+// counts captured records). onRound(r, max) drives progress display.
 async function pageType(dataType, maxRounds, label, staleLimit, freshFn, onRound) {
-  var off = 0, stale = 0;
+  var stale = 0;
   for (var r = 0; r < maxRounds; r++) {
     if (onRound) onRound(r + 1, maxRounds);
     var before = freshFn ? freshFn() : 0;
-    setItems(dataType, -1); setRec(dataType, 0);
-    log(label + ' round ' + (r + 1) + '/' + maxRounds + ' (byte offset ' + off + ')...');
-    await primeOffset05(dataType, off);
-    await wr(writeChar, '0x0AF6', buildV3Start04(dataType, off));
+    setItems(dataType, -1);
+    log(label + ' round ' + (r + 1) + '/' + maxRounds + '...');
+    await wr(writeChar, '0x0AF6', buildV3Start04(dataType, 0));
     await waitFor(function () { return getItems(dataType) >= 0; }, 12000, label + ' reply');
     await wr(writeChar, '0x0AF6', buildV3Stop04(dataType));
     await wait(3000);
     if (getItems(dataType) === 0) { log(label + ' history empty — paging done.'); break; }
     stale = (freshFn && freshFn() > before) ? 0 : stale + 1;
     if (stale >= staleLimit) { log(label + ' repeats known records — paging done.'); break; }
-    off = nextDaySaveOffset(off, getRec(dataType)); // byte-step to the next record
   }
-  return off;
 }
 // Today's record for a day-data type: START/STOP with byte14=1 at offset 0.
 // This is the ONLY way to get the in-progress day — the historical stream
 // (byte14=0) serves completed days only (oldest -> yesterday). b14=1 never
 // touches the historical cursor (live 2026-11-05).
 async function pullToday(dataType, label) {
-  setItems(dataType, -1); setRec(dataType, 0);
+  setItems(dataType, -1);
   await wr(writeChar, '0x0AF6', buildV3Start04(dataType, 0)); // byte14 default = 1
   await waitFor(function () { return getItems(dataType) >= 0; }, 12000, label + ' today reply');
   var items = getItems(dataType);
@@ -565,7 +504,7 @@ async function pageDayHistory(dataType, label, maxRounds, freshFn, onRound) {
   for (var r = 0; r < maxRounds; r++) {
     if (onRound) onRound(r + 1, maxRounds);
     var before = freshFn ? freshFn() : 0;
-    setItems(dataType, -1); setRec(dataType, 0);
+    setItems(dataType, -1);
     await wr(writeChar, '0x0AF6', buildV3Start04(dataType, 0, 0));
     await waitFor(function () { return getItems(dataType) >= 0; }, 12000, label + ' history reply');
     var items = getItems(dataType);
@@ -579,22 +518,8 @@ async function pageDayHistory(dataType, label, maxRounds, freshFn, onRound) {
     if (stale >= 2) { log(label + ' history repeats the same day — stopping.'); break; }
   }
 }
-// One day-data round at a fixed offset (kept for manual/single pulls):
-// returns the number of NEW dates captured by this round (0 = duplicate/empty).
-async function pullDayOffset(dataType, off, label) {
-  var before = (dataType === 8 ? capSportDays : capHrDays).length;
-  setItems(dataType, -1); setRec(dataType, 0);
-  log(label + ' (offset ' + off + ')...');
-  await primeOffset05(dataType, off);
-  await wr(writeChar, '0x0AF6', buildV3Start04(dataType, off));
-  await waitFor(function () { return getItems(dataType) >= 0; }, 12000, label + ' reply');
-  await wr(writeChar, '0x0AF6', buildV3Stop04(dataType));
-  await wait(3000);
-  var after = (dataType === 8 ? capSportDays : capHrDays).length;
-  return after - before;
-}
-// The one sync path (dashboard Sync, Pull Connect auto-sync, Pull B all use
-// it). Pulls today (b14=1) then drains the watch's completed-day cursor
+// The one sync path (dashboard Sync, Diagnostics Connect auto-sync, and the
+// Full sync button all use it). Pulls today (b14=1) then drains the watch's
 // (b14=0) until items=0, with a 60-round safety cap. The queue is finite, so
 // there is no day-window/gap logic: the last-sync stamp is logging only.
 // opts.deep widens count-data paging (sleep/workouts/swims) from 8 to 30
@@ -648,149 +573,9 @@ async function syncNow(opts) {
       ' — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');
   } finally { macroRunning = false; setMacroButtons(false); }
 }
-// Back-compat name for the Pull page's full-history button: same path, wider
-// count-data paging.
+// Back-compat name for the Diagnostics page's full-sync button: same path,
+// wider count-data paging.
 function syncAll() { return syncNow({ deep: true }); }
-// One probe round: prime 0x05, START at off, wait, STOP, log the result.
-async function probeRound(dataType, off, tag) {
-  setItems(dataType, -1); setRec(dataType, 0);
-  log('--- Probe type ' + dataType + ' @byte ' + off + (tag ? ' (' + tag + ')' : '') + ' ---');
-  await primeOffset05(dataType, off);
-  await wr(writeChar, '0x0AF6', buildV3Start04(dataType, off));
-  await waitFor(function () { return getItems(dataType) >= 0; }, 12000, 'probe t' + dataType + '@' + off);
-  await wr(writeChar, '0x0AF6', buildV3Stop04(dataType));
-  await wait(2000);
-  log('PROBE RESULT type=' + dataType + ' @' + off + (tag ? ' ' + tag : '') +
-    ': items=' + getItems(dataType) + ' recSize=' + getRec(dataType) + ' sizesTotal=' + lastSizesTotal);
-}
-// Diagnostic: probe ALL health types at byte offsets to learn what the watch
-// actually honors. Phase 1: day-data types (08,03,01,02) byte-stepped from 0.
-// Phase 2: sport coarse absolute sweep (find where history lives in the stream).
-// Phase 3: count-data types (07,04,06) — 3x repeated offset-0 STARTs (spent
-// cursor test: identical requests may return successive records) plus
-// byte-stepped rounds. Nothing is saved to the store here.
-async function probeAllOffsets() {
-  if (macroRunning) { log('A macro is already running — wait for it.'); return; }
-  macroRunning = true; resetCaptures();
-  try {
-    log('=== ALL-TYPES OFFSET PROBE ===');
-    var dayTypes = [8, 3, 1, 2];
-    for (var di = 0; di < dayTypes.length; di++) {
-      var dt = dayTypes[di], off = 0;
-      for (var r = 0; r < 12; r++) {
-        await probeRound(dt, off, 'step ' + (r + 1));
-        if (getItems(dt) === 0 || getRec(dt) === 0) break;
-        off = nextDaySaveOffset(off, getRec(dt));
-      }
-    }
-    var sweep = [100, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000];
-    log('=== Sport coarse sweep: ' + sweep.join(', ') + ' ===');
-    for (var si = 0; si < sweep.length; si++) await probeRound(8, sweep[si], 'sweep');
-    var countTypes = [7, 4, 6];
-    for (var ci = 0; ci < countTypes.length; ci++) {
-      var ct = countTypes[ci];
-      for (var k = 0; k < 3; k++) await probeRound(ct, 0, 'cursor try ' + (k + 1));
-      var coff = 0;
-      for (var r2 = 0; r2 < 8; r2++) {
-        await probeRound(ct, coff, 'step ' + (r2 + 1));
-        if (getItems(ct) === 0 || getRec(ct) === 0) break;
-        coff = nextDaySaveOffset(coff, getRec(ct));
-      }
-    }
-    log('=== Probe done ===');
-  } finally { macroRunning = false; }
-}
-// Probe history through the BULK channel 0x0AF1 — the VeryFit route: 0x05
-// prime + 0x04 START/STOP all written to 0x0AF1, replies on 0x0AF2. On bonds
-// where 0x0AF1 writes are refused (Windows: ATT "operation not permitted")
-// this logs and aborts without touching anything. Day-data types only, offsets
-// stepped by recSize. Nothing is saved to the store.
-async function probeViaF1() {
-  if (macroRunning) { log('A macro is already running — wait for it.'); return; }
-  if (!healthWriteChar) { log('F1PROBE: 0x0AF1 missing — stay on 0x0AF6 (button C) or reconnect with health chars.'); return; }
-  macroRunning = true; resetCaptures();
-  try {
-    // Write a v3 frame to 0x0AF1, CHUNKED to <=20B per ATT write (VeryFit
-    // pattern, TooburV3BleChunkedWrite: first chunk carries the 0x33 magic,
-    // continuations are raw bytes, ~25 ms gap). A single long write of the
-    // 137 B 0x05 frame is silently dropped by the watch on MTU-23 links.
-    // Write COMMAND (without response) FIRST: the watch ACKs Write Requests
-    // on 0x0AF1 at ATT level but may only process Write Commands at app
-    // level (VeryFit/Gadgetbridge use no-response writes there).
-    async function wrF1(pkt) {
-      var CHUNK = 20;
-      for (var o = 0; o < pkt.length; o += CHUNK) {
-        var piece = pkt.subarray(o, Math.min(o + CHUNK, pkt.length));
-        var ok = false;
-        if (healthWriteChar.writeValueWithoutResponse) {
-          record('0x0AF1', 'TX', piece);
-          try { await healthWriteChar.writeValueWithoutResponse(piece); ok = true; }
-          catch (e) { log('Write failed 0x0AF1 (no-response): ' + e); }
-        }
-        if (!ok) ok = await wrOk(healthWriteChar, '0x0AF1', piece);
-        if (!ok) return false;
-        if (o + CHUNK < pkt.length) await wait(25);
-      }
-      return true;
-    }
-    function stopB14(dt, b14) {
-      var pkt = new Uint8Array(buildV3Start04(dt, 0, b14));
-      pkt[12] = 0x01; // operate STOP
-      var crc = crc16Ccitt(pkt, 1, pkt.length - 3);
-      pkt[pkt.length - 2] = crc & 0xFF; pkt[pkt.length - 1] = (crc >> 8) & 0xFF;
-      return pkt;
-    }
-    function freshCount(dt) {
-      return dt === 8 ? capSportDays.length : dt === 3 ? capHrDays.length
-        : dt === 1 ? capSpo2.length : capPress.length;
-    }
-    async function f1Round(dt, off, b14) {
-      setItems(dt, -1); setRec(dt, 0); lastSizesTotal = -1;
-      var map = {}; map[dt] = off;
-      await wrF1(buildV3Sizes05(map));
-      if (sawSizesReply) await waitFor(function () { return lastSizesTotal >= 0; }, 3000, 'f1 sizes t' + dt + '@' + off);
-      await wrF1(buildV3Start04(dt, off, b14));
-      await waitFor(function () { return getItems(dt) >= 0; }, 12000, 'f1 start t' + dt + '@' + off);
-      log('F1PROBE t=' + dt + ' b14=' + b14 + ' @' + off + ': items=' + getItems(dt) + ' recSize=' + getRec(dt) + ' sizesTotal=' + lastSizesTotal);
-      await wrF1(stopB14(dt, b14));
-      await wait(1500);
-      return getItems(dt);
-    }
-    // Writability check: one all-zero 0x05 on 0x0AF1.
-    log('F1PROBE: 0x0AF1 props=' + JSON.stringify(healthWriteChar.properties));
-    log('F1PROBE: checking 0x0AF1 writability...');
-    var writable = await wrF1(buildV3Sizes05());
-    if (!writable) {
-      log('F1PROBE: 0x0AF1 NOT writable on this bond (ATT refusal) — aborting probe. Use button C (0x0AF6).');
-      return;
-    }
-    log('F1PROBE: 0x0AF1 writable — stepped-offset probe (0x05 prime + 0x04 on 0x0AF1)...');
-    // b14=1 is the VeryFit day-data pattern; b14=0 gave the single oldest
-    // record on 0x0AF6 — compare both for sport/HR.
-    var plan = [
-      { t: 8, rounds: 24, b14s: [1, 0] },
-      { t: 3, rounds: 24, b14s: [1, 0] },
-      { t: 1, rounds: 8, b14s: [1] },
-      { t: 2, rounds: 8, b14s: [1] },
-    ];
-    for (var pi = 0; pi < plan.length; pi++) {
-      var dt = plan[pi].t;
-      for (var bi = 0; bi < plan[pi].b14s.length; bi++) {
-        var b14 = plan[pi].b14s[bi], off = 0, stale = 0;
-        log('F1PROBE === type ' + dt + ' b14=' + b14 + ' (up to ' + plan[pi].rounds + ' rounds, off steps by recSize) ===');
-        for (var r = 0; r < plan[pi].rounds; r++) {
-          var before = freshCount(dt);
-          var items = await f1Round(dt, off, b14);
-          if (items === 0) { log('F1PROBE t=' + dt + ' b14=' + b14 + ' @' + off + ': empty — pass done.'); break; }
-          stale = (freshCount(dt) > before) ? 0 : stale + 1;
-          if (stale >= 3) { log('F1PROBE t=' + dt + ' b14=' + b14 + ': repeats — pass done.'); break; }
-          off += getRec(dt) > 0 ? getRec(dt) : 0;
-        }
-      }
-    }
-    log('=== F1PROBE done ===');
-  } finally { macroRunning = false; }
-}
 // v3 0x04 STOP. byte14 must MATCH the START that opened the session:
 //   byte14=1 closes "today" (the b14=1 pull),
 //   byte14=0 closes a historical day and ADVANCES the completed-day cursor.
@@ -829,8 +614,6 @@ function dispatchV3(buf) {
   log('v3 complete: cmd=0x' + cmd.toString(16) + ' seq=0x' + seq.toString(16) + ' payloadBytes=' + p.length);
   if (cmd === 0x0005 && p.length >= 4) {
     var total = u32le(p, 0);
-    lastSizesTotal = total;
-    sawSizesReply = true;
     show('Health sizes reply: totalBytes=' + total + ' (expect ~1021 if watch has fresh data)');
     log('0x05 reply payload ' + p.length + 'B: ' + hexStr(p));
     // Speculative per-type records after the leading u32 total: 7 x (type u8 + u32 LE).
@@ -842,12 +625,12 @@ function dispatchV3(buf) {
   if (cmd !== 0x0004 || p.length < 14) return;
   var dataType = p[1], itemCount = u16le(p, 5), headSize = u16le(p, 7), dataSize = u32le(p, 9);
   if (p[0] === 0x00) { // START reply only; STOP acks must not reset the trackers
-    if (dataType === 7) { lastSleepItems = itemCount; lastSleepRec = headSize + dataSize; }
-    else if (dataType === 8) { lastSportItems = itemCount; lastSportRec = headSize + dataSize; }
-    else if (dataType === 3) { lastHrItems = itemCount; lastHrRec = headSize + dataSize; }
-    else if (dataType === 4) { lastWorkoutItems = itemCount; lastWorkoutRec = headSize + dataSize; }
-    else if (dataType === 1) { lastSpo2Items = itemCount; lastSpo2Rec = headSize + dataSize; }
-    else if (dataType === 2) { lastPressItems = itemCount; lastPressRec = headSize + dataSize; }
+    if (dataType === 7) lastSleepItems = itemCount;
+    else if (dataType === 8) lastSportItems = itemCount;
+    else if (dataType === 3) lastHrItems = itemCount;
+    else if (dataType === 4) lastWorkoutItems = itemCount;
+    else if (dataType === 1) lastSpo2Items = itemCount;
+    else if (dataType === 2) lastPressItems = itemCount;
     // Post-reset empty stores can answer with an unknown data_type and zero
     // items (seen: 65 B reply to sleep START). During sleep paging that still
     // means "no more nights", so stop instead of looping 8 times.
@@ -976,7 +759,6 @@ function dispatchV3(buf) {
       log('SWIM dataType=6 items=0: empty-history marker, ignored (not a swim).');
     } else if (h.length >= 34) {
       lastSwimItems = itemCount;
-      lastSwimRec = headSize + dataSize;
       var swimDate = u16le(h, 0) + '-' + String(h[2]).padStart(2, '0') + '-' + String(h[3]).padStart(2, '0');
       var swimStartS = h[4] * 3600 + h[5] * 60 + h[6];
       var swimDur = u16le(h, 17), swimKcal = u16le(h, 9), swimDist = u16le(h, 11);
@@ -1042,7 +824,7 @@ function show(msg) {
   el.innerHTML += '<div class="ok">' + msg + '</div>';
 }
 // Progress hook: pages override by re-declaring setProgress AFTER including
-// this file. Default just logs (pull.html relies on log lines anyway).
+// this file. Default just logs (diagnostics.html relies on log lines anyway).
 function setProgress(done, total, label) {
   log('[progress] ' + done + '/' + total + ' ' + label);
 }
@@ -1076,7 +858,7 @@ function onNotifyF2(e) {
   handleLegacy(a);
 }
 var device = null;
-// Pages fill these before use (pull.html sets both; index.html leaves empty).
+// Pages fill these before use (diagnostics.html sets both; index.html leaves empty).
 // Full connect flow shared by both pages. Resolves when the link is up AND
 // any requested auto-sync finished. opts.noAuto skips the auto-sync (used
 // when the caller only needs a write, e.g. the auto-detect toggle).

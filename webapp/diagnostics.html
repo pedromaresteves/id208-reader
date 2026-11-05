@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ID208 Diagnostics (advanced / recovery)</title>
+<title>ID208 Diagnostics</title>
 <link rel="stylesheet" href="app.css">
 <style>
 #log { white-space: pre-wrap; font-family: monospace; font-size: 0.8rem; background: #f4f4f4; padding: 10px; max-height: 40vh; overflow: auto; }
@@ -13,63 +13,56 @@ summary { font-weight: bold; cursor: pointer; padding: 6px 0; }
 </style>
 </head>
 <body>
-<h1>ID208 Diagnostics (advanced / recovery)</h1>
-<p>Daily use lives on the <a href="index.html">dashboard</a> (one-tap sync).
-This page is for first-time setup, re-fetching single data types, and raw
-diagnostics. Ground truth 2026-10-01 18:31: <b>5736 steps / 468 kcal</b>,
-sleep <b>07h05m (23:47 → 06:52)</b>.</p>
-<button id="btnConnect">1. Connect (syncs automatically when bound)</button>
-<button id="btnSyncAll">B. Sync full history (all days on watch, slow)</button>
-<button id="btnProbe">C. Probe ALL types &amp; offsets (day-data stepped, sport sweep, count-data cursor)</button>
-<button id="btnProbeF1" disabled>D. Probe history via 0x0AF1 (phone bond; 0x05+0x04 on 0x0AF1, stepped offsets)</button>
+<h1>ID208 Diagnostics</h1>
+<p>Daily use lives on the <a href="index.html">dashboard</a>.
+This page is for first-time setup, recovery, and raw diagnostics.
+Ground truth 2026-10-01 18:31: <b>5736 steps / 468 kcal</b>, sleep
+<b>07h05m (23:47 → 06:52)</b>.</p>
+<button id="btnConnect">Connect (auto-sync when bound)</button>
+<button id="btnSyncAll">Full sync (drain all queued days)</button>
+<button id="btnSetupAuto" disabled>Setup watch (bind + auth)</button>
 <br>
+<p>
+<button id="btnInfo" disabled>Device info (02 01)</button>
+<button id="btnLive" disabled>Live data (02 A0)</button>
+<button id="btnSizes" disabled>Health sizes (v3 0x05)</button>
+</p>
 <details>
-<summary>Setup & advanced (first config, manual commands, diagnostics)</summary>
-<button id="btnSetupAuto" disabled>A. Setup watch (post-reset bind, no app needed)</button>
-<br>
+<summary>Raw commands (manual START/STOP and setup writes)</summary>
+<p><b>Health records:</b> pair each START with its matching STOP.
+Manual pulls show decoded text here but do not save to the dashboard store
+(use Full sync or the workout STOP).</p>
 <p>
-<button id="btnInfo" disabled>2. Device info (02 01)</button>
-<button id="btnLive" disabled>3. Live data (02 A0)</button>
-<button id="btnSizes" disabled>4. Health sizes (v3 0x05)</button>
-<button id="btnSport" disabled>5. Sport START (v3 0x04 type 08)</button>
-<button id="btnSleep" disabled>6. Sleep START (v3 0x04 type 07)</button>
-<button id="btnSportStop" disabled>7. Sport STOP (type 08)</button>
-<button id="btnSleepStop" disabled>8. Sleep STOP (type 07)</button>
-<button id="btnHr" disabled>9. HR START (type 03)</button>
-<button id="btnHrStop" disabled>10. HR STOP (type 03)</button>
+<button id="btnSport" disabled>Sport START (type 08)</button>
+<button id="btnSportStop" disabled>Sport STOP (type 08)</button>
+<button id="btnSleep" disabled>Sleep START (type 07)</button>
+<button id="btnSleepStop" disabled>Sleep STOP (type 07)</button>
+<button id="btnHr" disabled>HR START (type 03)</button>
+<button id="btnHrStop" disabled>HR STOP (type 03)</button>
 </p>
 <p>
-<button id="btnBind" disabled>11. Bind (04 01, clears QR setup)</button>
-<button id="btnTime" disabled>12. Set time (03 01, phone clock)</button>
-<button id="btnUser" disabled>13. User info (03 10 sample)</button>
-<button id="btnUnbind" disabled>14. Unbind (04 02)</button>
-<button id="btnAuth" disabled>15. Auth (04 05, finalizes bind)</button>
+<button id="btnWorkout" disabled>Workout START (type 04)</button>
+<button id="btnWorkoutStop" disabled>Workout STOP (type 04, saves)</button>
+<button id="btnSwim" disabled>Swim START (type 06)</button>
+<button id="btnSwimStop" disabled>Swim STOP (type 06)</button>
+<button id="btnSpo2" disabled>SpO2 START (type 01)</button>
+<button id="btnSpo2Stop" disabled>SpO2 STOP (type 01)</button>
+<button id="btnPress" disabled>Pressure START (type 02)</button>
+<button id="btnPressStop" disabled>Pressure STOP (type 02)</button>
+</p>
+<p><b>Setup / writes:</b> a fresh reset (QR screen) is handled by
+<b>Setup watch</b> above — it sends bind + 04 05 auth, no tap needed.</p>
+<p>
+<button id="btnBind" disabled>Bind (04 01)</button>
+<button id="btnTime" disabled>Set time (phone clock)</button>
+<button id="btnUser" disabled>User info</button>
+<button id="btnUnbind" disabled>Unbind (04 02)</button>
+<button id="btnAuth" disabled>Auth (04 05)</button>
 </p>
 <p>
-<button id="btnWorkout" disabled>16. Workout START (v3 0x04 type 04)</button>
-<button id="btnWorkoutStop" disabled>17. Workout STOP (type 04)</button>
-<button id="btnSwim" disabled>20. Swim START (v3 0x04 type 06)</button>
-<button id="btnSwimStop" disabled>21. Swim STOP (type 06)</button>
+<button id="btnAutoOff" disabled>Auto-detect OFF</button>
+<button id="btnAutoWalkRun" disabled>Auto-detect walk+run</button>
 </p>
-<p>
-<button id="btnSpo2" disabled>22. SpO2 START (v3 0x04 type 01)</button>
-<button id="btnSpo2Stop" disabled>23. SpO2 STOP (type 01)</button>
-<button id="btnPress" disabled>24. Pressure START (v3 0x04 type 02)</button>
-<button id="btnPressStop" disabled>25. Pressure STOP (type 02)</button>
-</p>
-<p>
-<button id="btnAutoOff" disabled>18. Auto-detect OFF (03 49, stops walk prompts)</button>
-<button id="btnAutoWalkRun" disabled>19. Auto-detect walk+run (03 49, restores prompts)</button>
-</p>
-<p>
-<label for="offset">Offset (byte position in the type's stream; 0 = today for sport/HR, oldest record for sleep/workouts):</label>
-<input id="offset" type="number" value="0" min="0" max="65535" style="width: 6em; padding: 8px; font-size: 1rem;">
-</p>
-<p><b>Manual commands:</b> buttons 5/6/9/16 pair with their matching STOP
-(START, wait 30 s, then STOP); 2–4 and 11–15/18–19 are one-shot reads or
-writes. Only the macros and workout-STOP save to the store — manual pulls
-show decoded text here but don't reach the dashboard.
-<b>Fresh reset (QR setup screen):</b> Connect -> <b>A. Setup watch</b> (bind + 04 05 auth finalizes it, no tap needed).</p>
 </details>
 <button id="btnCopy">Copy log</button>
 <button id="btnJsonl">Download JSONL</button>
@@ -95,8 +88,10 @@ show decoded text here but don't reach the dashboard.
 // Fail fast on file skew (new page + old ble.js/store.js): halt with an
 // actionable banner instead of half-wired buttons that fail silently.
 (function checkAppFiles() {
-  var need = ['Store', 'connectAndSync', 'ensureLink', 'setupAuto', 'syncNow', 'syncAll', 'wr',
-    'buildV3Start04', 'buildV3Stop04', 'buildBindAuthPacket', 'buildAutoActivity', 'saveCaptured', 'probeAllOffsets', 'pageType', 'probeViaF1', 'pullToday', 'pageDayHistory'];
+  var need = ['Store', 'connectAndSync', 'ensureLink', 'setupAuto', 'syncAll', 'wr',
+    'buildV3Start04', 'buildV3Stop04', 'buildV3Sizes05', 'buildBindStart', 'buildBindStop',
+    'buildSetTimeNow', 'buildUserInfoSample', 'buildBindAuthPacket', 'buildAutoActivity',
+    'saveCaptured', 'refreshStoreStatus', 'wait', 'todayStr'];
   var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
   if (!missing.length) return;
   var d = document.createElement('div');
@@ -114,52 +109,45 @@ show decoded text here but don't reach the dashboard.
 })();
 // Page wiring: ble.js holds all protocol code; here only DOM bindings.
 PAGE_BASIC_BUTTONS = ['btnInfo', 'btnLive', 'btnSetupAuto'];
-PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop', 'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth', 'btnWorkout', 'btnWorkoutStop', 'btnSwim', 'btnSwimStop', 'btnSpo2', 'btnSpo2Stop', 'btnPress', 'btnPressStop', 'btnAutoOff', 'btnAutoWalkRun', 'btnProbe', 'btnProbeF1'];
-function readOffset() {
-  var v = parseInt(document.getElementById('offset').value, 10);
-  return (isNaN(v) || v < 0) ? 0 : (v > 65535 ? 65535 : v);
-}
+PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop',
+  'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth',
+  'btnWorkout', 'btnWorkoutStop', 'btnSwim', 'btnSwimStop', 'btnSpo2', 'btnSpo2Stop',
+  'btnPress', 'btnPressStop', 'btnAutoOff', 'btnAutoWalkRun'];
 document.getElementById('btnConnect').addEventListener('pointerup', function () {
   connectAndSync().then(null, function () {});
 });
 document.getElementById('btnSyncAll').addEventListener('pointerup', function () {
   ensureLink().then(function () { syncAll(); }, function () {});
 });
-document.getElementById('btnProbe').addEventListener('pointerup', function () {
-  ensureLink().then(function () { probeAllOffsets(); }, function () {});
-});
-document.getElementById('btnProbeF1').addEventListener('pointerup', function () {
-  ensureLink().then(function () { probeViaF1(); }, function () {});
-});
+document.getElementById('btnSetupAuto').addEventListener('pointerup', function () { setupAuto(); });
 document.getElementById('btnInfo').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x01])); });
 document.getElementById('btnLive').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0])); });
 document.getElementById('btnSizes').addEventListener('pointerup', function () { wr(healthWriteChar, '0x0AF1', buildV3Sizes05()); });
-document.getElementById('btnSport').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(8, readOffset())); });
-document.getElementById('btnSleep').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(7, readOffset())); });
+document.getElementById('btnSport').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(8, 0)); });
+document.getElementById('btnSleep').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(7, 0)); });
 document.getElementById('btnSportStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(8)); });
 document.getElementById('btnSleepStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(7)); });
-document.getElementById('btnHr').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(3, readOffset())); });
+document.getElementById('btnHr').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(3, 0)); });
 document.getElementById('btnHrStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(3)); });
 document.getElementById('btnBind').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildBindStart()); });
 document.getElementById('btnTime').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildSetTimeNow()); });
 document.getElementById('btnUser').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildUserInfoSample()); });
 document.getElementById('btnUnbind').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildBindStop()); });
 document.getElementById('btnAuth').addEventListener('pointerup', function () { var p = buildBindAuthPacket(); if (p) wr(writeChar, '0x0AF6', p); });
-document.getElementById('btnWorkout').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(4, readOffset())); });
+document.getElementById('btnWorkout').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(4, 0)); });
 document.getElementById('btnWorkoutStop').addEventListener('pointerup', async function () {
   await wr(writeChar, '0x0AF6', buildV3Stop04(4));
   await wait(3000);
   await saveCaptured('workout ' + todayStr());
 });
-document.getElementById('btnSwim').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(6, readOffset())); });
+document.getElementById('btnSwim').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(6, 0)); });
 document.getElementById('btnSwimStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(6)); });
-document.getElementById('btnSpo2').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(1, readOffset())); });
+document.getElementById('btnSpo2').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(1, 0)); });
 document.getElementById('btnSpo2Stop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(1)); });
-document.getElementById('btnPress').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(2, readOffset())); });
+document.getElementById('btnPress').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(2, 0)); });
 document.getElementById('btnPressStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(2)); });
 document.getElementById('btnAutoOff').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildAutoActivity(null)); });
 document.getElementById('btnAutoWalkRun').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildAutoActivity([1, 1])); });
-document.getElementById('btnSetupAuto').addEventListener('pointerup', function () { setupAuto(); });
 document.getElementById('btnCopy').addEventListener('pointerup', function () {
   var text = document.getElementById('log').textContent;
   function fallback() {
@@ -196,7 +184,8 @@ document.getElementById('fileStoreImport').addEventListener('change', function (
     Store.importText(rd.result).then(
       function (c) {
         log('Import: steps ' + c.steps + ', sleep ' + c.sleep +
-          ', hr ' + c.hr + ', workouts ' + c.workout + '.');
+          ', hr ' + c.hr + ', workouts ' + c.workout +
+          ', spo2 ' + c.spo2 + ', pressure ' + c.pressure + '.');
         refreshStoreStatus();
       },
       function (err) { log('Import failed: ' + err.message); });
@@ -205,7 +194,7 @@ document.getElementById('fileStoreImport').addEventListener('change', function (
   e.target.value = '';
 });
 if (typeof Store !== 'undefined') refreshStoreStatus();
-else document.getElementById('storeStatus').textContent = 'store.js not found next to pull.html — keep both files together.';
+else document.getElementById('storeStatus').textContent = 'store.js not found next to diagnostics.html — keep both files together.';
 </script>
 <nav class="tabs">
 <a href="index.html">Dashboard</a>
@@ -213,7 +202,7 @@ else document.getElementById('storeStatus').textContent = 'store.js not found ne
 <a href="sleep.html">Sleep</a>
 <a href="workout.html">Workouts</a>
 <a href="watch.html">Watch</a>
-<a href="pull.html" aria-current="page">Diagnostics</a>
+<a href="diagnostics.html" aria-current="page">Diagnostics</a>
 </nav>
 </body>
 </html>

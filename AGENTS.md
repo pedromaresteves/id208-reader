@@ -15,7 +15,7 @@ Mismatches are decoder bugs.
 ```
 ├── webapp/              Static webapp (HTML + JS, no build step)
 │   ├── index.html       Dashboard (sync button, charts, history)
-│   ├── pull.html        Advanced: connect, setup, manual commands, probe
+│   ├── diagnostics.html Diagnostics: connect, setup, full sync, raw commands
 │   ├── activity.html    Steps/activity history page
 │   ├── sleep.html       Sleep history page
 │   ├── workout.html     Workouts/swims page
@@ -60,7 +60,7 @@ python sync.py
 
 # Serve webapp locally
 cd webapp && python3 -m http.server 8080
-# → http://localhost:8080/pull.html
+# → http://localhost:8080/diagnostics.html
 ```
 
 ## Conventions
@@ -133,7 +133,7 @@ cd webapp && python3 -m http.server 8080
 - **Do not mock the BLE layer and present results as if they were real
   watch behavior.** If asked to test against the watch, say so upfront:
   "I can't connect to Bluetooth from this environment. I can verify code
-  logic with mocks, or you can run the probe on your phone."
+  logic with mocks, or you can run the diagnostics page on your phone."
 - **To test against the real watch, use the Windows machine via WSL.**
   Python Playwright is already installed on Windows:
   - Windows Python: `/mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe`
@@ -173,9 +173,8 @@ cd webapp && python3 -m http.server 8080
 1. Read `TODO.md` first — it has known limitations and open items.
 2. Check `captures/` for real watch JSONL traces (gitignored, may not
    exist in a fresh clone).
-3. Use the **"C. Probe sport offsets"** button on `pull.html` to test
-   what the watch returns at various byte offsets.
-4. Use **"Copy log"** or **"Download JSONL"** on `pull.html` to capture
+3. Use **"Full sync"** on `diagnostics.html` to drain every queued day.
+4. Use **"Copy log"** or **"Download JSONL"** on `diagnostics.html` to capture
    a sync trace, then share it for analysis.
 5. Run `node webapp/capture.test.js` after any ble.js change.
 6. Run `pytest tests/ -q` after any decoder.py change.

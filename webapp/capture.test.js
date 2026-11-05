@@ -39,16 +39,12 @@ global.Store = {
 
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ble.js'), 'utf8') +
-    '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay, syncNow, nextDaySaveOffset,' +
+    '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay, syncNow,' +
     ' buildV3Start04, buildV3Stop04, pullToday, pageDayHistory,' +
-    ' _stub: function (w, wf, wt) { wr = w; waitFor = wf; wait = wt;' +
-    '   wrOk = function (ch, name, bytes) { return Promise.resolve(w(ch, name, bytes)).then(function () { return true; }); }; },' +
-    ' _setHealth: function (c) { healthWriteChar = c; },' +
+    ' _stub: function (w, wf, wt) { wr = w; waitFor = wf; wait = wt; },' +
     ' _setSeq: function (s) { v3Seq = s; } };',
 );
 const B = globalThis.B;
-// healthWriteChar must be set so primeOffset05 sends 0x05 (the mock wr handles it)
-B._setHealth({ writeValue: () => Promise.resolve() });
 
 // Byte-identical builder guard (must match src/ido/decoder.py build_v3_start_04;
 // vectors also pinned in tests/test_decoder.py):
@@ -201,9 +197,6 @@ const CHUNKS = [
   // history is a PERSISTENT cursor, oldest first. Each round is
   // START(b14=0) + matching STOP(b14=0); today comes from a separate b14=1
   // pull and is NOT part of that stream. saveOffset is ignored.
-  assert.strictEqual(B.nextDaySaveOffset(0, 986), 986, 'byte step past a count-data record');
-  assert.strictEqual(B.nextDaySaveOffset(986, 976), 1962, 'cumulative byte step');
-  assert.strictEqual(B.nextDaySaveOffset(50, 0), 50, 'zero-size record does not move the offset');
 
   // STOP builder: byte14 must be settable and match the START that opened
   // the session (same vectors pinned in tests/test_decoder.py).

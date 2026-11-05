@@ -29,7 +29,6 @@ CMD_BIND_STOP = bytes((0x04, 0x02, 0xF1, 0x01, 0x01, 0x02, 0x02, 0x01, 0x00))
 # (D0..0B ^ F4..45 = 24..4E) — the latter failed with `04 05 02 00`
 # only because its challenge was stale. Reply `04 05 00 00` finalizes
 # the bind (`pair` flips 0 -> 1). Random trailing bytes are REJECTED.
-CMD_BIND_AUTH = bytes((0x04, 0x03))
 CMD_SET_23_SAMPLE = bytes((0x03, 0x23, 0x02, 0x00))
 # SET time sample from VeryFit logcat (2026-03-08 01:17:24):
 # 03 01 EA 07 03 08 01 11 18 06 00 * 6.
@@ -43,8 +42,6 @@ CMD_SET_USER_INFO_SAMPLE = bytes(
 # VeryFit sends these after BIND before the watch leaves its setup screen:
 # units (17 B), calorie+distance goals (20 B), weather switch off (6 B).
 CMD_SET_UNITS_SAMPLE = bytes.fromhex("0311010101000201000000010101010000")
-# Units variant from the reinstall-bind log (byte[7] 0x02 vs 0x01 above).
-CMD_SET_UNITS_BIND = bytes.fromhex("0311010101000202000000010101010000")
 CMD_SET_GOALS_SAMPLE = bytes.fromhex("0343F40100000000000008070000FA000E060C00")
 CMD_SET_WEATHER_OFF = bytes.fromhex("032D55000000")
 # Auto activity/sport detection (SET 03 49, VBUS_EVT_APP_SET_ACTIVITY_SWITCH).
@@ -153,11 +150,6 @@ def parse_bind_mac(payload: bytes) -> bytes:
     return bytes(payload[5:11])
 
 
-def build_bind_auth_probe() -> bytes:
-    """Return the bare 2-byte `04 03` auth probe (watch stays silent)."""
-    return bytes(CMD_BIND_AUTH)
-
-
 def build_bind_auth(challenge: bytes, mac: bytes) -> bytes:
     """Build the 16-byte `04 05` encrypted-auth packet that finalizes binding.
 
@@ -233,11 +225,6 @@ def build_user_info_sample() -> bytes:
 def build_units_sample() -> bytes:
     """Return the 17-byte VeryFit units sample from fresh-launch logcat."""
     return bytes(CMD_SET_UNITS_SAMPLE)
-
-
-def build_units_bind() -> bytes:
-    """Return the 17-byte units variant from the reinstall-bind log."""
-    return bytes(CMD_SET_UNITS_BIND)
 
 
 def build_goals_sample() -> bytes:
@@ -391,7 +378,7 @@ def build_v3_start_04(
     resumes sport at byte offsets like 0x4E) — not a day index.
 
     byte14: 0x01 day-data (01,02,03,08), 0x00 count-data (04,06,07); pass
-    explicitly to override the per-type default (probeViaF1 does this).
+    explicitly to override the per-type default.
 
     LIVE 2026-11-05 (ID208 Plus, 0x0AF6): save_offset is IGNORED for day-data
     at every byte offset. byte14=1 returns TODAY's in-progress record; byte14=0

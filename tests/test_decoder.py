@@ -11,14 +11,12 @@ from ido.decoder import (
     V3_DATA_TYPES,
     build_auto_activity,
     build_bind_auth,
-    build_bind_auth_probe,
     build_bind_start,
     build_bind_stop,
     build_goals_sample,
     build_hr_mode,
     build_set_23_sample,
     build_set_time,
-    build_units_bind,
     build_units_sample,
     build_user_info_sample,
     build_v3_1a,
@@ -81,8 +79,8 @@ def test_bind_builders_and_reply() -> None:
 
 
 def test_bind_auth_probe_shape() -> None:
-    # Bare 2-byte header; the watch stays silent on it (confirmed 2x).
-    assert build_bind_auth_probe() == bytes.fromhex("0403")
+    # The old bare 04 03 probe is gone; parse_bind_reply still understands the
+    # 04 03 reply shape.
     assert parse_bind_reply(bytes.fromhex("040300")) == {"key": 3, "status": 0}
     assert build_set_23_sample() == bytes.fromhex("03230200")
 
@@ -162,7 +160,6 @@ def test_setup_prelude_v3_matches_logcat_crc() -> None:
     assert build_hr_mode(0x0004) == bytes.fromhex(
         "33DAADDAAD011700090004000000000000010000173B0000BF58"
     )
-    assert build_units_bind() == bytes.fromhex("0311010101000202000000010101010000")
 
 
 def test_parse_basic_info_rejects_bad_header() -> None:

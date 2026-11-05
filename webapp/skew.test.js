@@ -33,7 +33,7 @@ global.Store = {
   list: () => Promise.resolve([]),
 };
 
-const PAGES = ['index.html', 'activity.html', 'sleep.html', 'workout.html', 'watch.html', 'pull.html'];
+const PAGES = ['index.html', 'activity.html', 'sleep.html', 'workout.html', 'watch.html', 'diagnostics.html'];
 const needs = {};
 PAGES.forEach((p) => {
   const html = fs.readFileSync(path.join(ROOT, 'webapp', p), 'utf8');

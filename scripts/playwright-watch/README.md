@@ -39,14 +39,17 @@ $WINPY -c "import playwright; print('ok')"
 # From the repo root in WSL:
 WINPY=/mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe
 
-# Full history sync + sport offset probe:
+# Full sync (connect auto-syncs first):
 $WINPY scripts/playwright-watch/watch_test.py
 
-# 7-day daily sync + probe:
+# Daily sync only:
 $WINPY scripts/playwright-watch/watch_test.py --daily
 
-# Probe only (no sync):
-$WINPY scripts/playwright-watch/watch_test.py --probe
+# Headless UX smoke (no Bluetooth):
+$WINPY scripts/playwright-watch/ui_smoke.py
+
+# Live dashboard one-button sync:
+$WINPY scripts/playwright-watch/live_dashboard.py
 ```
 
 When the script prints **"CLICK THE ID208 WATCH IN THE PICKER NOW"**,
@@ -57,9 +60,11 @@ click the watch in the native Bluetooth dialog on the Windows desktop.
 | File | Contents |
 |------|----------|
 | `connect-log.txt` | Connection handshake log |
-| `last-sync-log.txt` | Full sync TX/RX log (all frames) |
-| `last-sync.jsonl` | Raw BLE frames as JSONL |
-| `probe-log.txt` | Sport offset probe results |
+| `auto-sync-log.txt` | Automatic sync TX/RX log |
+| `full-sync-log.txt` | Full sync TX/RX log (all frames) |
+| `full-sync.jsonl` | Raw BLE frames as JSONL |
+| `dashboard-sync-log.txt` | Dashboard one-button sync log |
+| `dashboard-sync-store.json` | Store dump after the dashboard sync |
 
 ## Troubleshooting
 
@@ -72,4 +77,4 @@ click the watch in the native Bluetooth dialog on the Windows desktop.
   remove ID208, reboot watch, retry.
 - **`localhost:8080` not reachable from Windows Chrome** — WSL2 should forward
   it. If not, use the WSL IP: `hostname -I` in WSL, then
-  `--url http://<wsl-ip>:8080/pull.html`.
+  `--url http://<wsl-ip>:8080/diagnostics.html`.

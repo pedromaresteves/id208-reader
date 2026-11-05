@@ -2,7 +2,7 @@
 """
 watch_test.py — Drive the id208-reader webapp from Windows Chrome via
 Python Playwright, connect to the REAL ID208 watch over WebBluetooth,
-run syncs + the all-types offset probe, and save all logs + the store.
+run syncs, and save all logs + the store.
 
 Run from WSL (this sandbox) — it launches the Windows Chrome executable:
 
@@ -14,11 +14,9 @@ Bluetooth picker dialog. Playwright CANNOT click native dialogs.
 YOU must click the ID208 watch in the picker when prompted.
 
 Usage:
-    python watch_test.py              # connect + auto daily sync + full sync + probe + store dump
-    python watch_test.py --daily      # connect + auto daily sync + probe only
-    python watch_test.py --probe      # connect (no sync buttons) + probe only
-    python watch_test.py --no-probe   # connect + syncs, skip the probe
-    python watch_test.py --url http://localhost:8080/pull.html
+    python watch_test.py              # connect + auto daily sync + full sync + store dump
+    python watch_test.py --daily      # connect + auto daily sync only
+    python watch_test.py --url http://localhost:8080/diagnostics.html
 """
 import argparse
 import json
@@ -34,11 +32,10 @@ OUT_DIR = HERE
 PAIR_TIMEOUT = 240    # seconds to wait for the user to click the device
 READY_TIMEOUT = 60
 SYNC_TIMEOUT = 1200   # full sync can page many rounds; each round is a few seconds
-PROBE_TIMEOUT = 1200
 
 KEYWORDS = [
-    "PROBE", "F1PROBE", "round", "empty", "paging done", "Saved to store", "sync done",
-    "daily sync done", "PAGEERROR", "MISSING", "0x05", "sizes reply", "SPORT", "SLEEP", "HR ",
+    "round", "empty", "paging done", "Saved to store", "sync done",
+    "daily sync done", "PAGEERROR", "MISSING", "0x05", "SPORT", "SLEEP", "HR ",
     "WORKOUT", "SWIM", "SPO2", "PRESSURE", "BT error", "Ready", "Device Selected",
     "pair=", "0x0AF", "Notify", "GATT", "bound", "stamp", "Last sync",
 ]
@@ -113,13 +110,15 @@ def save_page_state(page, name):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--daily", action="store_true", help="skip the full-history sync (auto daily sync still runs after connect)")
-    ap.add_argument("--probe", action="store_true", help="probe only, no sync buttons")
-    ap.add_argument("--no-probe", action="store_true", help="skip the probe")
-    ap.add_argument("--url", default="http://localhost:8080/pull.html")
+    ap.add_argument("--daily", action="store_true", help="skip the full sync (auto daily sync still runs after connect)")
+    ap.add_argument("--url", default="http://localhost:8080/diagnostics.html")
     args = ap.parse_args()
+    # The persistent Chrome profile can cache ble.js; version the page URL so
+    # every local script loads with the same fresh token.
+    sep = '&' if '?' in args.url else '?'
+    url = f"{args.url}{sep}v={int(time.time())}"
 
-    log(f"Opening {args.url} in headed Windows Chrome...")
+    log(f"Opening {url} in headed Windows Chrome...")
     log("WebBluetooth requires headed mode — the native picker will appear on the Windows desktop.")
 
     with sync_playwright() as p:
@@ -134,7 +133,7 @@ def main():
         page = context.new_page()
         page.on("pageerror", lambda err: log(f"PAGEERROR: {err}"))
 
-        page.goto(args.url, wait_until="domcontentloaded")
+        page.goto(url, wait_until="domcontentloaded")
         page.wait_for_timeout(1000)
 
         has_bt = page.evaluate("() => !!navigator.bluetooth")
@@ -190,43 +189,22 @@ def main():
         log("Connect state saved to connect-log.txt / connect.jsonl")
 
         # ---- Auto daily sync (runs automatically after connect when bound) ----
-        if not args.probe:
-            log("Waiting for the automatic daily sync after connect (or 'not bound')...")
-            wait_for_log(page, "Daily sync done", SYNC_TIMEOUT, "auto daily sync")
-            wait_for_log(page, "not bound", 5, "bind check")
-            save_page_state(page, "auto-sync")
+        log("Waiting for the automatic daily sync after connect (or 'not bound')...")
+        wait_for_log(page, "Daily sync done", SYNC_TIMEOUT, "auto daily sync")
+        wait_for_log(page, "not bound", 5, "bind check")
+        save_page_state(page, "auto-sync")
 
-        # ---- Full history sync ----
-        if not args.probe and not args.daily:
-            log("Clicking 'B. Sync full history'...")
+        # ---- Full sync ----
+        if not args.daily:
+            log("Clicking 'Full sync'...")
             page.click("#btnSyncAll")
             wait_for_log(page, "Full sync done", SYNC_TIMEOUT, "full sync")
             save_page_state(page, "full-sync")
             log("Full sync state saved to full-sync-log.txt / full-sync.jsonl / full-sync-store.json")
 
-        # ---- All-types offset probe ----
-        if not args.no_probe:
-            print()
-            print("=" * 64)
-            log("Running the ALL-TYPES offset probe (this can take several minutes)...")
-            print("=" * 64)
-            if "pull.html" not in page.url:
-                page.goto(args.url, wait_until="domcontentloaded")
-                page.wait_for_timeout(1000)
-            page.click("#btnProbe")
-            wait_for_log(page, "=== Probe done ===", PROBE_TIMEOUT, "probe")
-            save_page_state(page, "probe")
-            log("Probe state saved to probe-log.txt / probe.jsonl / probe-store.json")
-
-            log("--- Probe results ---")
-            full_log = page.evaluate("() => document.getElementById('log')?.textContent || ''")
-            for line in full_log.splitlines():
-                if "PROBE RESULT" in line or "0x05 rec" in line or "0x05 reply payload" in line:
-                    print("  " + line[:250], flush=True)
-
         log("")
         log("All done. Outputs in scripts/playwright-watch/:")
-        log("  connect-*, auto-sync-*, full-sync-*, probe-*  (each: -log.txt, .jsonl, -store.json, -decoded.html)")
+        log("  connect-*, auto-sync-*, full-sync-*  (each: -log.txt, .jsonl, -store.json, -decoded.html)")
         browser.close()
 
 

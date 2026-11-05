@@ -19,7 +19,7 @@
 <p id="lastSync" class="muted">Last sync: loading…</p>
 <p class="btn-row"><button id="btnRefresh" class="btn-sec icon" title="Refresh" aria-label="Refresh">↻</button>
 <a class="btn btn-sec icon" href="watch.html" title="Settings" aria-label="Settings">⚙</a>
-<a class="btn btn-sec small-text" href="pull.html" title="Advanced diagnostics and recovery">Diagnostics</a></p>
+<a class="btn btn-sec small-text" href="diagnostics.html" title="Advanced diagnostics and recovery">Diagnostics</a></p>
 <p class="btn-row"><button id="btnBackup" class="btn-sec small-text">Backup store</button>
 <label for="fileImport" class="btn btn-sec small-text">Import backup</label>
 <input id="fileImport" type="file" accept=".json,.jsonl,.csv" style="display:none;"></p>
@@ -85,7 +85,7 @@ function syncUiBusy(busy, label) {
 }
 function statusLink(msg) {
   document.getElementById('status').innerHTML = esc(msg) +
-    ' — <a href="pull.html">open Diagnostics</a>.';
+    ' — <a href="diagnostics.html">open Diagnostics</a>.';
 }
 document.getElementById('btnSync').addEventListener('click', async function () {
   syncUiBusy(true, 'Connecting…');
@@ -206,7 +206,7 @@ render();
 <a href="sleep.html">Sleep</a>
 <a href="workout.html">Workouts</a>
 <a href="watch.html">Watch</a>
-<a href="pull.html">Diagnostics</a>
+<a href="diagnostics.html">Diagnostics</a>
 </nav>
 </body>
 </html>

@@ -18,7 +18,7 @@ from playwright.sync_api import sync_playwright
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BASE = "http://localhost:8080"
-PAGES = ["index.html", "activity.html", "sleep.html", "workout.html", "watch.html", "pull.html"]
+PAGES = ["index.html", "activity.html", "sleep.html", "workout.html", "watch.html", "diagnostics.html"]
 IMPORT_PATH = os.path.join(HERE, ".ui-smoke-import.json")
 
 

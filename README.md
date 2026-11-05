@@ -8,15 +8,15 @@ Confirmed on ID208 Plus (FW v1.01.17). Other IDO/VeryFit variants may work
 if they speak the same `0x0AF0` service — captures + screen numbers welcome.
 
 Live app (GitHub Pages): [`webapp/`](https://pedromaresteves.github.io/id208-reader/webapp/) —
-[pull](https://pedromaresteves.github.io/id208-reader/webapp/pull.html) to sync,
+[diagnostics](https://pedromaresteves.github.io/id208-reader/webapp/diagnostics.html) for setup/recovery,
 [index](https://pedromaresteves.github.io/id208-reader/webapp/index.html) to view history.
 
 ## How it works
 
-1. **Pull (phone).** Open the pull page, tap Connect — the sync starts by
-   itself when the watch is bound (fresh-reset watches get pointed at
-   **A. Setup watch**, which binds with no app). Records land in the
-   phone's store automatically; JSONL download stays as audit trail.
+1. **Sync (phone).** Open the dashboard and tap **Sync Data** — the sync
+   starts by itself when the watch is bound (fresh-reset watches are bound
+   automatically). Records land in the phone's store automatically; JSONL
+   download stays as audit trail on Diagnostics.
 2. **View (phone).** Open the dashboard: latest values, history tables and
    charts per data type, all offline.
 3. **Decode (PC, optional).** Copy a JSONL into `captures/` and run
