@@ -17,8 +17,7 @@ scripts/playwright-watch/*.jsonl
 scripts/playwright-watch/*-log.txt
 scripts/playwright-watch/*-store.json
 scripts/playwright-watch/*-decoded.html
-# phase0/ is local-only (superseded by webapp/diagnostics.html + vendored idowatch.html)
-phase0/
+# Local plans are working notes, not committed docs.
 PLAN.md
 PLAN-WEBAPP.md
 PLAN-HISTORY.md
