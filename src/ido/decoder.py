@@ -352,6 +352,7 @@ def build_v3_sizes_05(seq: int, offsets: dict[int, int] | None = None) -> bytes:
     2026-11-04 on the ID208 Plus: on 0x0AF6 the prime gets a reply yet has no
     side effect (0x04 saveOffset is ignored there), and 0x0AF1 never answers,
     so on this firmware the offsets only shape the reply's totalBytes.
+    Sync no longer sends this packet; it remains the manual Diagnostics button.
     """
     pkt = bytearray(137)
     pkt[0:5] = V3_PREAMBLE

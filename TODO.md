@@ -1,158 +1,44 @@
 # Priority TODO (open items only)
 
-## 1. Workout mode byte — blocked on an unpullable history (only item left)
+## 1. Workout mode byte — blocked on count-data history
 - Known icon→record pairs: 08/10 Functional Strength, 08/10 + 09/10 Outdoor
-  Walk. Header byte `[8]` reads 5 on strength AND walk → NOT the mode.
-  Header byte `[10]` reads 0 (strength) vs 1 (walk) → lead candidate.
-- Two hypotheses: (a) `[10]` is the mode enum, or (b) it's an indoor/outdoor
-  flag. Official IDO tables have no record-ID mapping (only capability bits).
-- Status 2026-10-11: watch shows 4 records (Oct 8 strength, Oct 8 walk,
-  Oct 9 walk, Oct 11 run 10:25→10:38) but type-04 history returns `items=0`
-  at offsets 0–7 (TX-verified, post-restart). Dead models: absolute offsets,
-  open-session lock (run is finished). Oct 8 proved read-state (two identical
-  offset-0 requests → two different records). Guessed mechanism still open:
-  spent cursor, BLE/display store divergence, auto-detected sessions never
-  entering history.
-- Next experiment: close nRF (dual-master interference), record a 2-min
-  closed test workout (stop+save explicitly), pull 16/offset 0 → JSONL.
-  Appears → mechanism works, Oct 9/11 specifically unpullable (auto-detect?).
-  Empty → history broken watch-side → escalate to Gadgetbridge fork.
-- Then: one Outdoor Run record + summary + JSONL. If `[10]` reads a third
-  value → (a), fill `SPORT_NAMES` from the three pairs. If it reads 1
-  again → (b), hunt the real mode byte with the run's full header.
+  Walk. Header byte `[8]` reads 5 on both → not the mode. Byte `[10]` reads
+  0 (strength) vs 1 (walk) → lead candidate.
+- Hypotheses: (a) `[10]` is the mode enum, or (b) it is an indoor/outdoor
+  flag. Official IDO tables have no record-ID mapping.
+- Watch displayed four records (strength/walk/run) while type-04 history
+  returned `items=0` at offset 0 over BLE. VeryFit has the same gap.
+- Next experiment: close nRF, record a 2-minute workout with an explicit
+  stop+save, then Full sync → JSONL. If it appears, auto-detected sessions
+  are the special case; if still empty, the BLE store is broken watch-side.
+- Then pull one Outdoor Run summary + JSONL. A third `[10]` value supports
+  (a); another `1` supports (b), and the real mode byte still needs finding.
 - No code changes until the bytes speak.
 
-## 2. BPMs in Activity section + Page (done, uncommitted)
-- `ui.js` `hrStats`/`hrCell` added, covered in `chart.test.js`.
-- `activity.html` joins `Store.list('hr')` by date: new `BPM avg (min–max)`
-  column + week footer `BPM avg`/`Rest` + status counts HR days.
-- `index.html` Activity snippet shows `M bpm avg (rest R)` when an HR day
-  exists for the latest step date.
-- Verify on phone: re-download all webapp files together, sync, check
-  Oct 13 row shows BPM (capture has silent 61 + 580 samples).
-- Redesign 2026-10-13 (done, uncommitted): rolling 7-day window anchored on
-  phone today (today first, back 6 days), ‹ Prev 7 / Next 7 › pager (Next
-  capped at today), avg footer over visible 7 days, month section removed
-  (to be redone). Verified in a node harness: order, 7 rows, range label,
-  pager window, avgs (6816 steps / 382 kcal / BPM 70 / rest 61 on fixture).
-- Agreed: daily-HR join, single narrow column (middle ground of options 1+2).
-- `ui.js`: add `hrStats(samples)` helper — avg/min/max/count from
-  `samples[].bpm`, ignore non-numbers.
-- `activity.html`: `Store.list('hr')` alongside `steps`, join by `date`.
-  Table adds `BPM avg (min–max)`, missing HR renders `—`. Week footer adds
-  `Rest <silent> · Avg <x> bpm (n days)`.
-- `index.html`: extend Activity snippet to `... steps · N kcal · M bpm avg
-  (rest R)` when HR exists for latest step date, else unchanged.
-- Tests: node harness for `hrStats` + join (missing day, empty samples,
-  plain-number samples).
+## 2. Count-data history is empty over BLE (sleep 07 / workouts 04 / swims 06)
+- `items=0` at offset 0 on this firmware, even when the watch display shows
+  data. Count-data paging is now cursor-only (START/STOP at offset 0).
+- VeryFit shows the same gap, so this is a watch-side store divergence, not
+  a decoder bug. Daily accumulation is the current history source.
+- Need: one successful closed-workout capture (see §1) to confirm whether
+  the BLE store can ever serve count-data.
 
-## 3. Activity history: incremental sync, two buttons (done, uncommitted)
-- Root cause proven by health-capture.jsonl (Oct 13): `dailyAuto` asked
-  sport/HR at offset 0 (= today) only, so history never entered the store.
-- Fixed: multi-day capture (`capSportDays`/`capHrDays` + `upsertDay`),
-  each day keyed by header date; `last-sync` meta stamp (only when data
-  lands); `dailyAuto({days})` stretches past 7 to cover the gap since last
-  sync (cap 30, older gaps pointed at full-history); new `syncAll()` macro
-  (sport/HR 0..30, wider sleep sweep, workouts 0..15, early-stop on empty
-  or repeats). Dashboard = 7-day path, Pull "B. Sync full history" = all.
-  Guards in `capture.test.js` (multiday keys, stamp, helpers). NOTE: "since
-  Oct 14" was a date slip — today is Oct 13; the 12th fills in on next sync
-  if the watch holds it.
-- REBOOT TEST 2026-10-13 (Forget + watch reboot + rebind + Button B):
-  no revival. Sport offsets 0–3 all today (items 94/95), HR offsets 0–3 all
-  today (items up to 628), sleep offsets 0–7+108 all `items=0`, workouts
-  `items=0`. SUPERSEDED for sport/HR/SpO2/pressure on 2026-11-05 (below):
-  those offsets were ignored and the STOP carried the wrong byte14. The
-  sleep/workout/swim `items=0` part still holds (count-data is empty over
-  BLE).
-- 2026-11-05 LIVE PROBE (`scripts/playwright-watch/history_probe.py`,
-  Windows Playwright): HISTORY IS FULLY PAGEABLE over BLE. On `0x0AF6`,
-  START(oper=0, b14=0, off=0) + matching STOP(oper=1, b14=0) returns ONE
-  COMPLETED DAY per round: sport 10-31→11-04 (96 items each), HR
-  10-31→11-04, SpO2 10-31→11-04, pressure 10-31→11-04, then `items=0`.
-  The 11-04 "only today + oldest" verdict was an artifact of
-  `buildV3Stop04()` cloning the START default (b14=1), so the historical
-  session was never closed with the matching flag. saveOffset is still
-  ignored; 0x05 priming does not move the cursor.
-- Today (in-progress) is NOT in the b14=0 stream: b14=1 returns it. The
-  probe saw the day roll over mid-run (b14=1 → 2026-11-05, 95 steps).
-- Cursor lifecycle: PERSISTS across disconnect/reconnect (a second session
-  returned `items=0` immediately). NOT rewound by a b14=1 today pull, 0x05
-  sizes (all-zero or per-type), or bare STOP (all tested). `0x05`
-  totalBytes drops 18226→989 after draining (= unsynced bytes). Watch
-  reboot / day-rollover rewind untested.
-- Shipped: `buildV3Stop04(dataType, b14Override)` + `build_v3_stop_04`
-  mirror (vectors in `capture.test.js` / `test_decoder.py`); `pullToday`
-  (b14=1) + `pageDayHistory` (b14=0 cursor pager) in `ble.js`;
-  `dailyAuto`/`syncAll` use them; `pullOldestDay` removed.
-- NOTE: the probe consumed 10-31..11-04 from the BLE queue. Those days may
-  not be in the phone store yet — reboot the watch (if that rewinds the
-  cursor) and run "B. Sync full history" to refill.
-- 2026-11-05 REBOOT TEST (button reboot, then patched `syncAll`): the cursor
-  did NOT rewind — every day-data type returned `items=0` immediately.
-  The BLE queue is one-shot for the watch's lifetime (factory reset
-  untested). Today still pulls fine via b14=1.
-- The same run exposed an empty-marker bug: the terminal `items=0` frame was
-  decoded as sport (zeroed header → phone-date fallback → OVERWROTE today's
-  real record with zeros) and as an HR day `0-0-0`. Both now have phantom
-  guards in `ble.js` (types 08/03), covered by `capture.test.js`.
-- Recovery path: probe bytes are saved in
-  `captures/history-probe-2026-11-05.jsonl` (gitignored) and decoded to
-  `out/steps.csv` / `out/hr.json`; `out/import-2026-11-05.json` is the
-  combined file for diagnostics.html's Import control (restores 10-31..11-04).
+## 3. Completed-day cursor is one-shot
+- After the cursor returns `items=0` it stays spent for the watch's lifetime.
+  Disconnect/reconnect, button reboot, `b14=1`, `0x05`, and bare STOP do not
+  rewind it (tested 2026-11-05). Factory reset untested (it also empties the
+  BLE-accessible store).
+- Consequence: completed days can only be captured going forward. Dashboard
+  sync drains whatever is queued; the 9-day drain is covered by the mock
+  test, not by hardware since the queue was spent.
 
-## 4. Sleep page: missing night of the 12th (implement first)
-- Symptom: no record with `night 2026-10-12`; watch shows no previous
-  nights, browser has nothing.
-- Suspects: (a) sleep pager only asks offsets `0` then hardcoded `108` x7
-  (`ble.js:380-389`) — at most 2 distinct nights per sync; (b)
-  `sleep.html` drops `total_min==0` partials, hiding in-progress nights.
-- Fix: pager uses distinct offsets (0–7 or byte-size stepping per
-  `decoder.py` comment — verify against next JSONL); keep `items==0`
-  phantom guard; log skipped zero-nights to Pull log so arrival is visible.
-- Need from user: next Pull JSONL after fix (sleep rounds 1–8 log lines)
-  to tell watch-side retention gap from offset bug.
+## 4. Hardware verification pending
+- Once a new completed day exists, run one dashboard Sync to prove the
+  completed-day drain on the real watch (the mock test covers 9 days).
+- First-run auto-setup and the skew-banner force reload are code/headless
+  tested only; they need a fresh/reset watch or a deliberately broken file
+  to exercise live.
 
-## 5. Workouts page: empty rows (done, uncommitted — hide only, no delete)
-- User choice: filter display, keep store untouched.
-- `workout.html`: hide records where `durationsS` missing/0 AND `kcal`
-  missing/0 AND `samples` empty AND `avgHr/maxHr/minHr` all missing.
-  Explicitly exclude `no-date-*` keys from week list. Status line shows
-  `X shown, Y hidden empties`. Add "show hidden" toggle (default off).
-- Test: phantom `items=0` shape + dateless shape → zero visible rows,
-  count line correct.
-
-## 6. VeryFit HCI capture (closed 2026-10-13 — verdict reached without packets)
-- Watch ground truth 22:33: 7448 steps / 397 kcal / 5.47km Oct 13, sleep
-  last night 6h12, 4 workout records on-screen (run 11th, walks 9th+8th,
-  strength 8th).
-- KEY RESULT: VeryFit itself shows steps/BPM/kcal but NO sleep or workout
-  data — identical gaps to our app. Watch-side confirmed (display store vs
-  BLE-history divergence, as hypothesized in §1); not our decoder.
-- HCI packet capture BLOCKED without root (Samsung A52s): `/sdcard/btsnoop_hci.cfa`
-  from RTK config never materializes; `/data/log/bt`, `/data/misc/bluetooth`
-  all Permission denied; bugreport bundles no btsnoop file (only a
-  proprietary BTSNOOP_LOG_SUMMARY blob). Last no-root path untried:
-  dialer `*#9900#` SysDump → copy logs to sdcard. Value now LOW anyway —
-  vendor app fails identically, so magic unlock bytes are unlikely.
-- Cheaper next experiment first: reboot watch (hold button) → Pull Button B
-  → if sleep/workouts revive, BLE store was wedged; if still `items=0`,
-  store is what it is and daily accumulation is the history.
-- Android: Dev options → Wireless debugging on + Bluetooth HCI snoop log on.
-- Force-stop our page, open VeryFit, one full sync (Oct 14+ steps +
-  night-of-12th on watch). Note screen numbers first.
-- `adb bugreport` / pull `btsnoop_hci.log`, filter `btatt` / `0xaf0` in
-  Wireshark + `diagnostics.html → Download JSONL` of same state for diffing.
-- Scrub full MAC (keep first 3 octets), drop in `captures/`.
-- Caution: after VeryFit bonds, our page loses `0x0AF2` notify until
-  Forget ID208 in system BT + reboot watch; do VeryFit capture first,
-  then re-bind ours with A. Setup watch.
-
-## Done (kept for the record)
-- Empty/phantom workouts (old items 1+3): root cause proven 2026-10-11 —
-  empty-history START replies (`items=0`, 100 zero bytes) decoded as
-  all-zeros records saved under `<date> 0`. Fixed in `ble.js` (ignore
-  `items == 0` for types 04/07, header-date stamp), guards in
-  `capture.test.js` use the real Oct-11 phantom bytes. Uncommitted.
-- Watch settings page (old 4): done, committed.
-- Distance 2 decimals (old 5): done, committed.
+## 5. Low priority: sleep page partial nights
+- `sleep.html` hides `total_min == 0` records. Decide whether to show
+  in-progress nights with a clear marker instead.

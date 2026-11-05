@@ -19,10 +19,6 @@ scripts/playwright-watch/*-store.json
 scripts/playwright-watch/*-decoded.html
 # phase0/ is local-only (superseded by webapp/diagnostics.html + vendored idowatch.html)
 phase0/
-# One-off diagnostic drivers; findings recorded in docs/WATCH-HISTORY-2026-11-04.md:
-scripts/playwright-watch/watch_diag.py
-scripts/playwright-watch/phone_adb_probe.py
-scripts/playwright-watch/history_probe.py
 PLAN.md
 PLAN-WEBAPP.md
 PLAN-HISTORY.md

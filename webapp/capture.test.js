@@ -299,10 +299,9 @@ const CHUNKS = [
   assert.ok(txLog.every((t) => t.char === '0x0AF6'), 'all day-data 0x04 traffic stays on 0x0AF6');
   console.log('capture.test.js: cursor day paging passed (today + 10-31 + 11-01, STOP b14 matches START)');
 
-  // P1: one sync path drains the WHOLE completed-day queue. The old
-  // dailyAuto({days:7}) stopped after 7 days and left the rest for the
-  // full-history button; syncNow ignores the hint and pages to items=0
-  // (60-round safety cap).
+  // P1: one sync path drains the WHOLE completed-day queue. The old 7-day
+  // path stopped after 7 and left the rest for the full-sync button; syncNow
+  // ignores the hint and pages to items=0 (60-round safety cap).
   let seqD = 0x100;
   const nineDays = [];
   for (let i = 0; i < 9; i++) {

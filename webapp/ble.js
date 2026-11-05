@@ -11,7 +11,7 @@
  */
 // Wire map (d3nd3/toobur-veryfit-research A200-PROTOCOL.md Transport):
 // 0x0AF6 write -> 0x0AF7 notify (legacy GET 0x02.. + short v3 <=50B incl. 19B 0x04 START/STOP).
-// 0x0AF1 write -> 0x0AF2 notify (large v3 >50B: 137B 0x05 sizes). Listen for v3 on BOTH notifies.
+// 0x0AF1 write -> 0x0AF2 notify (large v3 >50B: 137B 0x05 sizes, manual only). Listen for v3 on BOTH notifies.
 var writeChar, notifyChar, healthWriteChar, healthNotifyChar;
 var v3Seq = 0x60; // start above logcat template seqs to avoid collisions in one session
 var rxBuf = null, rxWritten = 0;
@@ -547,17 +547,17 @@ async function syncNow(opts) {
     await pullToday(8, 'Sport');
     await pageDayHistory(8, 'Sport', historyCap, function () { return capSportDays.length; },
       function (r) { setProgress(2, 8, 'Sport day ' + r); });
-    setProgress(3, 8, 'Sleep'); log('[Sync 3/8] Sleep nights (byte-paged)...');
+    setProgress(3, 8, 'Sleep'); log('[Sync 3/8] Sleep nights (cursor-paged)...');
     await pageType(7, countRounds, 'Sleep', 3, function () { return capSleepNights.length; },
       function (r) { setProgress(3, 8, 'Sleep round ' + r); });
     setProgress(4, 8, 'HR days'); log('[Sync 4/8] Heart-rate days (today + completed-day cursor)...');
     await pullToday(3, 'HR');
     await pageDayHistory(3, 'HR', historyCap, function () { return capHrDays.length; },
       function (r) { setProgress(4, 8, 'HR day ' + r); });
-    setProgress(5, 8, 'Workouts'); log('[Sync 5/8] Workouts (byte-paged)...');
+    setProgress(5, 8, 'Workouts'); log('[Sync 5/8] Workouts (cursor-paged)...');
     await pageType(4, countRounds, 'Workout', 3, function () { return capWorkouts.length; },
       function (r) { setProgress(5, 8, 'Workout round ' + r); });
-    setProgress(6, 8, 'Swims'); log('[Sync 6/8] Swims (byte-paged)...');
+    setProgress(6, 8, 'Swims'); log('[Sync 6/8] Swims (cursor-paged)...');
     await pageType(6, countRounds, 'Swim', 3, function () { return capWorkouts.length; },
       function (r) { setProgress(6, 8, 'Swim round ' + r); });
     setProgress(7, 8, 'SpO2'); log('[Sync 7/8] SpO2 days (today + completed-day cursor)...');
