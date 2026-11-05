@@ -41,8 +41,9 @@
 <script>
 // Fail fast on file skew (see index.html): banner instead of silent hang.
 (function checkAppFiles() {
-  var need = ['Store', 'DEFAULT_GOALS', 'ensureLink', 'wr', 'buildAutoActivity',
-    'setupAuto', 'downloadStoreBackup', 'importStoreFile'];
+  var need = ['Store', 'DEFAULT_GOALS', 'IDO.transport.ensureLink',
+    'IDO.transport.wr', 'IDO.codec.buildAutoActivity', 'IDO.sync.setupAuto',
+    'downloadStoreBackup', 'importStoreFile'];
   IDO.shell.checkFiles(need);
 })();
 document.getElementById('btnSetup').addEventListener('click', async function () {
@@ -51,9 +52,9 @@ document.getElementById('btnSetup').addEventListener('click', async function () 
   btn.disabled = true;
   el.textContent = 'Connecting…';
   try {
-    await ensureLink();
+    await IDO.transport.ensureLink();
     el.textContent = 'Setting up (bind + auth, ~90 s)…';
-    await setupAuto();
+    await IDO.sync.setupAuto();
     el.textContent = 'Setup finished — return to the Dashboard and tap Sync.';
   } catch (e) {
     el.innerHTML = 'Setup failed (' + esc(e) + ') — <a href="diagnostics.html">open Diagnostics</a>.';
@@ -71,8 +72,8 @@ async function sendAutoDetect(flags, okMsg) {
   var el = document.getElementById('watchStatus');
   el.textContent = 'Connecting…';
   try {
-    await ensureLink();
-    await wr(writeChar, '0x0AF6', buildAutoActivity(flags));
+    await IDO.transport.ensureLink();
+    await IDO.transport.wr(IDO.transport.writeChar, '0x0AF6', IDO.codec.buildAutoActivity(flags));
     el.textContent = okMsg;
   } catch (e) {
     el.innerHTML = 'Failed (' + esc(e) + ') — <a href="diagnostics.html">open Diagnostics</a>.';

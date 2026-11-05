@@ -6,8 +6,9 @@ Opens the webapp in headed Windows Chrome via Python Playwright, clicks the
 page's sync button, waits for the user to pick the ID208 in the native
 Bluetooth dialog, then records the sync result + IndexedDB store.
 
-The page HTML is intercepted and every local `<script src="...js">` gets a
-`?v=<epoch>` suffix, so a persistent Chrome profile cannot serve stale code.
+The page URL carries `?v=<epoch>`; the page's script loader propagates that
+token to every local module, so a persistent Chrome profile cannot serve
+stale code.
 
 Run from WSL (the watch must be awake and bonded):
 
@@ -19,7 +20,6 @@ Outputs (gitignored): scripts/playwright-watch/dashboard-sync-{log.txt,store.jso
 import argparse
 import json
 import os
-import re
 import sys
 import time
 
@@ -47,16 +47,6 @@ for _s in (sys.stdout, sys.stderr):
         _s.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
-
-
-def busted_html(path, epoch):
-    """Read the real page and version every local script URL."""
-    html = open(path, encoding="utf-8").read()
-    return re.sub(
-        r'(<script\s+src=")([^"?]+\.js)(")',
-        lambda m: f"{m.group(1)}{m.group(2)}?v={epoch}{m.group(3)}",
-        html,
-    )
 
 
 def save_state(page, name):
@@ -112,11 +102,6 @@ def main():
 
     epoch = int(time.time())
     url = f"{args.base.rstrip('/')}/{args.page}?v={epoch}"
-    page_path = os.path.join(
-        os.path.dirname(HERE), "..", "webapp", args.page
-    )
-    page_path = os.path.abspath(page_path)
-    html = busted_html(page_path, epoch)
 
     log(f"Opening {url} (scripts cache-busted with ?v={epoch})")
     with sync_playwright() as p:
@@ -131,13 +116,6 @@ def main():
 
         page.on("console", on_console)
 
-        def handle_route(route):
-            if route.request.url.split("?")[0].endswith("/" + args.page):
-                route.fulfill(body=html, content_type="text/html; charset=utf-8")
-            else:
-                route.continue_()
-
-        page.route(f"**/{args.page}*", handle_route)
         page.goto(url, wait_until="domcontentloaded")
         page.wait_for_timeout(1000)
 

@@ -276,19 +276,8 @@ IDO.transport = (function () {
     connectAndSync: connectAndSync,
     setupLinkWithRetry: setupLinkWithRetry,
     ensureLink: ensureLink,
+    get writeChar() { return writeChar; },
+    get healthWriteChar() { return healthWriteChar; },
+    get lines() { return lines; },
   };
 })();
-
-// Compatibility aliases for page wiring/tests.
-var record = IDO.transport.record;
-var wait = IDO.transport.wait;
-var waitFor = IDO.transport.waitFor;
-var handleLegacy = IDO.transport.handleLegacy;
-var handleV3 = IDO.transport.handleV3;
-var dispatchV3 = IDO.transport.dispatchV3;
-var onNotifyF7 = IDO.transport.onNotifyF7;
-var onNotifyF2 = IDO.transport.onNotifyF2;
-var wr = IDO.transport.wr;
-var connectAndSync = IDO.transport.connectAndSync;
-var setupLinkWithRetry = IDO.transport.setupLinkWithRetry;
-var ensureLink = IDO.transport.ensureLink;

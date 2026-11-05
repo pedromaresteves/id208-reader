@@ -88,12 +88,16 @@ Manual pulls show decoded text here but do not save to the dashboard store
 // Fail fast on file skew (new page + old module): halt with an
 // actionable banner instead of half-wired buttons that fail silently.
 (function checkAppFiles() {
-  var need = ['Store', 'connectAndSync', 'ensureLink', 'setupAuto', 'syncAll', 'wr',
-    'buildV3Start04', 'buildV3Stop04', 'buildV3Sizes05', 'buildBindStart', 'buildBindStop',
-    'buildSetTimeNow', 'buildUserInfoSample', 'buildBindAuthPacket', 'buildAutoActivity',
-    'saveCaptured', 'refreshStoreStatus', 'wait', 'todayStr'];
+  var need = ['Store', 'IDO.transport.connectAndSync', 'IDO.transport.ensureLink',
+    'IDO.sync.setupAuto', 'IDO.sync.syncAll', 'IDO.transport.wr',
+    'IDO.codec.buildV3Start04', 'IDO.codec.buildV3Stop04', 'IDO.codec.buildV3Sizes05',
+    'IDO.codec.buildBindStart', 'IDO.codec.buildBindStop', 'IDO.codec.buildSetTimeNow',
+    'IDO.codec.buildUserInfoSample', 'IDO.codec.buildBindAuthPacket',
+    'IDO.codec.buildAutoActivity', 'IDO.sync.saveCaptured',
+    'IDO.shell.refreshStoreStatus', 'IDO.transport.wait', 'todayStr'];
   IDO.shell.checkFiles(need);
 })();
+var T = IDO.transport, C = IDO.codec, S = IDO.sync, H = IDO.shell;
 // Page wiring: codec/transport/sync hold all protocol code; here only DOM bindings.
 PAGE_BASIC_BUTTONS = ['btnInfo', 'btnLive', 'btnSetupAuto'];
 PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop',
@@ -101,40 +105,40 @@ PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSle
   'btnWorkout', 'btnWorkoutStop', 'btnSwim', 'btnSwimStop', 'btnSpo2', 'btnSpo2Stop',
   'btnPress', 'btnPressStop', 'btnAutoOff', 'btnAutoWalkRun'];
 document.getElementById('btnConnect').addEventListener('pointerup', function () {
-  connectAndSync().then(null, function () {});
+  T.connectAndSync().then(null, function () {});
 });
 document.getElementById('btnSyncAll').addEventListener('pointerup', function () {
-  ensureLink().then(function () { syncAll(); }, function () {});
+  T.ensureLink().then(function () { S.syncAll(); }, function () {});
 });
-document.getElementById('btnSetupAuto').addEventListener('pointerup', function () { setupAuto(); });
-document.getElementById('btnInfo').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0x01])); });
-document.getElementById('btnLive').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0])); });
-document.getElementById('btnSizes').addEventListener('pointerup', function () { wr(healthWriteChar, '0x0AF1', buildV3Sizes05()); });
-document.getElementById('btnSport').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(8, 0)); });
-document.getElementById('btnSleep').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(7, 0)); });
-document.getElementById('btnSportStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(8)); });
-document.getElementById('btnSleepStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(7)); });
-document.getElementById('btnHr').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(3, 0)); });
-document.getElementById('btnHrStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(3)); });
-document.getElementById('btnBind').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildBindStart()); });
-document.getElementById('btnTime').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildSetTimeNow()); });
-document.getElementById('btnUser').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildUserInfoSample()); });
-document.getElementById('btnUnbind').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildBindStop()); });
-document.getElementById('btnAuth').addEventListener('pointerup', function () { var p = buildBindAuthPacket(); if (p) wr(writeChar, '0x0AF6', p); });
-document.getElementById('btnWorkout').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(4, 0)); });
+document.getElementById('btnSetupAuto').addEventListener('pointerup', function () { S.setupAuto(); });
+document.getElementById('btnInfo').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', new Uint8Array([0x02, 0x01])); });
+document.getElementById('btnLive').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0])); });
+document.getElementById('btnSizes').addEventListener('pointerup', function () { T.wr(T.healthWriteChar, '0x0AF1', C.buildV3Sizes05()); });
+document.getElementById('btnSport').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Start04(8, 0)); });
+document.getElementById('btnSleep').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Start04(7, 0)); });
+document.getElementById('btnSportStop').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Stop04(8)); });
+document.getElementById('btnSleepStop').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Stop04(7)); });
+document.getElementById('btnHr').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Start04(3, 0)); });
+document.getElementById('btnHrStop').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Stop04(3)); });
+document.getElementById('btnBind').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildBindStart()); });
+document.getElementById('btnTime').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildSetTimeNow()); });
+document.getElementById('btnUser').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildUserInfoSample()); });
+document.getElementById('btnUnbind').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildBindStop()); });
+document.getElementById('btnAuth').addEventListener('pointerup', function () { var p = C.buildBindAuthPacket(); if (p) T.wr(T.writeChar, '0x0AF6', p); });
+document.getElementById('btnWorkout').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Start04(4, 0)); });
 document.getElementById('btnWorkoutStop').addEventListener('pointerup', async function () {
-  await wr(writeChar, '0x0AF6', buildV3Stop04(4));
-  await wait(3000);
-  await saveCaptured('workout ' + todayStr());
+  await T.wr(T.writeChar, '0x0AF6', C.buildV3Stop04(4));
+  await T.wait(3000);
+  await S.saveCaptured('workout ' + todayStr());
 });
-document.getElementById('btnSwim').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(6, 0)); });
-document.getElementById('btnSwimStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(6)); });
-document.getElementById('btnSpo2').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(1, 0)); });
-document.getElementById('btnSpo2Stop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(1)); });
-document.getElementById('btnPress').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Start04(2, 0)); });
-document.getElementById('btnPressStop').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildV3Stop04(2)); });
-document.getElementById('btnAutoOff').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildAutoActivity(null)); });
-document.getElementById('btnAutoWalkRun').addEventListener('pointerup', function () { wr(writeChar, '0x0AF6', buildAutoActivity([1, 1])); });
+document.getElementById('btnSwim').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Start04(6, 0)); });
+document.getElementById('btnSwimStop').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Stop04(6)); });
+document.getElementById('btnSpo2').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Start04(1, 0)); });
+document.getElementById('btnSpo2Stop').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Stop04(1)); });
+document.getElementById('btnPress').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Start04(2, 0)); });
+document.getElementById('btnPressStop').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Stop04(2)); });
+document.getElementById('btnAutoOff').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildAutoActivity(null)); });
+document.getElementById('btnAutoWalkRun').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildAutoActivity([1, 1])); });
 document.getElementById('btnCopy').addEventListener('pointerup', function () {
   var text = document.getElementById('log').textContent;
   function fallback() {
@@ -142,16 +146,16 @@ document.getElementById('btnCopy').addEventListener('pointerup', function () {
     ta.value = text;
     document.body.appendChild(ta);
     ta.select();
-    try { document.execCommand('copy'); log('log copied (fallback)'); }
-    catch (e) { log('Copy failed: long-press the log, Select all, Copy. ' + e); }
+    try { document.execCommand('copy'); H.log('log copied (fallback)'); }
+    catch (e) { H.log('Copy failed: long-press the log, Select all, Copy. ' + e); }
     document.body.removeChild(ta);
   }
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(function () { log('log copied'); }, function () { fallback(); });
+    navigator.clipboard.writeText(text).then(function () { H.log('log copied'); }, function () { fallback(); });
   } else { fallback(); }
 });
 document.getElementById('btnJsonl').addEventListener('pointerup', function () {
-  var blob = new Blob([lines.map(function (l) { return JSON.stringify(l); }).join('\n')], { type: 'application/jsonl' });
+  var blob = new Blob([T.lines.map(function (l) { return JSON.stringify(l); }).join('\n')], { type: 'application/jsonl' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = 'health-capture.jsonl'; a.click();
 });
@@ -160,8 +164,8 @@ document.getElementById('btnStoreExport').addEventListener('pointerup', function
     var blob = new Blob([text], { type: 'application/json' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = 'id208-store-backup.json'; a.click();
-    log('Store backup downloaded.');
-  }, function (e) { log('Store export failed: ' + e); });
+    H.log('Store backup downloaded.');
+  }, function (e) { H.log('Store export failed: ' + e); });
 });
 document.getElementById('fileStoreImport').addEventListener('change', function (e) {
   var f = e.target.files && e.target.files[0];
@@ -170,17 +174,17 @@ document.getElementById('fileStoreImport').addEventListener('change', function (
   rd.onload = function () {
     Store.importText(rd.result).then(
       function (c) {
-        log('Import: steps ' + c.steps + ', sleep ' + c.sleep +
+        H.log('Import: steps ' + c.steps + ', sleep ' + c.sleep +
           ', hr ' + c.hr + ', workouts ' + c.workout +
           ', spo2 ' + c.spo2 + ', pressure ' + c.pressure + '.');
-        refreshStoreStatus();
+        H.refreshStoreStatus();
       },
-      function (err) { log('Import failed: ' + err.message); });
+      function (err) { H.log('Import failed: ' + err.message); });
   };
   rd.readAsText(f);
   e.target.value = '';
 });
-if (typeof Store !== 'undefined') refreshStoreStatus();
+if (typeof Store !== 'undefined') H.refreshStoreStatus();
 else document.getElementById('storeStatus').textContent = 'store.js not found next to diagnostics.html — keep both files together.';
 </script>
 <nav class="tabs"></nav>

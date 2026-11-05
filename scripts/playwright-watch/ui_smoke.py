@@ -12,14 +12,14 @@ backup/import round-trips the store. Run from WSL with Windows Python:
 import json
 import os
 import sys
+import tempfile
 import time
 
 from playwright.sync_api import sync_playwright
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 BASE = "http://localhost:8080"
 PAGES = ["index.html", "activity.html", "sleep.html", "workout.html", "watch.html", "diagnostics.html"]
-IMPORT_PATH = os.path.join(HERE, ".ui-smoke-import.json")
+IMPORT_PATH = os.path.join(tempfile.gettempdir(), "id208-ui-smoke-import.json")
 
 
 def log(msg):

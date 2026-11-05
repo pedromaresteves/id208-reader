@@ -47,7 +47,9 @@ PAGES.forEach((p) => {
 });
 const allNames = [...new Set([].concat(...Object.values(needs)))];
 const probe = allNames
-  .map((n) => `__missing.push([${JSON.stringify(n)}, typeof ${n}]);`)
+  .map((n) => n.includes('.')
+    ? `__missing.push([${JSON.stringify(n)}, IDO.shell.hasPath(${JSON.stringify(n)})]);`
+    : `__missing.push([${JSON.stringify(n)}, typeof ${n} !== 'undefined']);`)
   .join('\n');
 
 eval(
@@ -60,6 +62,6 @@ eval(
     '\nconst __missing = [];\n' + probe +
     '\nglobalThis.SKEW = __missing;'
 );
-const missing = globalThis.SKEW.filter((row) => row[1] === 'undefined').map((row) => row[0]);
+const missing = globalThis.SKEW.filter((row) => !row[1]).map((row) => row[0]);
 assert.deepStrictEqual(missing, [], 'unresolved need names: ' + missing.join(', '));
 console.log('skew.test.js: all ' + allNames.length + ' need names resolve across ' + PAGES.length + ' pages');

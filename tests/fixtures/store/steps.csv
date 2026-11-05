@@ -1,7 +1,7 @@
 date,steps,distance_m,kcal,active_min,source
-2026-10-11,4898,4485,510,14,v3 sport type08 health-2026-10-11-workout-run.jsonl
-2026-10-31,27193,20401,966,70,v3 sport type08 history-probe-2026-11-05.jsonl
-2026-11-01,38043,28751,1497,206,v3 sport type08 history-probe-2026-11-05.jsonl
-2026-11-02,21912,16390,865,59,v3 sport type08 history-probe-2026-11-05.jsonl
-2026-11-03,3981,3010,238,50,v3 sport type08 history-probe-2026-11-05.jsonl
-2026-11-04,2199,1698,339,23,v3 sport type08 history-probe-2026-11-05.jsonl
+2025-01-01,5100,3825,210,20,synthetic fixture
+2025-01-02,5800,4350,240,25,synthetic fixture
+2025-01-03,6500,4875,270,30,synthetic fixture
+2025-01-04,7200,5400,300,35,synthetic fixture
+2025-01-05,7900,5925,330,40,synthetic fixture
+2025-01-06,1000,750,40,5,synthetic live fixture

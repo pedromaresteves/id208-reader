@@ -1,46 +1,46 @@
 {
   "steps": [
     {
-      "date": "2026-10-31",
-      "steps": 27193,
-      "distance_m": 20401,
-      "kcal": 966,
-      "active_min": 70
+      "date": "2025-01-01",
+      "steps": 5000,
+      "distance_m": 3750,
+      "kcal": 250,
+      "active_min": 20
     },
     {
-      "date": "2026-11-01",
-      "steps": 38043,
-      "distance_m": 28751,
-      "kcal": 1497,
-      "active_min": 206
+      "date": "2025-01-02",
+      "steps": 5700,
+      "distance_m": 4275,
+      "kcal": 285,
+      "active_min": 21
     },
     {
-      "date": "2026-11-02",
-      "steps": 21912,
-      "distance_m": 16390,
-      "kcal": 865,
-      "active_min": 59
+      "date": "2025-01-03",
+      "steps": 6400,
+      "distance_m": 4800,
+      "kcal": 320,
+      "active_min": 22
     },
     {
-      "date": "2026-11-03",
-      "steps": 3981,
-      "distance_m": 3010,
-      "kcal": 238,
-      "active_min": 50
-    },
-    {
-      "date": "2026-11-04",
-      "steps": 2199,
-      "distance_m": 1698,
-      "kcal": 339,
+      "date": "2025-01-04",
+      "steps": 7100,
+      "distance_m": 5325,
+      "kcal": 355,
       "active_min": 23
+    },
+    {
+      "date": "2025-01-05",
+      "steps": 7800,
+      "distance_m": 5850,
+      "kcal": 390,
+      "active_min": 24
     }
   ],
   "hr": [
     {
-      "date": "2026-10-31",
-      "startS": 353,
-      "silent": 64,
+      "date": "2025-01-01",
+      "startS": 0,
+      "silent": 60,
       "zones": [
         98,
         118,
@@ -48,20 +48,20 @@
         157,
         177
       ],
-      "sample_count": 1008,
+      "sample_count": 1178,
       "first": {
-        "t": 353,
-        "bpm": 56
+        "t": 60,
+        "bpm": 60
       },
       "last": {
-        "t": 86092,
-        "bpm": 90
+        "t": 70680,
+        "bpm": 99
       }
     },
     {
-      "date": "2026-11-01",
-      "startS": 44,
-      "silent": 64,
+      "date": "2025-01-02",
+      "startS": 0,
+      "silent": 60,
       "zones": [
         98,
         118,
@@ -69,20 +69,20 @@
         157,
         177
       ],
-      "sample_count": 1304,
+      "sample_count": 1446,
       "first": {
-        "t": 44,
-        "bpm": 80
+        "t": 60,
+        "bpm": 60
       },
       "last": {
-        "t": 86389,
-        "bpm": 113
+        "t": 86760,
+        "bpm": 95
       }
     },
     {
-      "date": "2026-11-02",
-      "startS": 40,
-      "silent": 61,
+      "date": "2025-01-03",
+      "startS": 0,
+      "silent": 60,
       "zones": [
         98,
         118,
@@ -90,20 +90,20 @@
         157,
         177
       ],
-      "sample_count": 875,
+      "sample_count": 1060,
       "first": {
-        "t": 40,
-        "bpm": 115
+        "t": 60,
+        "bpm": 60
       },
       "last": {
-        "t": 86263,
-        "bpm": 58
+        "t": 63600,
+        "bpm": 73
       }
     },
     {
-      "date": "2026-11-03",
-      "startS": 186,
-      "silent": 63,
+      "date": "2025-01-04",
+      "startS": 0,
+      "silent": 60,
       "zones": [
         98,
         118,
@@ -111,20 +111,20 @@
         157,
         177
       ],
-      "sample_count": 251,
+      "sample_count": 530,
       "first": {
-        "t": 186,
-        "bpm": 64
+        "t": 60,
+        "bpm": 60
       },
       "last": {
-        "t": 86249,
-        "bpm": 69
+        "t": 31800,
+        "bpm": 83
       }
     },
     {
-      "date": "2026-11-04",
-      "startS": 170,
-      "silent": 55,
+      "date": "2025-01-05",
+      "startS": 0,
+      "silent": 60,
       "zones": [
         98,
         118,
@@ -132,67 +132,67 @@
         157,
         177
       ],
-      "sample_count": 293,
+      "sample_count": 564,
       "first": {
-        "t": 170,
-        "bpm": 50
+        "t": 60,
+        "bpm": 60
       },
       "last": {
-        "t": 86379,
-        "bpm": 56
+        "t": 33840,
+        "bpm": 81
       }
     }
   ],
   "spo2": [
     {
-      "date": "2026-10-31",
+      "date": "2025-01-01",
       "items": 28,
       "sample_count": 28
     },
     {
-      "date": "2026-11-01",
+      "date": "2025-01-02",
       "items": 20,
       "sample_count": 20
     },
     {
-      "date": "2026-11-02",
+      "date": "2025-01-03",
       "items": 29,
       "sample_count": 29
     },
     {
-      "date": "2026-11-03",
+      "date": "2025-01-04",
       "items": 22,
-      "sample_count": 21
+      "sample_count": 22
     },
     {
-      "date": "2026-11-04",
+      "date": "2025-01-05",
       "items": 25,
-      "sample_count": 23
+      "sample_count": 25
     }
   ],
   "pressure": [
     {
-      "date": "2026-10-31",
+      "date": "2025-01-01",
       "items": 69,
       "sample_count": 69
     },
     {
-      "date": "2026-11-01",
+      "date": "2025-01-02",
       "items": 64,
       "sample_count": 64
     },
     {
-      "date": "2026-11-02",
+      "date": "2025-01-03",
       "items": 89,
       "sample_count": 89
     },
     {
-      "date": "2026-11-03",
+      "date": "2025-01-04",
       "items": 64,
       "sample_count": 64
     },
     {
-      "date": "2026-11-04",
+      "date": "2025-01-05",
       "items": 67,
       "sample_count": 67
     }

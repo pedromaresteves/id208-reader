@@ -1,23 +1,47 @@
 [
   {
-    "date": "2026-10-11",
-    "year": 2026,
-    "month": 10,
-    "day": 11,
-    "start_time_s": 136,
-    "silent_hr": 58,
+    "date": "2025-01-01",
+    "year": 2025,
+    "month": 1,
+    "day": 1,
+    "start_time_s": 120,
+    "silent_hr": 60,
     "zones": [
-      { "thr": 100, "min": 0 },
-      { "thr": 120, "min": 0 },
-      { "thr": 140, "min": 0 },
-      { "thr": 160, "min": 0 },
-      { "thr": 180, "min": 0 }
+      {
+        "thr": 100,
+        "min": 0
+      },
+      {
+        "thr": 120,
+        "min": 0
+      },
+      {
+        "thr": 140,
+        "min": 0
+      },
+      {
+        "thr": 160,
+        "min": 0
+      },
+      {
+        "thr": 180,
+        "min": 0
+      }
     ],
     "samples": [
-      { "t_s": 136, "bpm": 73 },
-      { "t_s": 475, "bpm": 71 },
-      { "t_s": 804, "bpm": 77 }
+      {
+        "t_s": 120,
+        "bpm": 61
+      },
+      {
+        "t_s": 420,
+        "bpm": 67
+      },
+      {
+        "t_s": 720,
+        "bpm": 73
+      }
     ],
-    "source": "v3 type03 fixture"
+    "source": "synthetic v3 type03 fixture"
   }
 ]

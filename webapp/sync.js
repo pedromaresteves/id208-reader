@@ -341,17 +341,3 @@ IDO.sync = (function () {
     getItems: getItems,
   };
 })();
-
-// Compatibility aliases for page wiring/tests.
-var resetCaptures = IDO.sync.resetCaptures;
-var upsertDay = IDO.sync.upsertDay;
-var setLive = IDO.sync.setLive;
-var saveCaptured = IDO.sync.saveCaptured;
-var autoSyncAfterConnect = IDO.sync.autoSyncAfterConnect;
-var setupAuto = IDO.sync.setupAuto;
-var pageType = IDO.sync.pageType;
-var pullToday = IDO.sync.pullToday;
-var pageDayHistory = IDO.sync.pageDayHistory;
-var syncNow = IDO.sync.syncNow;
-var syncAll = IDO.sync.syncAll;
-var getItems = IDO.sync.getItems;

@@ -102,7 +102,7 @@ IDO.codec = (function () {
   // 04 05 encrypted auth: challenge + (challenge XOR watchMAC).
   function buildBindAuthPacket() {
     if (!bindChallenge || !bindMac) {
-      if (typeof log === 'function') log('No 04 01 challenge captured yet — run Bind (step 6) first');
+      IDO.shell.log('No 04 01 challenge captured yet — run Bind (step 6) first');
       return null;
     }
     var pkt = new Uint8Array(16);
@@ -248,7 +248,7 @@ IDO.codec = (function () {
     } else if (dataType === 3) {
       out.kind = 'hr';
       out.message = 'HR dataType=3 items=' + itemCount + ' headSize=' + headSize + ' dataSize=' + dataSize +
-        ' headHex=' + hexStr(h.slice(0, Math.min(h.length, 24))) + '  (parser pending — send the JSONL)';
+        ' headHex=' + IDO.shell.hexStr(h.slice(0, Math.min(h.length, 24))) + '  (parser pending — send the JSONL)';
     } else if (dataType === 4) {
       var wdur = '?', wkcal = '?', whr = '?', wdist = '';
       out.kind = 'workout';
@@ -282,7 +282,7 @@ IDO.codec = (function () {
       }
       out.message = 'WORKOUT dataType=4 items=' + itemCount + ' headSize=' + headSize +
         ' dataSize=' + dataSize + ' dur=' + wdur + ' ' + wkcal + ' HR ' + whr + wdist +
-        ' headHex=' + hexStr(h.slice(0, Math.min(h.length, 16)));
+        ' headHex=' + IDO.shell.hexStr(h.slice(0, Math.min(h.length, 16)));
     } else if (dataType === 6) {
       if (itemCount === 0) {
         out.kind = 'swim'; out.empty = true;
@@ -311,7 +311,7 @@ IDO.codec = (function () {
       } else {
         out.kind = 'swim';
         out.message = 'SWIM dataType=6 items=' + itemCount + ' headSize=' + headSize +
-          ' dataSize=' + dataSize + ' headHex=' + hexStr(h) + ' (short header, logged only)';
+          ' dataSize=' + dataSize + ' headHex=' + IDO.shell.hexStr(h) + ' (short header, logged only)';
       }
     } else if ((dataType === 1 || dataType === 2) && itemCount === 0) {
       out.kind = dataType === 1 ? 'spo2' : 'pressure';
@@ -334,13 +334,13 @@ IDO.codec = (function () {
       out.kind = isSpo2 ? 'spo2' : 'pressure';
       out.record = {
         date: ddate, startS: st2, items: itemCount, headSize: headSize, dataSize: dataSize,
-        samples: pts, headHex: hexStr(h), dataHex: hexStr(d),
+        samples: pts, headHex: IDO.shell.hexStr(h), dataHex: IDO.shell.hexStr(d),
         source: 'v3 type0' + dataType + ' pull',
       };
       out.message = (isSpo2 ? 'SPO2' : 'PRESSURE') + ' date=' + (ddate || '?') + ' start=' + st2 +
         ' items=' + itemCount + ' samples=' + pts.length + '/' + itemCount +
         ' vals=' + pts.slice(0, 12).map(function (pt) { return pt.value; }).join(',') +
-        ' headHex=' + hexStr(h.slice(0, Math.min(h.length, 24)));
+        ' headHex=' + IDO.shell.hexStr(h.slice(0, Math.min(h.length, 24)));
     } else {
       out.kind = 'unknown';
       out.message = 'dataType=' + dataType + ' items=' + itemCount + ' headSize=' + headSize +
@@ -376,25 +376,3 @@ IDO.codec = (function () {
     decodeHealth: decodeHealth,
   };
 })();
-
-// Compatibility aliases for page wiring/tests while modules stay the source.
-var parseHex = IDO.codec.parseHex;
-var u16le = IDO.codec.u16le;
-var u32le = IDO.codec.u32le;
-var crc16Ccitt = IDO.codec.crc16Ccitt;
-var buildV3Sizes05 = IDO.codec.buildV3Sizes05;
-var buildV3Start04 = IDO.codec.buildV3Start04;
-var buildV3Stop04 = IDO.codec.buildV3Stop04;
-var buildV3FuncTable1A = IDO.codec.buildV3FuncTable1A;
-var buildHrModeSample = IDO.codec.buildHrModeSample;
-var buildBindStart = IDO.codec.buildBindStart;
-var buildBindStop = IDO.codec.buildBindStop;
-var buildSet23Sample = IDO.codec.buildSet23Sample;
-var buildBindAuthPacket = IDO.codec.buildBindAuthPacket;
-var buildSetTimeNow = IDO.codec.buildSetTimeNow;
-var buildUserInfoSample = IDO.codec.buildUserInfoSample;
-var buildUnitsSample = IDO.codec.buildUnitsSample;
-var buildGoalsSample = IDO.codec.buildGoalsSample;
-var buildWeatherOff = IDO.codec.buildWeatherOff;
-var buildAutoActivity = IDO.codec.buildAutoActivity;
-var guessHeaderDate = IDO.codec.guessHeaderDate;

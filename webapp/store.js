@@ -308,8 +308,12 @@ var Store = (function () {
   }
 
   // Persist a sync's captured records. `captures` is owned by sync.js.
+  // options.write/stamp let tests exercise this real path without IndexedDB.
   // Returns the human-readable list of saved groups (empty = nothing).
-  async function saveCaptured(captures, tag) {
+  async function saveCaptured(captures, tag, options) {
+    var opts = options || {};
+    var write = opts.write || put;
+    var stamp = opts.stamp || setLastSyncDay;
     var saved = [];
     var c = captures || {};
     var sportDays = c.sportDays || [];
@@ -323,7 +327,7 @@ var Store = (function () {
     if (sportDays.length) {
       for (var si = 0; si < sportDays.length; si++) {
         var sd = sportDays[si];
-        await put(sd.date, 'steps', {
+        await write(sd.date, 'steps', {
           date: sd.date, steps: sd.steps, distance_m: sd.distanceM,
           kcal: sd.displayKcal !== null ? sd.displayKcal : '',
           active_min: sd.activeMin !== null ? sd.activeMin : '',
@@ -332,7 +336,7 @@ var Store = (function () {
       }
       saved.push(sportDays.length + ' step day(s)');
     } else if (live) {
-      await put(todayStr(), 'steps', {
+      await write(todayStr(), 'steps', {
         date: todayStr(), steps: live.steps, distance_m: live.distanceM,
         kcal: '', active_min: '',
         source: 'live 02A0 diagnostics.html ' + tag,
@@ -341,7 +345,7 @@ var Store = (function () {
     }
     for (var i = 0; i < sleepNights.length; i++) {
       var n = sleepNights[i];
-      await put(n.night, 'sleep', {
+      await write(n.night, 'sleep', {
         night: n.night, fall_asleep: n.fallAsleep, get_up: n.getUp,
         total_min: n.tot, wake_min: n.wake, light_min: n.light,
         rem_min: n.rem, deep_min: n.deep,
@@ -352,7 +356,7 @@ var Store = (function () {
     if (hrDays.length) {
       for (var hi = 0; hi < hrDays.length; hi++) {
         var hd = hrDays[hi];
-        await put(hd.date, 'hr', {
+        await write(hd.date, 'hr', {
           date: hd.date, start_time_s: hd.startS, silent_hr: hd.silent,
           zones: hd.zones, samples: hd.samples,
           source: 'v3 type03 diagnostics.html ' + tag,
@@ -363,7 +367,7 @@ var Store = (function () {
     if (workouts.length) {
       for (var wi = 0; wi < workouts.length; wi++) {
         var w = workouts[wi];
-        await put(w.date + ' ' + w.startS, 'workout', w);
+        await write(w.date + ' ' + w.startS, 'workout', w);
       }
       saved.push(workouts.length + ' workout(s)');
     }
@@ -372,13 +376,13 @@ var Store = (function () {
       var arr = rawTypes[rt][0];
       var stype = rawTypes[rt][1];
       for (var ri = 0; ri < arr.length; ri++) {
-        await put(arr[ri].date || ('raw-' + ri), stype, arr[ri]);
+        await write(arr[ri].date || ('raw-' + ri), stype, arr[ri]);
       }
       if (arr.length) saved.push(arr.length + ' ' + stype + ' record(s)');
     }
     // Stamped only when something landed, so failed syncs retry the gap.
-    if (saved.length) await setLastSyncDay(todayStr(), tag);
-    if (typeof refreshStoreStatus === 'function') refreshStoreStatus();
+    if (saved.length) await stamp(todayStr(), tag);
+    if (!opts.quiet && window.IDO && IDO.shell) IDO.shell.refreshStoreStatus();
     return saved;
   }
 

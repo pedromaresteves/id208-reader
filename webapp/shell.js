@@ -128,6 +128,7 @@ IDO.shell = (function () {
     hexStr: hexStr,
     setProgress: defaultProgress,
     forceReload: forceReload,
+    hasPath: hasPath,
     checkFiles: checkFiles,
     renderNav: renderNav,
     refreshStoreStatus: refreshStoreStatus,
@@ -136,14 +137,7 @@ IDO.shell = (function () {
   };
 })();
 
-// Legacy aliases keep the page inline wiring small while modules are the source
-// of truth. Pages that override setProgress still win (it is a global hook).
-var log = IDO.shell.log;
-var show = IDO.shell.show;
-var hexStr = IDO.shell.hexStr;
+// Page progress hook: index.html overrides the global; everything else logs.
 var setProgress = IDO.shell.setProgress;
-var refreshStoreStatus = IDO.shell.refreshStoreStatus;
-var enableIds = IDO.shell.enableIds;
-var setMacroButtons = IDO.shell.setMacroButtons;
 var PAGE_BASIC_BUTTONS = [];
 var PAGE_FULL_BUTTONS = [];

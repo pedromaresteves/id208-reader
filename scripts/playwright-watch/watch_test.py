@@ -55,9 +55,11 @@ for _s in (sys.stdout, sys.stderr):
         pass
 
 
+_LOG_SEEN = {"n": 0}
+
+
 def wait_for_log(page, marker, timeout, tag):
-    """Poll #log until marker appears; stream new interesting lines as they land."""
-    seen = 0
+    """Poll #log until marker appears; stream only newly landed lines."""
     deadline = time.time() + timeout
     found = False
     while time.time() < deadline:
@@ -66,10 +68,12 @@ def wait_for_log(page, marker, timeout, tag):
         except Exception:
             text = ""
         lines = text.splitlines()
-        for ln in lines[seen:]:
+        if _LOG_SEEN["n"] > len(lines):
+            _LOG_SEEN["n"] = 0  # page navigated/reloaded; restart the stream
+        for ln in lines[_LOG_SEEN["n"]:]:
             if any(k in ln for k in KEYWORDS):
                 print("  | " + ln[:240], flush=True)
-        seen = len(lines)
+        _LOG_SEEN["n"] = len(lines)
         if marker and marker in text:
             found = True
             break
@@ -190,8 +194,9 @@ def main():
 
         # ---- Auto daily sync (runs automatically after connect when bound) ----
         log("Waiting for the automatic daily sync after connect (or 'not bound')...")
-        wait_for_log(page, "Daily sync done", SYNC_TIMEOUT, "auto daily sync")
-        wait_for_log(page, "not bound", 5, "bind check")
+        synced = wait_for_log(page, "Daily sync done", SYNC_TIMEOUT, "auto daily sync")
+        if not synced:
+            wait_for_log(page, "not bound", 5, "bind check")
         save_page_state(page, "auto-sync")
 
         # ---- Full sync ----

@@ -49,9 +49,9 @@
 // Fail fast on file skew (e.g. new page + old ui.js): missing shared
 // symbols halt here with an actionable banner instead of a silent hang.
 (function checkAppFiles() {
-  var need = ['Store', 'fmtHM', 'sportName', 'num', 'esc', 'fmtDur', 'kmOrDash',
-    'hrStats', 'connectAndSync', 'downloadStoreBackup', 'importStoreFile',
-    'refreshStoreStatus'];
+  var need = ['Store', 'IDO.transport.connectAndSync', 'IDO.shell.refreshStoreStatus',
+    'fmtHM', 'sportName', 'num', 'esc', 'fmtDur', 'kmOrDash',
+    'hrStats', 'downloadStoreBackup', 'importStoreFile'];
   IDO.shell.checkFiles(need);
 })();
 // Progress override: sync.js calls setProgress during macros; here it drives
@@ -78,7 +78,7 @@ document.getElementById('btnSync').addEventListener('click', async function () {
   syncUiBusy(true, 'Connecting…');
   try {
     // autoSetup: a fresh/reset watch runs bind + auth instead of failing.
-    await connectAndSync({ autoSetup: true });
+    await IDO.transport.connectAndSync({ autoSetup: true });
     document.getElementById('syncLabel').textContent = 'Sync done.';
   } catch (e) {
     document.getElementById('syncLabel').textContent = 'Sync failed.';
@@ -179,7 +179,7 @@ async function render() {
       steps: steps, sleep: sleep, workouts: workouts,
     }, null, 1).slice(0, 20000);
     renderLastSync();
-    refreshStoreStatus();
+    IDO.shell.refreshStoreStatus();
   } catch (e) {
     statusLink('Store unavailable (' + e + ')');
   }
