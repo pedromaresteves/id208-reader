@@ -146,7 +146,17 @@ function hrCell(d) {
   if (!s) return '—';
   return s.avg + ' (' + s.min + '–' + s.max + ')';
 }
-// --- Month/week date helpers (YYYY-MM-DD strings, Monday-start weeks) ---
+// --- Shared date helpers (YYYY-MM-DD strings, local phone day) ---
+function todayStr() {
+  var n = new Date();
+  return n.getFullYear() + '-' + pad2(n.getMonth() + 1) + '-' + pad2(n.getDate());
+}
+function dayDiff(a, b) {
+  function dayNum(ds) {
+    return Date.UTC(Number(ds.slice(0, 4)), Number(ds.slice(5, 7)) - 1, Number(ds.slice(8, 10))) / 86400000;
+  }
+  return Math.round(dayNum(b) - dayNum(a));
+}
 function monthKey(ds) { return String(ds).slice(0, 7); }
 function isoDay(y, m, d) {
   return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');

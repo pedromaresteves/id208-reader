@@ -36,11 +36,11 @@
 <script>
 // Load local scripts with the page's cache-bust token (?v=<epoch>). The skew
 // banner's Force reload uses the same mechanism, so stale Chrome profiles
-// cannot keep serving an old ble.js/ui.js/store.js.
+// cannot keep serving an old module.
 (function () {
   var m = location.search.match(/[?&]v=([^&]+)/);
   var q = m ? '?v=' + m[1] : '';
-  ['store.js', 'ble.js', 'ui.js'].forEach(function (f) {
+  ['shell.js', 'store.js', 'ui.js', 'codec.js', 'transport.js', 'sync.js'].forEach(function (f) {
     document.write('<script src="' + f + q + '"><\/script>');
   });
 })();
@@ -52,22 +52,9 @@
   var need = ['Store', 'fmtHM', 'sportName', 'num', 'esc', 'fmtDur', 'kmOrDash',
     'hrStats', 'connectAndSync', 'downloadStoreBackup', 'importStoreFile',
     'refreshStoreStatus'];
-  var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
-  if (!missing.length) return;
-  var d = document.createElement('div');
-  d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
-  d.textContent = 'App files out of sync (' + missing.join(', ') +
-    ' missing) — force a fresh reload, or re-download all webapp files together.';
-  var b = document.createElement('button');
-  b.textContent = 'Force reload (fresh files)';
-  b.style.cssText = 'margin-top:8px;';
-  b.addEventListener('click', function () { location.replace(location.pathname + '?v=' + Date.now()); });
-  d.appendChild(document.createElement('br'));
-  d.appendChild(b);
-  document.body.insertBefore(d, document.body.firstChild);
-  throw new Error('halt: ' + missing.join(','));
+  IDO.shell.checkFiles(need);
 })();
-// Progress override: ble.js calls setProgress during macros; here it drives
+// Progress override: sync.js calls setProgress during macros; here it drives
 // the spinner + thin step bar (paging rounds update the label; the bar moves
 // per phase, so it can pause inside long loops — the spinner shows life).
 function setProgress(done, total, label) {
@@ -200,13 +187,6 @@ async function render() {
 document.getElementById('btnRefresh').addEventListener('click', render);
 render();
 </script>
-<nav class="tabs">
-<a href="index.html" aria-current="page">Dashboard</a>
-<a href="activity.html">Activity</a>
-<a href="sleep.html">Sleep</a>
-<a href="workout.html">Workouts</a>
-<a href="watch.html">Watch</a>
-<a href="diagnostics.html">Diagnostics</a>
-</nav>
+<nav class="tabs"></nav>
 </body>
 </html>

@@ -33,7 +33,7 @@
 (function () {
   var m = location.search.match(/[?&]v=([^&]+)/);
   var q = m ? '?v=' + m[1] : '';
-  ['store.js', 'ble.js', 'ui.js'].forEach(function (f) {
+  ['shell.js', 'store.js', 'ui.js', 'codec.js', 'transport.js', 'sync.js'].forEach(function (f) {
     document.write('<script src="' + f + q + '"><\/script>');
   });
 })();
@@ -43,20 +43,7 @@
 (function checkAppFiles() {
   var need = ['Store', 'DEFAULT_GOALS', 'ensureLink', 'wr', 'buildAutoActivity',
     'setupAuto', 'downloadStoreBackup', 'importStoreFile'];
-  var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
-  if (!missing.length) return;
-  var d = document.createElement('div');
-  d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
-  d.textContent = 'App files out of sync (' + missing.join(', ') +
-    ' missing) — force a fresh reload, or re-download all webapp files together.';
-  var b = document.createElement('button');
-  b.textContent = 'Force reload (fresh files)';
-  b.style.cssText = 'margin-top:8px;';
-  b.addEventListener('click', function () { location.replace(location.pathname + '?v=' + Date.now()); });
-  d.appendChild(document.createElement('br'));
-  d.appendChild(b);
-  document.body.insertBefore(d, document.body.firstChild);
-  throw new Error('halt: ' + missing.join(','));
+  IDO.shell.checkFiles(need);
 })();
 document.getElementById('btnSetup').addEventListener('click', async function () {
   var el = document.getElementById('setupStatus');
@@ -137,13 +124,6 @@ document.getElementById('btnGoals').addEventListener('click', async function () 
 });
 loadGoals();
 </script>
-<nav class="tabs">
-<a href="index.html">Dashboard</a>
-<a href="activity.html">Activity</a>
-<a href="sleep.html">Sleep</a>
-<a href="workout.html">Workouts</a>
-<a href="watch.html" aria-current="page">Watch</a>
-<a href="diagnostics.html">Diagnostics</a>
-</nav>
+<nav class="tabs"></nav>
 </body>
 </html>

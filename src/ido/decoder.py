@@ -387,7 +387,7 @@ def build_v3_start_04(
     first), and the matching STOP(byte14=0) advances it. One START+STOP round
     per day: 2026-10-31 -> 11-01 -> ... -> 11-04 -> items=0. The cursor
     survives disconnect/reconnect and is not rewound by b14=1, 0x05, or a bare
-    STOP. See build_v3_stop_04 and webapp/ble.js pageDayHistory.
+    STOP. See build_v3_stop_04 and webapp/sync.js pageDayHistory.
     """
     if data_type not in V3_BYTE14:
         raise ValueError(f"unknown v3 data_type: {data_type:#x}")
@@ -411,7 +411,7 @@ def build_v3_stop_04(
 
     byte14 must match the START that opened the session: 0x01 closes today's
     (b14=1) pull, 0x00 closes a completed historical day and advances the
-    watch's sync cursor. Byte-identical mirror of webapp/ble.js
+    watch's sync cursor. Byte-identical mirror of webapp/codec.js
     buildV3Stop04(dataType, b14Override).
     """
     pkt = bytearray(build_v3_start_04(data_type, seq, save_offset, byte14))

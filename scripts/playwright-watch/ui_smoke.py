@@ -75,6 +75,16 @@ def main():
                 if errors:
                     failures.append(f"{name}: page errors {errors}")
                     errors.clear()
+                nav_count = page.evaluate(
+                    "() => document.querySelectorAll('nav.tabs a').length"
+                )
+                if nav_count != 6:
+                    failures.append(f"{name}: nav rendered {nav_count} links")
+                current_link = page.evaluate(
+                    "() => document.querySelector('nav.tabs a[aria-current]')?.textContent || ''"
+                )
+                if not current_link:
+                    failures.append(f"{name}: nav has no current page")
                 scripts = page.evaluate(
                     "() => performance.getEntriesByType('resource')"
                     ".map(r => r.name).filter(n => n.endsWith('.js') || n.includes('.js?'))"

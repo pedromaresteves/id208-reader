@@ -249,7 +249,7 @@ def test_v3_stop_04_byte14_override() -> None:
     assert crc16_ccitt(stop_hist[1:-2]) == int.from_bytes(stop_hist[-2:], "little")
     stop_today = build_v3_stop_04(0x08, 0x75)
     assert stop_today[12] == 0x01 and stop_today[14] == 0x01
-    # Byte-identical with webapp/ble.js buildV3Stop04 (same vectors in
+    # Byte-identical with webapp/codec.js buildV3Stop04 (same vectors in
     # webapp/capture.test.js).
     assert stop_hist.hex().upper() == "33DAADDAAD011000040074000108000000E993"
     assert stop_today.hex().upper() == "33DAADDAAD011000040075000108010000B81C"

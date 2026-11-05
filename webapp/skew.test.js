@@ -21,13 +21,16 @@ function makeEl() {
 global.window = {};
 const __els = {};
 global.document = {
+  readyState: 'loading',
   getElementById: (id) => (__els[id] || (__els[id] = makeEl())),
   createElement: () => makeEl(),
   createTextNode: (t) => ({ text: t }),
+  querySelector: () => null,
+  addEventListener: () => {},
   body: makeEl(),
 };
-// NOTE: no navigator stub — node 22 ships a read-only global one, and ble.js
-// only touches navigator inside connectAndSync (never exercised here).
+// NOTE: no navigator stub — node 22 ships a read-only global one; the
+// transport only touches navigator inside connectAndSync (never exercised).
 global.Store = {
   put: () => Promise.resolve(),
   list: () => Promise.resolve([]),
@@ -48,9 +51,12 @@ const probe = allNames
   .join('\n');
 
 eval(
-  fs.readFileSync(path.join(ROOT, 'webapp', 'store.js'), 'utf8') + '\n' +
-    fs.readFileSync(path.join(ROOT, 'webapp', 'ble.js'), 'utf8') + '\n' +
-    fs.readFileSync(path.join(ROOT, 'webapp', 'ui.js'), 'utf8') +
+  fs.readFileSync(path.join(ROOT, 'webapp', 'shell.js'), 'utf8') + '\n' +
+    fs.readFileSync(path.join(ROOT, 'webapp', 'store.js'), 'utf8') + '\n' +
+    fs.readFileSync(path.join(ROOT, 'webapp', 'ui.js'), 'utf8') + '\n' +
+    fs.readFileSync(path.join(ROOT, 'webapp', 'codec.js'), 'utf8') + '\n' +
+    fs.readFileSync(path.join(ROOT, 'webapp', 'transport.js'), 'utf8') + '\n' +
+    fs.readFileSync(path.join(ROOT, 'webapp', 'sync.js'), 'utf8') +
     '\nconst __missing = [];\n' + probe +
     '\nglobalThis.SKEW = __missing;'
 );

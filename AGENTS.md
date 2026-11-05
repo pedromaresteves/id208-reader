@@ -20,15 +20,17 @@ Mismatches are decoder bugs.
 │   ├── sleep.html       Sleep history page
 │   ├── workout.html     Workouts/swims page
 │   ├── watch.html       Watch settings (setup, auto-detect, goals, backup)
-│   ├── ble.js           ALL protocol code (GATT, builders, v3 reassembly,
-│   │                    syncNow, capture vars) — ~975 lines
-│   ├── store.js         IndexedDB wrapper (one record per date+type)
-│   ├── ui.js            Shared chart/format/backup helpers
+│   ├── shell.js         DOM log/show, progress, skew guard, nav, store status
+│   ├── store.js         IndexedDB wrapper + saveCaptured (one record/date+type)
+│   ├── codec.js         v3 builders + pure decodeHealth() -> typed records
+│   ├── transport.js     GATT connect/write/notify + v3 reassembly
+│   ├── sync.js          capture state + pullToday/pageDayHistory/syncNow/setup
+│   ├── ui.js            Shared chart/format/date/backup helpers
 │   ├── *.test.js        Node tests (capture, chart, store, skew, parity)
 │   └── parity.test.js   JS side of the JS<->Python golden-capture test
 ├── src/ido/
 │   ├── decoder.py       Python builders/parsers — MUST stay byte-identical
-│   │                    with the JS builders in ble.js
+│   │                    with the JS builders in codec.js
 │   └── captures.py      JSONL capture replay
 ├── sync.py              Offline decode entry point (captures/ → out/)
 ├── tests/               pytest suite (53 tests)
@@ -54,7 +56,10 @@ Mismatches are decoder bugs.
 .venv/bin/ruff format --check src tests sync.py
 
 # JS syntax check
-node --check webapp/ble.js
+node --check webapp/shell.js
+node --check webapp/codec.js
+node --check webapp/transport.js
+node --check webapp/sync.js
 
 # JS tests (no deps, plain node)
 node webapp/capture.test.js
@@ -74,7 +79,7 @@ cd webapp && python3 -m http.server 8080
 ## Conventions
 
 - **JS and Python builders must be byte-identical.** When changing a packet
-  builder in `webapp/ble.js`, mirror it in `src/ido/decoder.py` (and vice
+  builder in `webapp/codec.js`, mirror it in `src/ido/decoder.py` (and vice
   versa). Tests in `tests/test_decoder.py` and `webapp/capture.test.js`
   guard this.
 - **No build step, no npm deps** for the webapp. Plain HTML/JS files.
@@ -118,7 +123,7 @@ cd webapp && python3 -m http.server 8080
   STOP(oper=1, b14=0) returns one day per round; `items=0` ends it.
   STOP must echo the START's byte14 — a b14=1 STOP does not advance the
   cursor. `b14=1` returns today (in-progress) only. See `pullToday` /
-  `pageDayHistory` in ble.js.
+  `pageDayHistory` in sync.js.
 - The cursor survives disconnect/reconnect and is NOT rewound by b14=1,
   `0x05`, or a bare STOP (tested 2026-11-05). After `items=0` it stays spent
   for the watch's lifetime; factory reset untested.

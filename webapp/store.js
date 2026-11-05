@@ -288,6 +288,100 @@ var Store = (function () {
     return writeGroups({ steps: parseCsvSteps(trimmed), sleep: [], hr: [], workout: [] });
   }
 
+  // --- Last-sync anchor ---
+  async function getLastSyncDay() {
+    try {
+      var r = await get('last-sync', 'meta');
+      if (r && r.payload && typeof r.payload.day === 'string') return r.payload.day;
+    } catch (e) {}
+    return null;
+  }
+
+  async function setLastSyncDay(day, tag) {
+    try {
+      await put('last-sync', 'meta', {
+        day: day,
+        at: new Date().toISOString(),
+        tag: tag || '',
+      });
+    } catch (e) { /* logging is the caller's job */ }
+  }
+
+  // Persist a sync's captured records. `captures` is owned by sync.js.
+  // Returns the human-readable list of saved groups (empty = nothing).
+  async function saveCaptured(captures, tag) {
+    var saved = [];
+    var c = captures || {};
+    var sportDays = c.sportDays || [];
+    var live = c.live || null;
+    var sleepNights = c.sleepNights || [];
+    var hrDays = c.hrDays || [];
+    var workouts = c.workouts || [];
+    var spo2 = c.spo2 || [];
+    var press = c.press || [];
+
+    if (sportDays.length) {
+      for (var si = 0; si < sportDays.length; si++) {
+        var sd = sportDays[si];
+        await put(sd.date, 'steps', {
+          date: sd.date, steps: sd.steps, distance_m: sd.distanceM,
+          kcal: sd.displayKcal !== null ? sd.displayKcal : '',
+          active_min: sd.activeMin !== null ? sd.activeMin : '',
+          source: 'v3 sport type08 diagnostics.html ' + tag,
+        });
+      }
+      saved.push(sportDays.length + ' step day(s)');
+    } else if (live) {
+      await put(todayStr(), 'steps', {
+        date: todayStr(), steps: live.steps, distance_m: live.distanceM,
+        kcal: '', active_min: '',
+        source: 'live 02A0 diagnostics.html ' + tag,
+      });
+      saved.push('steps(live)');
+    }
+    for (var i = 0; i < sleepNights.length; i++) {
+      var n = sleepNights[i];
+      await put(n.night, 'sleep', {
+        night: n.night, fall_asleep: n.fallAsleep, get_up: n.getUp,
+        total_min: n.tot, wake_min: n.wake, light_min: n.light,
+        rem_min: n.rem, deep_min: n.deep,
+        source: 'v3 type07 diagnostics.html ' + tag,
+      });
+    }
+    if (sleepNights.length) saved.push(sleepNights.length + ' night(s)');
+    if (hrDays.length) {
+      for (var hi = 0; hi < hrDays.length; hi++) {
+        var hd = hrDays[hi];
+        await put(hd.date, 'hr', {
+          date: hd.date, start_time_s: hd.startS, silent_hr: hd.silent,
+          zones: hd.zones, samples: hd.samples,
+          source: 'v3 type03 diagnostics.html ' + tag,
+        });
+      }
+      saved.push(hrDays.length + ' HR day(s)');
+    }
+    if (workouts.length) {
+      for (var wi = 0; wi < workouts.length; wi++) {
+        var w = workouts[wi];
+        await put(w.date + ' ' + w.startS, 'workout', w);
+      }
+      saved.push(workouts.length + ' workout(s)');
+    }
+    var rawTypes = [[spo2, 'spo2'], [press, 'pressure']];
+    for (var rt = 0; rt < rawTypes.length; rt++) {
+      var arr = rawTypes[rt][0];
+      var stype = rawTypes[rt][1];
+      for (var ri = 0; ri < arr.length; ri++) {
+        await put(arr[ri].date || ('raw-' + ri), stype, arr[ri]);
+      }
+      if (arr.length) saved.push(arr.length + ' ' + stype + ' record(s)');
+    }
+    // Stamped only when something landed, so failed syncs retry the gap.
+    if (saved.length) await setLastSyncDay(todayStr(), tag);
+    if (typeof refreshStoreStatus === 'function') refreshStoreStatus();
+    return saved;
+  }
+
   return {
     open: open,
     put: put,
@@ -303,5 +397,8 @@ var Store = (function () {
     routeInput: routeInput,
     parseCsvSteps: parseCsvSteps,
     importText: importText,
+    getLastSyncDay: getLastSyncDay,
+    setLastSyncDay: setLastSyncDay,
+    saveCaptured: saveCaptured,
   };
 })();

@@ -2,49 +2,28 @@
 // Guards the snake/camel key mismatch that once dropped distance_m silently.
 // Plain node, no deps:   node webapp/capture.test.js
 'use strict';
-const fs = require('fs');
-const path = require('path');
 const assert = require('assert');
+const { load } = require('./test-harness');
 
-const ROOT = path.resolve(__dirname, '..');
-
-function makeEl() {
-  return {
-    textContent: '',
-    innerHTML: '',
-    disabled: false,
-    style: {},
-    appendChild() {},
-  };
-}
-global.window = {};
-const __els = {};
-global.document = {
-  getElementById: (id) => (__els[id] || (__els[id] = makeEl())),
-  createElement: () => makeEl(),
-  createTextNode: (t) => ({ text: t }),
-  body: makeEl(),
-};
-// NOTE: no navigator stub — node 22 ships a read-only global one, and ble.js
-// only touches navigator inside connectAndSync (never exercised here).
-
-const puts = [];
-global.Store = {
-  put: (date, type, payload) => {
-    puts.push({ date, type, payload });
-    return Promise.resolve();
+const { IDO, puts } = load();
+const B = {
+  handleV3: IDO.transport.handleV3,
+  saveCaptured: IDO.sync.saveCaptured,
+  resetCaptures: IDO.sync.resetCaptures,
+  dayDiff: globalThis.dayDiff,
+  upsertDay: IDO.sync.upsertDay,
+  syncNow: IDO.sync.syncNow,
+  buildV3Start04: IDO.codec.buildV3Start04,
+  buildV3Stop04: IDO.codec.buildV3Stop04,
+  pullToday: IDO.sync.pullToday,
+  pageDayHistory: IDO.sync.pageDayHistory,
+  _setSeq: IDO.codec.setSeq,
+  _stub: function (w, wf, wt) {
+    IDO.transport.wr = w;
+    IDO.transport.waitFor = wf;
+    IDO.transport.wait = wt;
   },
-  list: () => Promise.resolve([]),
 };
-
-eval(
-  fs.readFileSync(path.join(ROOT, 'webapp', 'ble.js'), 'utf8') +
-    '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures, dayDiff, upsertDay, syncNow,' +
-    ' buildV3Start04, buildV3Stop04, pullToday, pageDayHistory,' +
-    ' _stub: function (w, wf, wt) { wr = w; waitFor = wf; wait = wt; },' +
-    ' _setSeq: function (s) { v3Seq = s; } };',
-);
-const B = globalThis.B;
 
 // Byte-identical builder guard (must match src/ido/decoder.py build_v3_start_04;
 // vectors also pinned in tests/test_decoder.py):

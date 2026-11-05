@@ -46,7 +46,7 @@ def log(msg):
     print(f"[{ts}] {msg}", flush=True)
 
 
-# Windows Python defaults to cp1252 stdout; ble.js log lines contain arrows
+# Windows Python defaults to cp1252 stdout; module log lines contain arrows
 # and dashes — reconfigure so printing never crashes the run.
 for _s in (sys.stdout, sys.stderr):
     try:
@@ -113,7 +113,7 @@ def main():
     ap.add_argument("--daily", action="store_true", help="skip the full sync (auto daily sync still runs after connect)")
     ap.add_argument("--url", default="http://localhost:8080/diagnostics.html")
     args = ap.parse_args()
-    # The persistent Chrome profile can cache ble.js; version the page URL so
+    # The persistent Chrome profile can cache modules; version the page URL so
     # every local script loads with the same fresh token.
     sep = '&' if '?' in args.url else '?'
     url = f"{args.url}{sep}v={int(time.time())}"

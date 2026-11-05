@@ -23,7 +23,7 @@
 (function () {
   var m = location.search.match(/[?&]v=([^&]+)/);
   var q = m ? '?v=' + m[1] : '';
-  ['store.js', 'ui.js'].forEach(function (f) {
+  ['shell.js', 'store.js', 'ui.js'].forEach(function (f) {
     document.write('<script src="' + f + q + '"><\/script>');
   });
 })();
@@ -33,21 +33,8 @@
 (function checkAppFiles() {
   var need = ['Store', 'lineChart', 'setupCanvas', 'barChart', 'esc', 'num', 'fmtDur', 'sportName', 'pad2',
     'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'wireMonthNav',
-    'isoWeek'];
-  var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
-  if (!missing.length) return;
-  var d = document.createElement('div');
-  d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
-  d.textContent = 'App files out of sync (' + missing.join(', ') +
-    ' missing) — force a fresh reload, or re-download all webapp files together.';
-  var b = document.createElement('button');
-  b.textContent = 'Force reload (fresh files)';
-  b.style.cssText = 'margin-top:8px;';
-  b.addEventListener('click', function () { location.replace(location.pathname + '?v=' + Date.now()); });
-  d.appendChild(document.createElement('br'));
-  d.appendChild(b);
-  document.body.insertBefore(d, document.body.firstChild);
-  throw new Error('halt: ' + missing.join(','));
+    'isoWeek', 'todayStr'];
+  IDO.shell.checkFiles(need);
 })();
 var WORKOUTS = [], ALL = [], SEL = null, CUR = null, SHOW_HIDDEN = false;
 function isEmptyWorkout(w) {
@@ -188,7 +175,7 @@ async function render() {
     // belong to no week); with no dates at all, pin to month start, never NaN.
     var latest = '';
     ALL.forEach(function (r) { if (r.payload.date) latest = r.payload.date; });
-    CUR = monthKey(latest || new Date().toISOString().slice(0, 10));
+    CUR = monthKey(latest || todayStr());
     var anchor = latest || (CUR + '-01');
     SEL = { start: mondayOf(anchor), end: addDays(mondayOf(anchor), 6) };
     selectWeek();
@@ -211,13 +198,6 @@ document.getElementById('chkHidden').addEventListener('change', function (e) {
 wireMonthNav(function (n) { CUR = addMonths(CUR, n); renderMonth(); });
 render();
 </script>
-<nav class="tabs">
-<a href="index.html">Dashboard</a>
-<a href="activity.html">Activity</a>
-<a href="sleep.html">Sleep</a>
-<a href="workout.html" aria-current="page">Workouts</a>
-<a href="watch.html">Watch</a>
-<a href="diagnostics.html">Diagnostics</a>
-</nav>
+<nav class="tabs"></nav>
 </body>
 </html>

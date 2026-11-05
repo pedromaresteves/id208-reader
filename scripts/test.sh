@@ -26,7 +26,8 @@ echo "== ruff =="
 "$RUFF" format --check src tests sync.py
 
 echo "== node syntax =="
-for f in webapp/ble.js webapp/store.js webapp/ui.js webapp/*.test.js; do
+for f in webapp/shell.js webapp/store.js webapp/ui.js webapp/codec.js \
+  webapp/transport.js webapp/sync.js webapp/test-harness.js webapp/*.test.js; do
   node --check "$f"
 done
 

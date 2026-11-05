@@ -1,7 +1,7 @@
 """JS<->Python decode parity on the golden five-day capture.
 
-The webapp (webapp/ble.js) and the offline decoder (src/ido/captures.py) must
-turn the same watch bytes into the same records. A drift here is exactly how
+The webapp (webapp/codec.js + sync.js) and the offline decoder
+(src/ido/captures.py) must turn the same watch bytes into the same records. A drift here is exactly how
 the empty-marker bug slipped through: the phone saved a phantom sport day and
 a "0-0-0" HR day while Python skipped both.
 """

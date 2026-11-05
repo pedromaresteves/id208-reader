@@ -1,50 +1,25 @@
 // JS side of the JS<->Python parity test: decode the golden capture with the
-// same ble.js code the phone runs, then either print canonical records
-// (--json, consumed by tests/test_parity.py) or assert the golden summary.
+// same modules the phone runs, then either print canonical records (--json,
+// consumed by tests/test_parity.py) or assert the golden summary.
 // Plain node, no deps:   node webapp/parity.test.js
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
+const { load, ROOT } = require('./test-harness');
 
-const ROOT = path.resolve(__dirname, '..');
 const FIXTURE = process.argv[2] && process.argv[2].charAt(0) !== '-'
   ? path.resolve(process.argv[2])
   : path.join(ROOT, 'tests', 'fixtures', 'history-5day.jsonl');
 const EXPECTED = path.join(ROOT, 'tests', 'fixtures', 'history-5day.expected.json');
 const AS_JSON = process.argv.includes('--json');
 
-function makeEl() {
-  return {
-    textContent: '',
-    innerHTML: '',
-    disabled: false,
-    style: {},
-    appendChild() {},
-  };
-}
-global.window = {};
-const __els = {};
-global.document = {
-  getElementById: (id) => (__els[id] || (__els[id] = makeEl())),
-  createElement: () => makeEl(),
-  createTextNode: (t) => ({ text: t }),
-  body: makeEl(),
+const { IDO, puts } = load();
+const B = {
+  handleV3: IDO.transport.handleV3,
+  saveCaptured: IDO.sync.saveCaptured,
+  resetCaptures: IDO.sync.resetCaptures,
 };
-const puts = [];
-global.Store = {
-  put: (date, type, payload) => {
-    puts.push({ date, type, payload });
-    return Promise.resolve();
-  },
-  list: () => Promise.resolve([]),
-};
-
-eval(
-  fs.readFileSync(path.join(ROOT, 'webapp', 'ble.js'), 'utf8') +
-    '\nglobalThis.B = { handleV3, saveCaptured, resetCaptures };',
-);
-const B = globalThis.B;
 
 function canonical() {
   const byType = {};
@@ -114,7 +89,7 @@ function summary(c) {
     .filter((ln) => ln.trim() !== '')
     .map((ln) => JSON.parse(ln));
 
-  // ble.js logs every frame; keep stdout clean for --json.
+  // The modules log every frame; keep stdout clean for --json.
   const realLog = console.log;
   console.log = () => {};
   try {

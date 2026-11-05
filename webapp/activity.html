@@ -19,7 +19,7 @@
 (function () {
   var m = location.search.match(/[?&]v=([^&]+)/);
   var q = m ? '?v=' + m[1] : '';
-  ['store.js', 'ui.js'].forEach(function (f) {
+  ['shell.js', 'store.js', 'ui.js'].forEach(function (f) {
     document.write('<script src="' + f + q + '"><\/script>');
   });
 })();
@@ -28,28 +28,10 @@
 // Fail fast on file skew (see index.html): banner + fresh reload instead of silent hang.
 (function checkAppFiles() {
   var need = ['Store', 'barChart', 'esc', 'num', 'kmOrDash', 'hrStats', 'hrCell',
-    'addDays', 'DEFAULT_GOALS'];
-  var missing = need.filter(function (k) { return typeof window[k] === 'undefined'; });
-  if (!missing.length) return;
-  var d = document.createElement('div');
-  d.style.cssText = 'background:#7f1d1d;color:#fff;padding:12px;margin:8px;border-radius:8px;font-weight:bold;';
-  d.textContent = 'App files out of sync (' + missing.join(', ') +
-    ' missing) — force a fresh reload, or re-download all webapp files together.';
-  var b = document.createElement('button');
-  b.textContent = 'Force reload (fresh files)';
-  b.style.cssText = 'margin-top:8px;';
-  b.addEventListener('click', function () { location.replace(location.pathname + '?v=' + Date.now()); });
-  d.appendChild(document.createElement('br'));
-  d.appendChild(b);
-  document.body.insertBefore(d, document.body.firstChild);
-  throw new Error('halt: ' + missing.join(','));
+    'addDays', 'DEFAULT_GOALS', 'todayStr'];
+  IDO.shell.checkFiles(need);
 })();
-var STEPS = [], HRMAP = {}, GOALS = DEFAULT_GOALS, END = phoneToday();
-function phoneToday() {
-  var n = new Date();
-  return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' +
-    String(n.getDate()).padStart(2, '0');
-}
+var STEPS = [], HRMAP = {}, GOALS = DEFAULT_GOALS, END = todayStr();
 function met(v, g) {
   return v !== undefined && v !== null && v !== '' && Number(v) >= g;
 }
@@ -64,7 +46,7 @@ function renderWeek() {
   for (var i = 6; i >= 0; i--) daysAsc.push(addDays(END, -i));
   var start = daysAsc[0];
   document.getElementById('rangeLabel').textContent = start.slice(5) + ' – ' + END.slice(5);
-  document.getElementById('btnNextW').disabled = END >= phoneToday();
+  document.getElementById('btnNextW').disabled = END >= todayStr();
   var rows = daysAsc.slice().reverse().map(function (ds) {
     var s = map[ds];
     var bpm = esc(hrCell(HRMAP[ds]));
@@ -122,7 +104,7 @@ async function render() {
     if (!STEPS.length && !Object.keys(HRMAP).length) {
       document.querySelector('#secActivity .body').textContent = 'No data yet — run a sync.';
     }
-    END = phoneToday(); // each visit re-anchors on today
+    END = todayStr(); // each visit re-anchors on today
     renderWeek();
     document.getElementById('status').textContent = STEPS.length + ' step days, ' +
       Object.keys(HRMAP).length + ' HR days in store.';
@@ -135,19 +117,12 @@ document.getElementById('btnPrevW').addEventListener('click', function () {
   renderWeek();
 });
 document.getElementById('btnNextW').addEventListener('click', function () {
-  var today = phoneToday();
+  var today = todayStr();
   END = addDays(END, 7) > today ? today : addDays(END, 7);
   renderWeek();
 });
 render();
 </script>
-<nav class="tabs">
-<a href="index.html">Dashboard</a>
-<a href="activity.html" aria-current="page">Activity</a>
-<a href="sleep.html">Sleep</a>
-<a href="workout.html">Workouts</a>
-<a href="watch.html">Watch</a>
-<a href="diagnostics.html">Diagnostics</a>
-</nav>
+<nav class="tabs"></nav>
 </body>
 </html>
