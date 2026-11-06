@@ -41,7 +41,7 @@ eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ui.js'), 'utf8') +
     '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, kmOrDash, hrStats, hrCell,' +
     ' monthKey, addMonths, daysInMonth, addDays, mondayOf, weeksOf, sleepScore, DEFAULT_GOALS,' +
-    ' wireMonthNav, isoWeek };'
+    ' wireMonthNav, isoWeek, parseNightDateTime, nightInProgress };'
 );
 const U = globalThis.U;
 
@@ -81,6 +81,13 @@ for (let i = 0; i < 7; i++) {
   const mid = (canvas._bars[i].x0 + canvas._bars[i].x1) / 2;
   assert.strictEqual(U.barAt('chSleepWeek', mid), i, 'tap hits bar ' + i);
 }
+
+// Per-bar totalText overrides the fmtHM label (empty days, partial nights).
+canvas.calls.length = 0;
+U.stackedBarChart('chSleepWeek', [{ label: '11-08', total: 0, parts: [], totalText: '' }], 0);
+const barLabels = canvas.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
+assert.ok(!barLabels.includes('0h00m'), 'empty totalText hides the zero label');
+assert.ok(barLabels.includes('11-08'), 'date label still drawn');
 
 // fmtHM sanity.
 assert.strictEqual(U.fmtHM(425), '7h05m');
@@ -128,6 +135,23 @@ assert.strictEqual(U.hrCell({ samples: [] }), '—');
 assert.strictEqual(U.hrCell(null), '—');
 assert.strictEqual(U.hrCell({ samples: [0, 255, 70] }), '70 (70–70)', 'out-of-range BPMs ignored');
 assert.strictEqual(U.hrStats({ samples: [] }), null, 'empty samples score null');
+
+// In-progress nights: no totals yet, or a get-up time still in the future.
+const NOW = new Date(2026, 10, 6, 12, 0); // 2026-11-06 12:00 local
+assert.strictEqual(U.nightInProgress({ total_min: 0, get_up: '2026-11-5 23:00' }, NOW), true,
+  'zero totals means in progress');
+assert.strictEqual(U.nightInProgress({ total_min: 426, get_up: '2026-11-6 6:37' }, NOW), false,
+  'past get-up means completed');
+assert.strictEqual(U.nightInProgress({ total_min: 120, get_up: '2026-11-6 18:00' }, NOW), true,
+  'future get-up means in progress');
+assert.strictEqual(U.nightInProgress({ total_min: 426, get_up: '' }, NOW), false,
+  'missing get-up with totals is treated as completed');
+assert.strictEqual(U.nightInProgress(null, NOW), false, 'null record is not in progress');
+assert.deepStrictEqual(
+  U.parseNightDateTime('2026-11-6 6:37'),
+  new Date(2026, 10, 6, 6, 37),
+  'night timestamp parsed as local time');
+assert.strictEqual(U.parseNightDateTime('nope'), null, 'bad timestamp is null');
 
 // Goal defaults match the watch setup (8000 steps / 500 kcal).
 assert.deepStrictEqual(U.DEFAULT_GOALS, { steps: 8000, kcal: 500 });

@@ -79,7 +79,8 @@ function stackedBarChart(id, nights, selected) {
     g.ctx.globalAlpha = 1;
     g.el._bars.push({ x0: x0, x1: x1, index: i });
     g.ctx.fillStyle = t.bright; g.ctx.font = '10px sans-serif';
-    g.ctx.fillText(fmtHM(n.total), x0, y - 2);
+    // totalText lets a page hide labels for empty days or mark partial nights.
+    g.ctx.fillText(n.totalText !== undefined ? n.totalText : fmtHM(n.total), x0, y - 2);
     g.ctx.fillStyle = t.text;
     g.ctx.fillText(n.label, x0, g.h - 2);
   }
@@ -233,6 +234,24 @@ function sleepScore(n) {
     deepPct: Math.round(100 * deep / base),
     remPct: Math.round(100 * rem / base),
   };
+}
+
+// Sleep record timestamps are "YYYY-M-D H:MM" in watch-local time.
+// Date.parse is not portable for that shape, so build a local Date by hand.
+function parseNightDateTime(s) {
+  var m = /^(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})$/.exec(String(s || ''));
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+    Number(m[4]), Number(m[5]));
+}
+// Best-effort "still recording" flag: the watch exposes no such field.
+// A night counts as in progress when it has no totals yet, or when the
+// recorded get-up time is still in the future.
+function nightInProgress(n, now) {
+  if (!n) return false;
+  if ((Number(n.total_min) || 0) === 0) return true;
+  var gu = parseNightDateTime(n.get_up);
+  return !!(gu && gu.getTime() > (now || new Date()).getTime());
 }
 
 // Daily goals: the watch ships 8000 steps / 500 kcal (setup sample + photos).

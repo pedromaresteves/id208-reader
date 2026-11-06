@@ -6,8 +6,6 @@
    corrupted settings file to exercise live (§4).
 2. **Optional hardware:** one fresh swim to complete the count-data check
    (§2); workouts and sleep are already confirmed.
-3. **Decision, low priority:** whether `sleep.html` should show
-   in-progress nights instead of hiding `total_min == 0` (§5).
 
 ## 1. Workout mode — not exposed in the type-04 record (closed)
 - Four confirmed 2026-11-05 records: Outdoor Walk 17:04 (`items=58`),
@@ -64,7 +62,3 @@
 - First-run auto-setup and the skew-banner force reload are still
   code/headless tested only; they need a fresh/reset watch or a deliberately
   broken settings file to exercise live.
-
-## 5. Low priority: sleep page partial nights
-- `sleep.html` hides `total_min == 0` records. Decide whether to show
-  in-progress nights with a clear marker instead.
