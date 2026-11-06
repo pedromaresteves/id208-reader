@@ -123,9 +123,11 @@ cd webapp && python3 -m http.server 8080
 - The cursor survives disconnect/reconnect and is NOT rewound by b14=1,
   `0x05`, or a bare STOP (tested 2026-11-05). After `items=0` it stays spent
   for the watch's lifetime; factory reset untested.
-- Count-data types (sleep 07, workouts 04, swims 06): cursor-paged at offset
-  0 (START/STOP, stop on `items=0` or repeated records). This firmware has
-  returned `items=0` over BLE at every tested offset.
+- Count-data types (sleep 07, workouts 04, swims 06): a **fresh saved record
+  is served at offset 0** (2026-11-05: closed Outdoor Walk, `items=58`), but
+  the stream is one-shot/cursor-like — the auto-sync consumed it and the
+  immediately following Full sync saw `items=0`. Old/historical records
+  still return `items=0` at every tested offset.
 
 ### Known watch limitations (ID208 Plus, FW v1.01.17)
 - After a factory reset, the BLE-accessible history store is empty.
@@ -133,8 +135,10 @@ cd webapp && python3 -m http.server 8080
   that is NOT accessible via BLE. VeryFit has the same limitation.
 - The completed-day cursor is one-shot for the watch's lifetime. Once it
   returns `items=0`, only new completed days can be captured.
-- Count-data (sleep 07, workouts 04, swims 06) may return `items=0` even
-  when the watch display shows data. Daily accumulation is the fallback.
+- Count-data (sleep 07, workouts 04, swims 06): fresh saved records can be
+  served once; old records return `items=0` even when the watch display
+  shows data. Treat the count-data stream as one-shot; daily accumulation is
+  the fallback.
 - See `TODO.md` §1–§3 for the open experiments and limitations.
 
 ## Environment constraints — READ BEFORE TESTING

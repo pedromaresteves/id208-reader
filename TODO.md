@@ -1,27 +1,50 @@
 # Priority TODO (open items only)
 
-## 1. Workout mode byte — blocked on count-data history
-- Known icon→record pairs: 08/10 Functional Strength, 08/10 + 09/10 Outdoor
-  Walk. Header byte `[8]` reads 5 on both → not the mode. Byte `[10]` reads
-  0 (strength) vs 1 (walk) → lead candidate.
-- Hypotheses: (a) `[10]` is the mode enum, or (b) it is an indoor/outdoor
-  flag. Official IDO tables have no record-ID mapping.
-- Watch displayed four records (strength/walk/run) while type-04 history
-  returned `items=0` at offset 0 over BLE. VeryFit has the same gap.
-- Next experiment: close nRF, record a 2-minute workout with an explicit
-  stop+save, then Full sync → JSONL. If it appears, auto-detected sessions
-  are the special case; if still empty, the BLE store is broken watch-side.
-- Then pull one Outdoor Run summary + JSONL. A third `[10]` value supports
-  (a); another `1` supports (b), and the real mode byte still needs finding.
-- No code changes until the bytes speak.
+## 0. Next steps (in order)
+1. **Later / needs reset or broken state:** first-run auto-setup and the
+   skew-banner force reload still need a reset watch or a deliberately
+   corrupted settings file to exercise live (§4).
+2. **Optional hardware:** one fresh swim to complete the count-data check
+   (§2); workouts and sleep are already confirmed.
+3. **Decision, low priority:** whether `sleep.html` should show
+   in-progress nights instead of hiding `total_min == 0` (§5).
 
-## 2. Count-data history is empty over BLE (sleep 07 / workouts 04 / swims 06)
-- `items=0` at offset 0 on this firmware, even when the watch display shows
-  data. Count-data paging is now cursor-only (START/STOP at offset 0).
-- VeryFit shows the same gap, so this is a watch-side store divergence, not
-  a decoder bug. Daily accumulation is the current history source.
-- Need: one successful closed-workout capture (see §1) to confirm whether
-  the BLE store can ever serve count-data.
+## 1. Workout mode — not exposed in the type-04 record (closed)
+- Four confirmed 2026-11-05 records: Outdoor Walk 17:04 (`items=58`),
+  Functional Strength 21:14 (`items=4`), Outdoor Run 21:17 (`items=3`),
+  Outdoor Walk 22:32 (`items=3`).
+- The mode is NOT in the type-04 record:
+  - 14-byte common header: identical apart from counts/sizes.
+  - 100-byte header: no duration-independent byte separates the modes;
+    `[8..11] = 05 00 00 02` for all four. `[8]` is a generic workout
+    marker, and the old “walk = `[10]=1`” note is wrong.
+  - Data blob: HR samples then HR/pace histogram tables (table values track
+    duration/effort, not mode).
+- Field notes from the comparison: `[12:16]` is fixed-point steps
+  (`value / 256` ≈ step count), `[39]` is the max-speed high byte,
+  `[78]` = `items` (sample count), `[84:90]` = three sample-count words,
+  and `[71:76]` / `[96:100]` repeat the end date-time.
+- Conclusion: the watch does not send the workout mode over BLE in type 04.
+  Leave `SPORT_NAMES` empty. VeryFit must use another command or keep the
+  mode in its own store.
+- Optional low-priority follow-up: capture VeryFit app↔watch traffic while
+  opening a workout list, to look for a separate mode field/command.
+- Raw captures (gitignored): `captures/workout-2026-11-05-walk.jsonl`,
+  `captures/workouts-2026-11-05-strength-run.jsonl`,
+  `captures/workout-2026-11-05-walk-short.jsonl`.
+
+## 2. Count-data history — fresh records work; old records do not
+- Workouts: five fresh closed records served by type-04 START at offset 0
+  (Outdoor Walk `items=58`, Functional Strength `items=4`, Outdoor Run
+  `items=3`, short Outdoor Walk `items=3` on 2026-11-05; a 39m16s workout
+  `items=39` on 2026-11-06). All decoded and saved.
+- Sleep: a fresh night (2026-11-05) was served once on 2026-11-06:
+  `items=19`, 426 min, 23:31→06:37, then `items=0`.
+- The stream is one-shot/cursor-like: the sync consumed each fresh record;
+  the next round returned `items=0`.
+- Old sleep/workout/swim records still return `items=0`, and VeryFit shows
+  the same gaps. Historical records remain inaccessible.
+- Remaining: one fresh swim (type 06) to complete the count-data check.
 
 ## 3. Completed-day cursor is one-shot
 - After the cursor returns `items=0` it stays spent for the watch's lifetime.
@@ -33,11 +56,14 @@
   test, not by hardware since the queue was spent.
 
 ## 4. Hardware verification pending
-- Once a new completed day exists, run one dashboard Sync to prove the
-  completed-day drain on the real watch (the mock test covers 9 days).
-- First-run auto-setup and the skew-banner force reload are code/headless
-  tested only; they need a fresh/reset watch or a deliberately broken file
-  to exercise live.
+- **Completed-day drain ✅ (2026-11-06):** one dashboard Sync pulled the
+  completed 2026-11-05 day for every day-data type — sport `items=96`,
+  HR `items=507`, SpO2 `items=16`, pressure `items=49` — and each type then
+  returned `items=0`. Sleep and workout count-data were also served once.
+  Raw log: `captures/sync-2026-11-06-dashboard-log.txt` (gitignored).
+- First-run auto-setup and the skew-banner force reload are still
+  code/headless tested only; they need a fresh/reset watch or a deliberately
+  broken settings file to exercise live.
 
 ## 5. Low priority: sleep page partial nights
 - `sleep.html` hides `total_min == 0` records. Decide whether to show

@@ -141,6 +141,12 @@ const CHUNKS = [
   assert.strictEqual(dated.length, 1, 'one workout saved, got ' + dated.length);
   assert.strictEqual(dated[0].payload.date, '2026-10-08', 'header date stamped, got ' + dated[0].payload.date);
   assert.strictEqual(dated[0].date, '2026-10-08 0', 'store key uses header date, got ' + dated[0].date);
+  // HR samples start at data[0]; the bogus 4-byte skip used to drop them.
+  assert.deepStrictEqual(
+    dated[0].payload.samples,
+    [70, 80, 90, 100],
+    'HR samples start at data[0], got ' + dated[0].payload.samples,
+  );
   console.log('capture.test.js: date stamp passed');
 
   // Phantom guard: a real empty-history type-04 reply (2026-10-11 pull:

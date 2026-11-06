@@ -522,6 +522,33 @@ def test_parse_workout_summary_walk_pins_distance_pace() -> None:
     assert out["hr_samples"] == [90, 95]
 
 
+def test_parse_workout_summary_reads_samples_from_byte_zero() -> None:
+    # 2026-11-05 fresh workouts start with real bpm at data[0]. The old
+    # `data[4:]` parse dropped those four samples (live: 697 samples over
+    # 3520 s at ~5 s intervals; 693 with the bogus 4-byte prefix).
+    header = bytearray(100)
+    header[0] = 16
+    header[1:3] = (2026).to_bytes(2, "little")
+    header[3], header[4], header[5], header[6], header[7] = 11, 5, 21, 14, 25
+    header[8] = 5
+    header[17:21] = (184).to_bytes(4, "little")
+    header[29], header[30], header[31] = 115, 128, 61
+    # 61/99/100/100 are the first four stored bpm samples, then a 0 separator.
+    data = bytes((61, 99, 100, 100, 90, 95, 0, 6, 0, 0x24))
+    out = parse_workout_summary(bytes(header), data)
+    assert out["hr_samples"] == [61, 99, 100, 100, 90, 95]
+
+
+def test_parse_workout_summary_ignores_tables_when_hr_missing() -> None:
+    # No HR (header stats all zero): the histogram table after the zero run
+    # may contain bytes in the bpm range and must not be read as samples.
+    header = bytearray(100)
+    header[17:21] = (60).to_bytes(4, "little")
+    data = bytes((0, 0, 0, 0, 0, 90, 116, 0))
+    out = parse_workout_summary(bytes(header), data)
+    assert out["hr_samples"] == []
+
+
 def test_parse_swim_summary_matches_pool_swim_oct14() -> None:
     # Pool Swim 2026-10-14 (watch screen + health-capture (5).jsonl seq 0x71):
     # 17:39:28, 40m09s (2409 s), 358 kcal, 1650 m, 66 laps x 25 m,

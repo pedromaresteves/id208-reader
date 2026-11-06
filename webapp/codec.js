@@ -195,8 +195,7 @@ IDO.codec = (function () {
         activeMin: h.length >= 24 ? u32le(h, 20) : null,
       };
       out.message = 'SPORT dataType=8 items=' + itemCount + ': date=' + sportDate +
-        ' steps=' + steps + ' kcal(raw)=' + kcal + ' distance(m)=' + dist +
-        '  [watch: 5736 steps / 468 kcal]';
+        ' steps=' + steps + ' kcal(raw)=' + kcal + ' distance(m)=' + dist;
     } else if (dataType === 7 && itemCount === 0) {
       out.kind = 'sleep'; out.empty = true;
       out.message = 'SLEEP dataType=7 items=0: empty-history marker, ignored (not a night).';
@@ -213,7 +212,7 @@ IDO.codec = (function () {
       };
       out.message = 'SLEEP dataType=7 items=' + itemCount + ': total=' + tot + 'm wake=' + wake +
         'm light=' + light + 'm REM=' + rem + 'm deep=' + deep +
-        'm fallAsleep=' + fa + ' getUp=' + gu + '  [watch: 425m 23:47->06:52]';
+        'm fallAsleep=' + fa + ' getUp=' + gu;
     } else if (dataType === 3 && itemCount === 0) {
       out.kind = 'hr'; out.empty = true;
       out.message = 'HR dataType=3 items=0: empty-history marker, ignored.';
@@ -262,10 +261,19 @@ IDO.codec = (function () {
         whr = 'avg' + h[29] + '/max' + h[30] + '/min' + h[31];
         wdist = ' ' + (u32le(h, 25) / 1000).toFixed(2) + 'km pace' +
           Math.floor(u16le(h, 40) / 60) + "'" + (u16le(h, 40) % 60) + '"/km';
+        // HR samples start at d[0]; leading 0x00 bytes are MISSING samples
+        // (not a 4-byte prefix) and the run ends at the first 0x00 separator.
         var wsamples = [];
-        for (var k = 4; k < d.length; k++) {
-          if (d[k] === 0x00) break;
-          if (d[k] >= 30 && d[k] <= 220) wsamples.push(d[k]);
+        if (h[29] || h[30] || h[31]) {
+          var started = false;
+          for (var k = 0; k < d.length; k++) {
+            if (!started) {
+              if (d[k] === 0x00) continue;
+              started = true;
+            }
+            if (d[k] === 0x00) break;
+            if (d[k] >= 30 && d[k] <= 220) wsamples.push(d[k]);
+          }
         }
         out.kind = 'workout';
         out.record = {

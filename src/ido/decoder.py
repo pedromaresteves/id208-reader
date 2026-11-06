@@ -605,22 +605,33 @@ def parse_workout_summary(header: bytes, data: bytes) -> dict[str, object]:
     maybe steps×256: 517684/256 = 2022.2 vs 2021 shown, unconfirmed),
     [48:56], tail triplets and segment tables await a counting run
     (treadmill with exact steps would nail [12:16]).
-    sport_type reads 5 on BOTH runs (strength + walk) — disambiguate with
-    a third mode before blessing the enum.
+    sport_type [8] reads 5 on Functional Strength, Outdoor Walk AND Outdoor
+    Run (2026-11-05) — it is a generic workout marker, not the mode. No
+    header byte tracks the mode; it is not exposed in this record.
 
-    Data layout: 4-byte zero prefix, then raw bpm bytes at ~5 s intervals
-    (180 samples here over 928 s) until the first 0x00, then
-    histogram/pace/cadence segment tables (TBD).
+    Data layout: raw bpm bytes at ~5 s intervals starting at data[0]; LEADING
+    0x00 bytes are missing samples (no 4-byte prefix), and the run ends at
+    the first 0x00 separator. Then histogram/pace/cadence segment tables
+    (TBD). Sample counts from byte 0 match duration/5 (2026-11-05: 697 over
+    3520 s, 37 over 184 s); skipping a fixed 4 bytes dropped real samples.
     """
     if len(header) < 100:
         raise ValueError("workout header too short")
     start_time_s = header[5] * 3600 + header[6] * 60 + header[7]
     samples: list[int] = []
-    for bpm in data[4:]:
-        if bpm == 0x00:
-            break
-        if 30 <= bpm <= 220:
-            samples.append(bpm)
+    # No HR at all: the tables after the separator can look like bpm values,
+    # so trust the header stats instead of scanning past the zero run.
+    if header[29] or header[30] or header[31]:
+        started = False
+        for bpm in data:
+            if not started:
+                if bpm == 0x00:
+                    continue
+                started = True
+            if bpm == 0x00:
+                break
+            if 30 <= bpm <= 220:
+                samples.append(bpm)
     return {
         "version": header[0],
         "year": int.from_bytes(header[1:3], "little"),

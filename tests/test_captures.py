@@ -74,7 +74,11 @@ def test_collect_health_skips_empty_marker() -> None:
 
 def test_collect_health_harvests_raw_workout() -> None:
     # dataType 0x04 with items: decoded summary (see parse_workout_summary).
-    head = bytes.fromhex("10EA070A08123A2805") + bytes(92)
+    # HR stats must be non-zero, else the parser treats the record as no-HR
+    # and refuses to read the table bytes after the zero run as samples.
+    head = bytearray(bytes.fromhex("10EA070A08123A2805") + bytes(92))
+    head[29], head[30], head[31] = 85, 145, 63
+    head = bytes(head)
     payload = (
         bytes((0x00, 0x04, 0x00, 0x00, 0x00, 0x01, 0x00))
         + len(head).to_bytes(2, "little")
