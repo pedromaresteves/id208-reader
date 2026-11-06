@@ -1,80 +1,50 @@
-# Playwright + real watch (Windows machine, Python Playwright)
+# Playwright live drivers (Windows)
 
-Python Playwright is **already installed** on the Windows machine:
+These scripts drive the real watch from WSL using **Windows Python** and its
+installed Playwright/Chromium. Full procedures, troubleshooting and the
+first-run test are in [`docs/TESTING.md`](../../docs/TESTING.md).
 
-- Python: `C:\Users\pedro\AppData\Local\Programs\Python\Python313\python.exe`
-- Playwright package: in that Python's `site-packages`
-- Browsers: `C:\Users\pedro\AppData\Local\ms-playwright\chromium-1248\`
+Prerequisites:
 
-From WSL you can run the Windows Python directly:
+- Windows Bluetooth on; Chrome allowed to use it.
+- Watch awake and bonded.
+- Webapp served from WSL:
+
+```bash
+cd webapp && python3 -m http.server 8080
+```
+
+Run:
 
 ```bash
 WINPY=/mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe
-$WINPY -c "import playwright; print('ok')"
+
+$WINPY scripts/playwright-watch/watch_test.py           # diagnostics: connect + full sync
+$WINPY scripts/playwright-watch/watch_test.py --daily   # connect only (auto-sync)
+$WINPY scripts/playwright-watch/live_dashboard.py       # one dashboard Sync click
+$WINPY scripts/playwright-watch/ui_smoke.py             # headless, no Bluetooth
 ```
 
-## Why the user must click the device picker
+## The picker
 
-`navigator.bluetooth.requestDevice()` opens a **native Windows dialog**
-(not a web page element). Playwright cannot click native dialogs. So:
+`requestDevice()` opens a **native Windows Bluetooth dialog**. Playwright
+cannot click it. When the script prints the prompt, click **ID208 Plus** and
+leave Chrome open until the run finishes.
 
-1. The script opens the webapp in headed Windows Chrome and clicks "Connect".
-2. The native Bluetooth picker pops up on the Windows desktop.
-3. **YOU click the ID208 watch in the picker.** That is the pairing step.
-4. The script takes over: runs the sync, reads the log, saves files.
+## Outputs (gitignored)
 
-## Prerequisites
+| Driver | Files |
+|---|---|
+| `watch_test.py` | `connect*`, `auto-sync*`, `full-sync*` (JSONL + log + store + decoded HTML) |
+| `live_dashboard.py` | `dashboard-sync-log.txt`, `dashboard-sync-store.json` |
+| `ui_smoke.py` | none |
 
-- The webapp must be served on `http://localhost:8080` (from WSL):
-  ```bash
-  cd /home/pedro/projects/id208-reader/webapp && python3 -m http.server 8080
-  ```
-  Windows Chrome can reach WSL's localhost via `localhost` (WSL2 forwards it).
-- Windows Bluetooth must be ON (Settings > Bluetooth & devices).
-- Chrome needs Bluetooth permission: `chrome://settings/content/bluetooth` → allow.
+Notes:
 
-## Run the watch test
-
-```bash
-# From the repo root in WSL:
-WINPY=/mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe
-
-# Full sync (connect auto-syncs first):
-$WINPY scripts/playwright-watch/watch_test.py
-
-# Daily sync only:
-$WINPY scripts/playwright-watch/watch_test.py --daily
-
-# Headless UX smoke (no Bluetooth):
-$WINPY scripts/playwright-watch/ui_smoke.py
-
-# Live dashboard one-button sync:
-$WINPY scripts/playwright-watch/live_dashboard.py
-```
-
-When the script prints **"CLICK THE ID208 WATCH IN THE PICKER NOW"**,
-click the watch in the native Bluetooth dialog on the Windows desktop.
-
-## Output files (in `scripts/playwright-watch/`)
-
-| File | Contents |
-|------|----------|
-| `connect-log.txt` | Connection handshake log |
-| `auto-sync-log.txt` | Automatic sync TX/RX log |
-| `full-sync-log.txt` | Full sync TX/RX log (all frames) |
-| `full-sync.jsonl` | Raw BLE frames as JSONL |
-| `dashboard-sync-log.txt` | Dashboard one-button sync log |
-| `dashboard-sync-store.json` | Store dump after the dashboard sync |
-
-## Troubleshooting
-
-- **"Bluetooth adapter not available"** — Windows Bluetooth is off, or Chrome
-  lacks permission. Check `chrome://settings/content/bluetooth`.
-- **Picker doesn't appear** — Chrome must be headed (`headless=False`, which
-  the script uses). If running from WSL, the window appears on the Windows desktop.
-- **Watch not in picker** — put the watch in discoverable mode (hold button).
-- **Stale bond (0x0AF1/0x0AF2 missing in log)** — Windows Settings > Bluetooth >
-  remove ID208, reboot watch, retry.
-- **`localhost:8080` not reachable from Windows Chrome** — WSL2 should forward
-  it. If not, use the WSL IP: `hostname -I` in WSL, then
-  `--url http://<wsl-ip>:8080/diagnostics.html`.
+- Every run uses a fresh browser context, so the IndexedDB store is
+  ephemeral; the store JSON is the artifact.
+- Drivers cache-bust with `?v=<epoch>` and propagate it to every local JS
+  file.
+- `live_dashboard.py` truncates console lines at 240 characters; a printed
+  RX frame can look 2 bytes short. Trust the frame length and `head_size`.
+- `watch_test.py` writes full JSONL; `live_dashboard.py` does not.

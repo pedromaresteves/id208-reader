@@ -8,196 +8,160 @@ over WebBluetooth from the phone's Chrome; a Python decoder (`src/ido/`)
 replays captured JSONL offline. No vendor app, no cloud, no build step.
 
 Success rule: **numbers decoded by the app must match the watch screen.**
-Mismatches are decoder bugs.
+Mismatches are decoder bugs, not cosmetic issues.
 
 ## Repo layout
 
 ```
 ├── webapp/              Static webapp (HTML + JS, no build step)
 │   ├── index.html       Dashboard (sync, last-sync, store summary, backup)
-│   ├── diagnostics.html Diagnostics: connect, setup, full sync, raw commands
-│   ├── activity.html    Steps/activity history page
-│   ├── sleep.html       Sleep history page
-│   ├── workout.html     Workouts/swims page
+│   ├── activity.html    Steps/activity history
+│   ├── sleep.html       Last night + week chart + month history list
+│   ├── workout.html     Workouts and swims
 │   ├── watch.html       Watch settings (setup, auto-detect, goals, backup)
+│   ├── diagnostics.html Recovery + raw protocol work (connect, full sync, raw)
 │   ├── shell.js         DOM log/show, progress, skew guard, nav, store status
-│   ├── store.js         IndexedDB wrapper + saveCaptured (one record/date+type)
+│   ├── store.js         IndexedDB wrapper + saveCaptured
 │   ├── codec.js         v3 builders + pure decodeHealth() -> typed records
 │   ├── transport.js     GATT connect/write/notify + v3 reassembly
 │   ├── sync.js          capture state + pullToday/pageDayHistory/syncNow/setup
-│   ├── ui.js            Shared chart/format/date/backup helpers
-│   ├── *.test.js        Node tests (capture, chart, store, skew, parity)
-│   └── parity.test.js   JS side of the JS<->Python golden-capture test
+│   ├── ui.js            Shared charts, formatting, dates, backup, sleep helpers
+│   └── *.test.js        Node suites (capture, chart, skew, store, parity)
 ├── src/ido/
-│   ├── decoder.py       Python builders/parsers — MUST stay byte-identical
-│   │                    with the JS builders in codec.js
-│   └── captures.py      JSONL capture replay
+│   ├── decoder.py       Python builders/parsers — must mirror codec.js
+│   └── captures.py      JSONL reassembly + collect_health
 ├── sync.py              Offline decode entry point (captures/ → out/)
-├── tests/               pytest suite (53 tests)
-│   └── fixtures/        Golden capture + store fixtures (committed)
-├── scripts/test.sh      One-command pytest + ruff + node suite
+├── tests/               pytest suite
+│   └── fixtures/        Synthetic golden capture + store fixtures (committed)
+├── scripts/test.sh      pytest + ruff + node syntax + node suites
 ├── scripts/playwright-watch/  Windows Playwright live drivers
-├── captures/            Raw JSONL + photos (gitignored, never commit)
-├── out/                 Decoded output (gitignored)
-└── TODO.md              Open items / known limitations (read this first)
+├── docs/PROTOCOL.md     Wire format, record layouts, store schema, evidence
+├── docs/TESTING.md      Test layers + live hardware playbook
+├── captures/            Raw JSONL/logs/photos (gitignored, never commit)
+└── out/                 Decoded output (gitignored)
 ```
 
 ## Commands
 
 ```bash
-# Everything (Python + lint + node)
+# Everything (Python tests + lint + node syntax + node suites)
 ./scripts/test.sh
 
-# Python tests
+# Focused Python
 .venv/bin/python -m pytest tests/ -q
-
-# Lint/format
 .venv/bin/ruff check src tests sync.py
 .venv/bin/ruff format --check src tests sync.py
 
-# JS syntax check
-node --check webapp/shell.js
-node --check webapp/codec.js
-node --check webapp/transport.js
-node --check webapp/sync.js
-
-# JS tests (no deps, plain node)
+# Focused JS (no deps)
 node webapp/capture.test.js
 node webapp/chart.test.js
-node webapp/store.test.js
 node webapp/skew.test.js
+node webapp/store.test.js
 node webapp/parity.test.js
 
 # Offline decode
 python sync.py
 
-# Serve webapp locally
+# Serve the webapp
 cd webapp && python3 -m http.server 8080
-# → http://localhost:8080/index.html
+# -> http://localhost:8080/index.html
 ```
 
 ## Conventions
 
-- **JS and Python builders must be byte-identical.** When changing a packet
-  builder in `webapp/codec.js`, mirror it in `src/ido/decoder.py` (and vice
-  versa). Tests in `tests/test_decoder.py` and `webapp/capture.test.js`
-  guard this.
+- **JS and Python builders must stay byte-identical.** Change a builder in
+  `webapp/codec.js` and mirror it in `src/ido/decoder.py` (and vice versa).
+  `tests/test_decoder.py` and `webapp/capture.test.js` guard the vectors.
+- **Parsers must agree too.** The webapp (`codec.js`) and offline decoder
+  (`captures.py` + `decoder.py`) must turn the same bytes into the same
+  records; `tests/test_parity.py` + `webapp/parity.test.js` cover the golden
+  capture.
 - **No build step, no npm deps** for the webapp. Plain HTML/JS files.
-- **Commit format:** short imperative subject, then body.
-- **Never commit** `captures/*.jsonl`, `captures/*.jpeg`, `out/`, `*.log`,
-  `scripts/playwright-watch/*.jsonl`, `*-log.txt`, or `*-store.json`.
-  Scrub Bluetooth MACs (keep first 3 octets) if sharing captures.
-- **PLAN*.md files are gitignored** — they are working notes, not committed
-  docs.
+- **Update docs when behavior changes.** Wire facts go in
+  `docs/PROTOCOL.md`; test procedures in `docs/TESTING.md`; user-facing
+  limits in `README.md`.
+- **Never commit** `captures/*.jsonl`, `captures/*.jpeg`, `captures/*.txt`,
+  `out/`, `*.log`, `scripts/playwright-watch/*.jsonl`, `*-log.txt`,
+  `*-store.json` or `*-decoded.html`. Scrub Bluetooth MACs (keep the first
+  three octets) if sharing captures.
+- **PLAN*.md files are gitignored** — working notes, not committed docs.
 
-## Critical protocol knowledge
+## Critical protocol summary
 
-### GATT characteristics
-- `0x0AF6` write / `0x0AF7` notify — legacy GET/SET + short v3 (≤50B,
-  including 19B `0x04` START/STOP)
-- `0x0AF1` write / `0x0AF2` notify — bulk v3 (manual 137B `0x05` sizes
-  query; writes are refused on this bond, so sync uses `0x0AF6` only)
-- Listen for v3 frames on BOTH notify characteristics.
+Full details, offsets and the evidence trail: `docs/PROTOCOL.md`.
 
-### v3 frame format
-- Preamble: `33 DA AD DA AD 01`, then inner length (2B LE), cmd (2B LE),
-  seq (2B LE), payload, CRC-16-CCITT-FALSE (2B LE) over bytes [1..len-3].
-- Multi-chunk reassembly: first chunk has full preamble; continuation
-  chunks start with `0x33` but not the full preamble.
-
-### Health sync (cmd 0x04)
-- `0x05` sizes query (137B, 7 type+offset records) is **manual diagnostics
-  only** now. Sync no longer sends it: offsets are ignored on `0x0AF6`, the
-  write fails on `0x0AF1` for this bond, and it only cost timeout time.
-  Types: 01=SpO2, 02=pressure, 03=HR, 04=activity/workout, 06=swim,
-  07=sleep, 08=sport.
-- `0x04` START/STOP: 19B. byte12=operate (00=START, 01=STOP),
-  byte13=dataType, byte14=day-data flag (01 for 01/02/03/08, 00 for
-  04/06/07), bytes 15-16 = saveOffset (16-bit LE, ignored on `0x0AF6`).
-- **Day-data history (01/02/03/08) is a persistent cursor over COMPLETED
-  days, oldest first.** START(oper=0, b14=0, off=0) + matching
-  STOP(oper=1, b14=0) returns one day per round; `items=0` ends it.
-  STOP must echo the START's byte14 — a b14=1 STOP does not advance the
-  cursor. `b14=1` returns today (in-progress) only. See `pullToday` /
-  `pageDayHistory` in sync.js.
-- The cursor survives disconnect/reconnect and is NOT rewound by b14=1,
-  `0x05`, or a bare STOP (tested 2026-11-05). After `items=0` it stays spent
-  for the watch's lifetime; factory reset untested.
-- Count-data types (sleep 07, workouts 04, swims 06): a **fresh saved record
-  is served at offset 0** (2026-11-05: closed Outdoor Walk, `items=58`), but
-  the stream is one-shot/cursor-like — the auto-sync consumed it and the
-  immediately following Full sync saw `items=0`. Old/historical records
-  still return `items=0` at every tested offset.
-- A swim (06) `items=0` reply is not always an empty marker: an all-zero
-  34-byte header is, while a real date + duration is a zero-lap swim
-  summary (2026-11-06: 10m09s, 0 laps). Both decoders accept the latter;
-  see `swim_summary_has_record` / `swimHeaderHasRecord`.
-
-### Known watch limitations (ID208 Plus, FW v1.01.17)
-- After a factory reset, the BLE-accessible history store is empty.
-  The watch display may show historical data from a separate UI store
-  that is NOT accessible via BLE. VeryFit has the same limitation.
-- The completed-day cursor is one-shot for the watch's lifetime. Once it
-  returns `items=0`, only new completed days can be captured.
-- Count-data (sleep 07, workouts 04, swims 06): fresh saved records can be
-  served once; old records return `items=0` even when the watch display
-  shows data. Treat the count-data stream as one-shot; daily accumulation is
-  the fallback.
-- See `TODO.md` §1–§3 for the open experiments and limitations.
+- Service `0x0AF0`. `0x0AF6` write / `0x0AF7` notify for legacy commands and
+  short v3 frames; `0x0AF1`/`0x0AF2` are the bulk pair. On this bond, writes
+  to `0x0AF1` are refused, so sync uses `0x0AF6` only. Listen on both
+  notifies.
+- v3 frame: `33 DA AD DA AD 01` + declared body length (after the `0x33`;
+  16 for the 19-byte START/STOP, 136 for the 137-byte sizes query) + cmd +
+  seq + payload + CRC-16-CCITT-FALSE. Multi-chunk frames reassemble by
+  length; only the first chunk has the full preamble.
+- Health common header (14 bytes): operate, data_type, zeros, item_count
+  u16, head_size u16, data_size u32, zero. Then `head_size` bytes of header
+  and `data_size` bytes of data.
+- `0x04` START/STOP is 19 bytes: byte12 operate, byte13 data_type, byte14
+  day-data flag, bytes15-16 save offset (ignored on `0x0AF6`).
+- Day-data types (01 SpO2, 02 pressure, 03 HR, 08 sport): `b14=1` returns
+  today; `b14=0` advances a persistent completed-day cursor, oldest first,
+  one day per round. STOP must echo the START's `b14`. `items=0` ends paging.
+- Count-data types (04 workout, 06 swim, 07 sleep): fresh saved records are
+  served once at offset 0; old records return `items=0`. Treat the stream as
+  one-shot.
+- A swim `items=0` reply is not always a marker: an all-zero 34-byte header
+  is, but a real date + duration is a zero-lap swim summary. See
+  `swim_summary_has_record` / `swimHeaderHasRecord`.
+- Workout type-04 HR samples start at `data[0]`; leading `0x00` bytes are
+  missing samples, and the run ends at the first `0x00`. The workout mode is
+  not exposed in the record.
 
 ## Environment constraints — READ BEFORE TESTING
 
 - **This sandbox has NO Bluetooth hardware.** WebBluetooth `requestDevice`
-  fails with "Bluetooth adapter not available". You CANNOT connect to a
-  real watch from here.
-- **Do not mock the BLE layer and present results as if they were real
-  watch behavior.** If asked to test against the watch, say so upfront:
-  "I can't connect to Bluetooth from this environment. I can verify code
-  logic with mocks, or you can run the diagnostics page on your phone."
-- **To test against the real watch, use the Windows machine via WSL.**
-  Python Playwright is already installed on Windows:
-  - Windows Python: `/mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe`
+  fails with "Bluetooth adapter not available". You cannot connect to a real
+  watch from here.
+- **Never present mocked BLE results as hardware behavior.** If asked, say
+  plainly: "I can't connect to Bluetooth from here. I can verify logic with
+  mocks, or you can run the live drivers on the Windows machine."
+- **Live path: Windows Python Playwright via WSL.**
+  - Windows Python:
+    `/mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe`
   - Browsers: `/mnt/c/Users/pedro/AppData/Local/ms-playwright/chromium-1248/`
-  - Run: `WINPY=/mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe`
-    then `$WINPY scripts/playwright-watch/watch_test.py` (serve webapp on :8080 first).
-  - The script opens headed Windows Chrome; `navigator.bluetooth.requestDevice()`
-    opens a NATIVE Windows picker that Playwright cannot click — **the user
-    must click the watch in the picker**. The script prints a clear prompt.
-  - See `scripts/playwright-watch/README.md` for details.
-- Windows Python Playwright is the supported live path (`watch_test.py`,
-  `live_dashboard.py`, `ui_smoke.py`). `ui_smoke.py` is headless and needs no
-  Bluetooth.
-- The webapp can be served locally with `python3 -m http.server 8080` from
-  `webapp/`.
-
-## Git workflow — READ BEFORE COMMITTING
-
-- **Do NOT commit unless the user explicitly asks.** Make the changes,
-  run the tests, report what changed — then wait. The user decides when
-  to commit and what message to use.
-- Exception: the user may say "commit" or "add and commit" — that is
-  explicit authorization for that change set only.
-
-## Communication style
-
-- **Ask, don't improvise.** If a task has a strong constraint or the
-  approach is ambiguous, ask the user before proceeding. Don't silently
-  pick a strategy and present results as definitive.
-- Be upfront about limitations. If you can't do something (no Bluetooth,
-  no network, missing tools), say so immediately rather than working around
-  it silently.
-- When the user asks "did you test it?", distinguish clearly between
-  "tested with mocks (code logic only)" and "tested against real hardware".
+  - Serve `webapp/` on `:8080` first, then run a driver from
+    `scripts/playwright-watch/`.
+  - The native Windows Bluetooth picker cannot be clicked by Playwright —
+    **the user must click the watch**. Drivers print a clear prompt.
+  - `ui_smoke.py` is headless and needs no Bluetooth.
+- Live checks must cache-bust with `?v=<epoch>`; the page loaders propagate it
+  to every local JS file. The drivers do this automatically.
+- Full live procedures, driver outputs and troubleshooting:
+  `docs/TESTING.md`.
 
 ## Debugging workflow
 
-1. Read `TODO.md` first — it has known limitations and open items.
-2. Check `captures/` for real watch JSONL traces (gitignored, may not
-   exist in a fresh clone).
-3. Use **"Full sync"** on `diagnostics.html` to drain every queued day.
-4. Use **"Copy log"** or **"Download JSONL"** on `diagnostics.html` to capture
-   a sync trace, then share it for analysis.
-5. Run `./scripts/test.sh` after any code change (or the focused
-   `node webapp/capture.test.js` / `pytest tests/ -q` while iterating).
-6. Live checks bust the script cache with `?v=<epoch>`; the page loaders
-   propagate it to every local JS file.
+1. Read `docs/PROTOCOL.md` for the type you are touching and its known limits.
+2. Check `captures/` for real traces (gitignored; may not exist in a fresh
+   clone). `captures/README.md` is the local session notebook.
+3. Reproduce offline first: `sync.py` or the pytest/node suites.
+4. On the phone/PC, use **Full sync** on `diagnostics.html` to drain queued
+   days, and **Copy log** / **Download JSONL** to capture a trace.
+5. Run `./scripts/test.sh` after any code change.
+6. For hardware claims, run a live driver and quote its log; otherwise call
+   the result a mock/headless check.
+
+## Git workflow — READ BEFORE COMMITTING
+
+- **Do NOT commit unless the user explicitly asks.** Make the changes, run
+  the tests, report what changed, then wait.
+- "Commit" / "add and commit" authorizes that change set only. Never push
+  unless asked.
+
+## Communication style
+
+- **Ask, don't improvise.** For ambiguous or high-impact changes, propose the
+  approach and wait.
+- Be upfront about limitations (no Bluetooth, no network, missing tools)
+  immediately rather than silently working around them.
+- Distinguish "tested with mocks" from "tested on the watch" every time.
+- Keep replies short; no filler and no restating what the user already knows.

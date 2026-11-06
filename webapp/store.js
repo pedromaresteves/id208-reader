@@ -1,9 +1,10 @@
 /* id208-reader local store — framework-free IndexedDB wrapper.
  *
  * One record per (date, type): { date, type, payload, source, updatedAt }.
- * Types: 'steps' | 'sleep' | 'hr' | 'workout'. Dates are YYYY-MM-DD
- * (sleep uses its night date). Newer pulls overwrite the same key, so
- * history grows by date, never duplicates. No network, no account.
+ * Types: 'steps' | 'sleep' | 'hr' | 'workout' | 'spo2' | 'pressure' | 'meta'.
+ * Dates are YYYY-MM-DD (sleep uses its night date, workouts use
+ * "date startS", meta uses 'last-sync'). Newer pulls overwrite the same key,
+ * so history grows by date, never duplicates. No network, no account.
  */
 
 var Store = (function () {
