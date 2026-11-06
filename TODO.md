@@ -4,8 +4,9 @@
 1. **Later / needs reset or broken state:** first-run auto-setup and the
    skew-banner force reload still need a reset watch or a deliberately
    corrupted settings file to exercise live (§4).
-2. **Optional hardware:** one fresh swim to complete the count-data check
-   (§2); workouts and sleep are already confirmed.
+2. **Optional hardware:** a future fresh swim will now be saved (see §2);
+   no action needed unless you want to confirm the zero-lap path on a real
+   record.
 
 ## 1. Workout mode — not exposed in the type-04 record (closed)
 - Four confirmed 2026-11-05 records: Outdoor Walk 17:04 (`items=58`),
@@ -40,9 +41,18 @@
   `items=19`, 426 min, 23:31→06:37, then `items=0`.
 - The stream is one-shot/cursor-like: the sync consumed each fresh record;
   the next round returned `items=0`.
+- Swim: a fresh fake pool swim was served once on 2026-11-06 as a
+  **zero-item summary** — `items=0`, but the 34-byte header carried
+  19:35:39, 609 s (10m09s), 25 m pool, 0 laps/distance/strokes.
+  The old decoder treated every `items=0` reply as an empty marker, so the
+  one-shot record was consumed without being saved; the next sync returned
+  the all-zero marker. The decoders now accept a zero-item swim when the
+  header has a real date + duration (all-zero header is still a marker),
+  so the next fresh swim is captured. Raw trace:
+  `captures/sync-2026-11-06-swim-log.txt` (gitignored; lines are truncated
+  at 240 chars by the driver, so the log shows 32 of the 34 header bytes).
 - Old sleep/workout/swim records still return `items=0`, and VeryFit shows
   the same gaps. Historical records remain inaccessible.
-- Remaining: one fresh swim (type 06) to complete the count-data check.
 
 ## 3. Completed-day cursor is one-shot
 - After the cursor returns `items=0` it stays spent for the watch's lifetime.

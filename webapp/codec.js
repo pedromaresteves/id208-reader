@@ -25,6 +25,17 @@ IDO.codec = (function () {
     return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
   }
 
+  // Zero-lap swims arrive with items=0 but a real summary header (date,
+  // start, duration); the empty-history marker header is all zeros. Mirror
+  // of swim_summary_has_record in src/ido/decoder.py.
+  function swimHeaderHasRecord(h) {
+    if (h.length < 20) return false;
+    var year = u16le(h, 0);
+    if (year < 2000 || year > 2100) return false;
+    if (h[2] < 1 || h[2] > 12 || h[3] < 1 || h[3] > 31) return false;
+    return u16le(h, 17) > 0;
+  }
+
   // CRC-16-CCITT-FALSE (poly 0x1021, init 0xFFFF), over [1..len-3], stored LE.
   function crc16Ccitt(buf, off, len) {
     var crc = 0xFFFF;
@@ -292,7 +303,7 @@ IDO.codec = (function () {
         ' dataSize=' + dataSize + ' dur=' + wdur + ' ' + wkcal + ' HR ' + whr + wdist +
         ' headHex=' + IDO.shell.hexStr(h.slice(0, Math.min(h.length, 16)));
     } else if (dataType === 6) {
-      if (itemCount === 0) {
+      if (itemCount === 0 && !swimHeaderHasRecord(h)) {
         out.kind = 'swim'; out.empty = true;
         out.message = 'SWIM dataType=6 items=0: empty-history marker, ignored (not a swim).';
       } else if (h.length >= 34) {
@@ -315,7 +326,8 @@ IDO.codec = (function () {
         };
         out.message = 'SWIM dataType=6 items=' + itemCount + ' date=' + swimDate +
           ' dur=' + Math.floor(swimDur / 60) + 'm' + (swimDur % 60) + 's' +
-          ' ' + swimKcal + 'kcal ' + (swimDist / 1000).toFixed(2) + 'km laps=' + h[15];
+          ' ' + swimKcal + 'kcal ' + (swimDist / 1000).toFixed(2) + 'km laps=' + h[15] +
+          (itemCount === 0 ? ' (summary only — no lap data)' : '');
       } else {
         out.kind = 'swim';
         out.message = 'SWIM dataType=6 items=' + itemCount + ' headSize=' + headSize +

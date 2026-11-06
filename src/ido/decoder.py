@@ -551,6 +551,10 @@ def parse_swim_summary(header: bytes, data: bytes) -> dict[str, object]:
     distance), byte[8]=pace-ish, byte[10]=minute index. Only distance
     sums exactly; other per-minute semantics stay provisional until a
     second swim anchors them.
+
+    A zero-lap swim arrives with item_count=0 and data_size=0: the header
+    still carries the session (see swim_summary_has_record), and the
+    all-zero header is the empty-history marker.
     """
     if len(header) < 34:
         raise ValueError("swim header too short")
@@ -587,6 +591,23 @@ def parse_swim_summary(header: bytes, data: bytes) -> dict[str, object]:
         "stroke_rate_spm": header[28],
         "minutes": minutes,
     }
+
+
+def swim_summary_has_record(header: bytes) -> bool:
+    """True when a dataType 0x06 header describes a saved swim.
+
+    A zero-lap swim (fake/short session) arrives with item_count=0 but a real
+    header: date, start time and duration set. The empty-history marker has an
+    all-zero header. Mirror of swimHeaderHasRecord in webapp/codec.js.
+    """
+    if len(header) < 20:
+        return False
+    year = int.from_bytes(header[0:2], "little")
+    if not 2000 <= year <= 2100:
+        return False
+    if not (1 <= header[2] <= 12 and 1 <= header[3] <= 31):
+        return False
+    return int.from_bytes(header[17:19], "little") > 0
 
 
 def parse_workout_summary(header: bytes, data: bytes) -> dict[str, object]:

@@ -128,6 +128,10 @@ cd webapp && python3 -m http.server 8080
   the stream is one-shot/cursor-like — the auto-sync consumed it and the
   immediately following Full sync saw `items=0`. Old/historical records
   still return `items=0` at every tested offset.
+- A swim (06) `items=0` reply is not always an empty marker: an all-zero
+  34-byte header is, while a real date + duration is a zero-lap swim
+  summary (2026-11-06: 10m09s, 0 laps). Both decoders accept the latter;
+  see `swim_summary_has_record` / `swimHeaderHasRecord`.
 
 ### Known watch limitations (ID208 Plus, FW v1.01.17)
 - After a factory reset, the BLE-accessible history store is empty.

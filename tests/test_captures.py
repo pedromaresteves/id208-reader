@@ -107,6 +107,61 @@ def test_collect_health_harvests_raw_workout() -> None:
     assert row["source"] == "test"
 
 
+def test_collect_health_harvests_zero_lap_swim() -> None:
+    # 2026-11-06 fake pool swim: items=0 (no per-lap data) but the 34-byte
+    # summary header carries start 19:35:39, 609 s and a 25 m pool.
+    head = bytes.fromhex(
+        "EA070B0613232701010000000000000000610200000000051900FFFF000000000000"
+    )
+    payload = (
+        bytes((0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00))
+        + len(head).to_bytes(2, "little")
+        + (0).to_bytes(4, "little")
+        + bytes((0x00,))
+        + head
+    )
+    logical = _frame_bytes(0x0004, 0x71, payload)
+    lines = [
+        {
+            "ts": "t",
+            "char": "0x0AF7",
+            "dir": "RX",
+            "hex": (bytes((0x33,)) + logical).hex(),
+        }
+    ]
+    sport, sleep, hr, workouts = collect_health(lines, "test")
+    assert sport == [] and sleep == [] and hr == []
+    assert len(workouts) == 1
+    row = workouts[0]
+    assert row["date"] == "2026-11-06"
+    assert row["kind"] == "swim"
+    assert row["startS"] == 19 * 3600 + 35 * 60 + 39
+    assert row["durationsS"] == 609
+    assert row["distanceM"] == 0
+    assert row["laps"] == 0
+    assert row["main_stroke"] == 1
+    assert row["pool_length_m"] == 25
+
+    # The same zero-item reply with an all-zero header stays a marker.
+    zero_payload = (
+        bytes((0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00))
+        + (34).to_bytes(2, "little")
+        + (0).to_bytes(4, "little")
+        + bytes((0x00,))
+        + bytes(34)
+    )
+    zero_logical = _frame_bytes(0x0004, 0x72, zero_payload)
+    zero_lines = [
+        {
+            "ts": "t",
+            "char": "0x0AF7",
+            "dir": "RX",
+            "hex": (bytes((0x33,)) + zero_logical).hex(),
+        }
+    ]
+    assert collect_health(zero_lines, "test")[3] == []
+
+
 def test_collect_health_harvests_swim() -> None:
     # dataType 0x06 with the Oct-14 pool-swim header: lands in workout rows
     # as kind=swim with per-minute distances summing to 1650 m.

@@ -36,6 +36,7 @@ from ido.decoder import (
     parse_swim_summary,
     parse_v3_health_common,
     parse_workout_summary,
+    swim_summary_has_record,
 )
 
 
@@ -576,3 +577,21 @@ def test_parse_swim_summary_matches_pool_swim_oct14() -> None:
 def test_parse_swim_summary_rejects_short_header() -> None:
     with pytest.raises(ValueError):
         parse_swim_summary(bytes(33), bytes(10))
+
+
+def test_swim_summary_has_record_separates_empty_marker() -> None:
+    # 2026-11-06 fake pool swim: items=0, but the header carries the session
+    # (start 19:35:39, 609 s, 25 m pool) with zero laps.
+    real = bytes.fromhex(
+        "EA070B0613232701010000000000000000610200000000051900FFFF000000000000"
+    )
+    assert swim_summary_has_record(real)
+    assert not swim_summary_has_record(bytes(34))
+    # Short or impossible headers are treated as markers.
+    assert not swim_summary_has_record(bytes(19))
+    bad_year = bytearray(real)
+    bad_year[0:2] = (1999).to_bytes(2, "little")
+    assert not swim_summary_has_record(bytes(bad_year))
+    zero_dur = bytearray(real)
+    zero_dur[17:19] = (0).to_bytes(2, "little")
+    assert not swim_summary_has_record(bytes(zero_dur))

@@ -18,6 +18,7 @@ from ido.decoder import (
     parse_swim_summary,
     parse_v3_health_common,
     parse_workout_summary,
+    swim_summary_has_record,
 )
 
 V3_PREAMBLE = bytes((0x33, 0xDA, 0xAD, 0xDA, 0xAD))
@@ -117,12 +118,18 @@ def collect_health(
                 common = parse_v3_health_common(payload)
             except ValueError:
                 continue
-            if common["item_count"] == 0:
-                continue  # end-of-history marker / STOP ack
             head = payload[14 : 14 + common["head_size"]]
             if len(head) < common["head_size"]:
                 continue
             data = payload[14 + common["head_size"] :]
+            # Zero-lap swims have item_count=0 but a real summary header;
+            # an all-zero header is the empty-history marker. See
+            # swim_summary_has_record.
+            if common["data_type"] == 0x06 and common["item_count"] == 0:
+                if not swim_summary_has_record(head):
+                    continue
+            elif common["item_count"] == 0:
+                continue  # end-of-history marker / STOP ack
             if common["data_type"] == 0x08 and len(head) >= 20:
                 summary = parse_sport_summary(head)
                 year = int.from_bytes(head[1:3], "little")

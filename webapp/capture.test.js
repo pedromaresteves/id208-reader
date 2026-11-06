@@ -162,6 +162,32 @@ const CHUNKS = [
   assert.strictEqual(phantomRows.length, 0, 'empty-history reply saves no workout, got ' + phantomRows.length);
   console.log('capture.test.js: phantom guard passed');
 
+  // Zero-lap swim: items=0 but a real 34-byte header (2026-11-06 fake pool
+  // swim, 609 s, 25 m pool). It must be saved, while the all-zero marker is
+  // still ignored.
+  const swHead = Buffer.from(
+    'EA070B0613232701010000000000000000610200000000051900FFFF000000000000', 'hex');
+  const swPay = Buffer.concat([
+    Buffer.from([0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 34, 0x00, 0, 0, 0, 0, 0x00]),
+    swHead,
+  ]);
+  const swBuf = Buffer.concat([
+    Buffer.from([0xDA, 0xAD, 0xDA, 0xAD, 0x01, 0, 0, 0x04, 0x00, 0x75, 0x00]),
+    swPay,
+  ]);
+  swBuf.writeUInt16LE(swBuf.length, 5);
+  B.resetCaptures();
+  B.handleV3(new Uint8Array(Buffer.concat([Buffer.from([0x33]), swBuf])));
+  const swBefore = puts.length;
+  await B.saveCaptured('swim-zero-lap');
+  const swRows = puts.slice(swBefore).filter((p) => p.type === 'workout');
+  assert.strictEqual(swRows.length, 1, 'zero-lap swim saved, got ' + swRows.length);
+  assert.strictEqual(swRows[0].payload.kind, 'swim');
+  assert.strictEqual(swRows[0].payload.durationsS, 609);
+  assert.strictEqual(swRows[0].payload.laps, 0);
+  assert.strictEqual(swRows[0].payload.startS, 19 * 3600 + 35 * 60 + 39);
+  console.log('capture.test.js: zero-lap swim summary passed');
+
   // Same phantom family for sleep: a zeroed dataType-07 frame (items=0)
   // used to store a "0-00-00" zero-night on every empty pull.
   const sPay = Buffer.concat([
