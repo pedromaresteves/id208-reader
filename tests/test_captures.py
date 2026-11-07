@@ -68,8 +68,10 @@ def test_collect_health_skips_empty_marker() -> None:
             "hex": (bytes((0x33,)) + logical).hex(),
         }
     ]
-    sport, sleep, hr, workouts = collect_health(lines, "test")
-    assert sport == [] and sleep == [] and hr == [] and workouts == []
+    sport, sleep, hr, workouts, spo2, pressure = collect_health(lines, "test")
+    assert sport == [] and sleep == [] and hr == []
+    assert spo2 == [] and pressure == []
+    assert workouts == []
 
 
 def test_collect_health_harvests_raw_workout() -> None:
@@ -96,8 +98,9 @@ def test_collect_health_harvests_raw_workout() -> None:
             "hex": (bytes((0x33,)) + logical).hex(),
         }
     ]
-    sport, sleep, hr, workouts = collect_health(lines, "test")
+    sport, sleep, hr, workouts, spo2, pressure = collect_health(lines, "test")
     assert sport == [] and sleep == [] and hr == []
+    assert spo2 == [] and pressure == []
     assert len(workouts) == 1
     row = workouts[0]
     assert row["date"] == "2026-10-08"
@@ -129,8 +132,9 @@ def test_collect_health_harvests_zero_lap_swim() -> None:
             "hex": (bytes((0x33,)) + logical).hex(),
         }
     ]
-    sport, sleep, hr, workouts = collect_health(lines, "test")
+    sport, sleep, hr, workouts, spo2, pressure = collect_health(lines, "test")
     assert sport == [] and sleep == [] and hr == []
+    assert spo2 == [] and pressure == []
     assert len(workouts) == 1
     row = workouts[0]
     assert row["date"] == "2026-11-06"
@@ -186,8 +190,9 @@ def test_collect_health_harvests_swim() -> None:
             "hex": (bytes((0x33,)) + logical).hex(),
         }
     ]
-    sport, sleep, hr, workouts = collect_health(lines, "test")
+    sport, sleep, hr, workouts, spo2, pressure = collect_health(lines, "test")
     assert sport == [] and sleep == [] and hr == []
+    assert spo2 == [] and pressure == []
     assert len(workouts) == 1
     row = workouts[0]
     assert row["date"] == "2026-10-14"

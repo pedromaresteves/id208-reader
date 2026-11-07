@@ -52,8 +52,8 @@ python sync.py
 ```
 
 It replays captures through `src/ido/` into dated `out/` files
-(`steps.csv`, `sleep.json`, `hr.json`, `workouts.json`). SpO2 and pressure are
-webapp-only today. Captures and `out/` are gitignored.
+(`steps.csv`, `sleep.json`, `hr.json`, `spo2.json`, `pressure.json`,
+`workouts.json`). Captures and `out/` are gitignored.
 
 ## Requirements
 
@@ -97,8 +97,9 @@ These are watch or firmware limits, not missing UI:
   common header or data blob.
 - **Sleep is totals only** (bedtime, wake time, stage minutes). There is no
   per-minute stage timeline in the BLE record.
-- **SpO2 and pressure are raw** — values are decoded, but units/calibration
-  are not confirmed against the watch screen.
+- **SpO2 and "pressure" are confirmed**: SpO2 is percent; type 02 is the
+  watch's Stress score (0-100), not blood pressure. Both matched the screen
+  on 2026-11-07.
 
 ## Status (verified on hardware)
 
@@ -108,6 +109,8 @@ These are watch or firmware limits, not missing UI:
 - First-run bind/auth after a factory reset (2026-11-06).
 - Workout HR samples from byte 0 of the data blob.
 - First post-reset completed day (2026-11-06) drained on 2026-11-07.
+- SpO2 (98%) and stress (34) matched the watch screen; type 02 is the
+  stress index, and its time axis is minutes since midnight.
 - Not yet observed live: a swim with lap data and the file-skew banner (only
   triggers on partial file updates).
 

@@ -35,6 +35,7 @@ from ido.decoder import (
     parse_sport_summary,
     parse_swim_summary,
     parse_v3_health_common,
+    parse_vitals_day,
     parse_workout_summary,
     swim_summary_has_record,
 )
@@ -419,6 +420,32 @@ def test_parse_hr_day_matches_watch_oct3() -> None:
 def test_parse_hr_day_rejects_short_header() -> None:
     with pytest.raises(ValueError):
         parse_hr_day(bytes(9), bytes(10), 5)
+
+
+def test_parse_vitals_day_spo2_and_pressure() -> None:
+    header = bytes.fromhex("EA070A03") + (1000).to_bytes(4, "little") + bytes(2)
+    data = bytes((10, 97, 20, 45, 30, 98))
+
+    spo2 = parse_vitals_day(header, data, 3, 0x01)
+    assert spo2["date"] == "2026-10-03"
+    assert spo2["start_min"] == 1000
+    assert spo2["items"] == 3
+    # SpO2 drops the out-of-range 45; pressure keeps it.
+    assert spo2["samples"] == [
+        {"t_min": 1010, "value": 97},
+        {"t_min": 1060, "value": 98},
+    ]
+    pressure = parse_vitals_day(header, data, 3, 0x02)
+    assert pressure["samples"] == [
+        {"t_min": 1010, "value": 97},
+        {"t_min": 1030, "value": 45},
+        {"t_min": 1060, "value": 98},
+    ]
+
+
+def test_parse_vitals_day_rejects_short_header() -> None:
+    with pytest.raises(ValueError):
+        parse_vitals_day(bytes(3), bytes(4), 1, 0x01)
 
 
 def test_parse_v3_health_common_ok() -> None:

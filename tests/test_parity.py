@@ -26,14 +26,21 @@ def _js_decode() -> dict[str, list[dict[str, object]]]:
     return json.loads(out)
 
 
-def _python_decode() -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-    sport, _sleep, hr, _workouts = collect_health(load_lines(FIXTURE), FIXTURE.name)
-    return sport, hr
+def _python_decode() -> tuple[
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+]:
+    sport, _sleep, hr, _workouts, spo2, pressure = collect_health(
+        load_lines(FIXTURE), FIXTURE.name
+    )
+    return sport, hr, spo2, pressure
 
 
 def test_js_and_python_agree_on_sport_days() -> None:
     js = _js_decode()
-    sport, _hr = _python_decode()
+    sport, _hr, _spo2, _pressure = _python_decode()
 
     assert len(js["steps"]) == len(sport) == 5
     for js_row, py_row in zip(js["steps"], sport, strict=True):
@@ -46,7 +53,7 @@ def test_js_and_python_agree_on_sport_days() -> None:
 
 def test_js_and_python_agree_on_hr_days() -> None:
     js = _js_decode()
-    _sport, hr = _python_decode()
+    _sport, hr, _spo2, _pressure = _python_decode()
 
     assert len(js["hr"]) == len(hr) == 5
     for js_row, py_row in zip(js["hr"], hr, strict=True):
@@ -57,6 +64,23 @@ def test_js_and_python_agree_on_hr_days() -> None:
         assert js_row["samples"] == [
             {"t": sample["t_s"], "bpm": sample["bpm"]} for sample in py_row["samples"]
         ]
+
+
+def test_js_and_python_agree_on_spo2_and_pressure_days() -> None:
+    js = _js_decode()
+    _sport, _hr, spo2, pressure = _python_decode()
+
+    for group, py_rows in (("spo2", spo2), ("pressure", pressure)):
+        assert len(js[group]) == len(py_rows) == 5
+        for js_row, py_row in zip(js[group], py_rows, strict=True):
+            assert js_row["date"] == py_row["date"]
+            assert js_row["startMin"] == py_row["start_min"]
+            assert js_row["items"] == py_row["items"]
+            samples = [
+                {"tMin": sample["t_min"], "value": sample["value"]}
+                for sample in py_row["samples"]
+            ]
+            assert js_row["samples"] == samples
 
 
 def test_parity_fixture_has_no_phantom_records() -> None:

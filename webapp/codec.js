@@ -349,11 +349,11 @@ IDO.codec = (function () {
       for (var pi = 0; pi < itemCount && 2 * pi + 1 < d.length; pi++) {
         tt2 += d[2 * pi];
         var v = d[2 * pi + 1];
-        if (v >= lo && v <= hi) pts.push({ t: tt2, value: v });
+        if (v >= lo && v <= hi) pts.push({ tMin: tt2, value: v });
       }
       out.kind = isSpo2 ? 'spo2' : 'pressure';
       out.record = {
-        date: ddate, startS: st2, items: itemCount, headSize: headSize, dataSize: dataSize,
+        date: ddate, startMin: st2, items: itemCount, headSize: headSize, dataSize: dataSize,
         samples: pts, headHex: IDO.shell.hexStr(h), dataHex: IDO.shell.hexStr(d),
         source: 'v3 type0' + dataType + ' pull',
       };

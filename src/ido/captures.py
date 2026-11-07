@@ -17,6 +17,7 @@ from ido.decoder import (
     parse_sport_summary,
     parse_swim_summary,
     parse_v3_health_common,
+    parse_vitals_day,
     parse_workout_summary,
     swim_summary_has_record,
 )
@@ -92,20 +93,25 @@ def collect_health(
     list[dict[str, object]],
     list[dict[str, object]],
     list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
 ]:
-    """Collect v3 sport summaries, sleep nights, HR days and raw workouts.
+    """Collect v3 sport, sleep, HR, SpO2/pressure and raw workout records.
 
     Groups consecutive RX chunks starting with 0x33 on the same
     characteristic into frames; skips empty end-of-history markers
     (item_count == 0) and STOP acks (no header).
-    Returns (sport_rows, sleep_rows, hr_rows, workout_rows); workout rows
-    carry the decoded summary plus head_hex (segment tables stay in the
-    source JSONL until a run anchors their layout).
+    Returns (sport_rows, sleep_rows, hr_rows, workout_rows, spo2_rows,
+    pressure_rows); workout rows carry the decoded summary plus head_hex
+    (segment tables stay in the source JSONL until a run anchors their
+    layout).
     """
     sport_rows: list[dict[str, object]] = []
     sleep_rows: list[dict[str, object]] = []
     hr_rows: list[dict[str, object]] = []
     workout_rows: list[dict[str, object]] = []
+    spo2_rows: list[dict[str, object]] = []
+    pressure_rows: list[dict[str, object]] = []
     pending: list[bytes] = []
     pending_char = ""
 
@@ -155,6 +161,21 @@ def collect_health(
                         "source": source,
                     }
                 )
+            elif common["data_type"] in (0x01, 0x02) and len(head) >= 4:
+                vitals_data = data[: common["data_size"]]
+                record = parse_vitals_day(
+                    head, vitals_data, common["item_count"], common["data_type"]
+                )
+                row = {
+                    **record,
+                    "head_hex": head.hex(),
+                    "data_hex": vitals_data.hex(),
+                    "source": source,
+                }
+                if common["data_type"] == 0x01:
+                    spo2_rows.append(row)
+                else:
+                    pressure_rows.append(row)
             elif common["data_type"] == 0x06 and len(head) >= 34:
                 try:
                     summary = parse_swim_summary(head, data)
@@ -215,4 +236,4 @@ def collect_health(
         pending.append(raw)
     if pending:
         flush()
-    return sport_rows, sleep_rows, hr_rows, workout_rows
+    return sport_rows, sleep_rows, hr_rows, workout_rows, spo2_rows, pressure_rows

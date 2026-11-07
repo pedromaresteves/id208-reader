@@ -81,7 +81,7 @@ Then `head_size` bytes of record header, then `data_size` bytes of data.
 | Type | Meaning | History style |
 |---:|---|---|
 | `01` | SpO2 | day-data |
-| `02` | Pressure | day-data |
+| `02` | Stress (stored as `pressure`) | day-data |
 | `03` | Heart rate | day-data |
 | `04` | Workout (details) | count-data |
 | `06` | Swim | count-data |
@@ -229,19 +229,24 @@ the mode) is 0 for all of them. `[12:16]` behaves like fixed-point steps
 (`value / 256` ≈ steps) but is unconfirmed; `[48:56]` and the tail tables are
 still partial.
 
-### SpO2 (01) and pressure (02)
+### SpO2 (01) and stress (02)
 
 | Offset | Field |
 |---|---|
 | 0-1 | year |
 | 2 | month |
 | 3 | day |
-| 4-7 | start seconds since midnight (u32) |
-| data | 2-byte samples: `delta_s`, value |
+| 4-7 | start minutes since midnight (u32) |
+| data | 2-byte samples: `delta_min`, value |
 
-SpO2 values are filtered to 50-100. Pressure is kept raw (0-100 in observed
-data); units/calibration are not confirmed. These types are decoded by the
-webapp only; `sync.py` does not emit them.
+The time axis is **minutes**, not seconds: both readings taken at 23:30 on
+2026-11-07 reported `start=1410` (23×60+30), and a day's samples span at
+most 1436 with the last one landing near 23:xx. Sample deltas are minutes.
+
+SpO2 is percent (filtered to 50-100). Type 02 is the watch's **Stress**
+score (0-100), not blood pressure. Both matched the screen on 2026-11-07
+(98% and 34). Decoded by the webapp and `sync.py` (`spo2.json`,
+`pressure.json`).
 
 ## Builders, parsers and parity
 
@@ -273,8 +278,8 @@ of duplicating history.
 | `sleep` | night date | night, fall_asleep, get_up, total_min, wake_min, light_min, rem_min, deep_min, source |
 | `hr` | `YYYY-MM-DD` | start_time_s, silent_hr, zones, samples `[{t, bpm}]`, source |
 | `workout` | `date + ' ' + startS` | workout or swim fields + samples |
-| `spo2` | `YYYY-MM-DD` | startS, items, samples `[{t, value}]`, headHex, dataHex |
-| `pressure` | `YYYY-MM-DD` | same shape as SpO2 |
+| `spo2` | `YYYY-MM-DD` | startMin, items, samples `[{tMin, value}]`, headHex, dataHex |
+| `pressure` | `YYYY-MM-DD` | same shape as SpO2 (watch Stress score) |
 | `meta` | `last-sync` | day, at, tag |
 
 Backups are JSON `{app: 'id208-reader', version: 1, rows: [...]}`. Import
@@ -294,7 +299,7 @@ accepts a store backup, the combined offline JSON, or `steps.csv`.
 - **Bulk characteristic unusable on this bond** (`0x0AF1` writes refused).
 - **Sleep is totals only**; `sleep.html` marks in-progress nights best-effort
   (zero totals or a future get-up) because the watch sends no flag.
-- **SpO2/pressure units unconfirmed.**
+- **Type 02 is the Stress score**, not blood pressure (0-100 index).
 
 ## Evidence timeline
 
@@ -320,6 +325,9 @@ accepts a store backup, the combined offline JSON, or `steps.csv`.
 - **2026-11-07** — first post-reset completed day served (2026-11-06: 2639
   steps / 1922 m / 183 kcal / 7 active min, plus 129 HR samples); cursor is
   per-store, not per-watch-lifetime.
+- **2026-11-07** — SpO2/stress calibrated against the screen (98% / 34);
+  type 02 is the stress index, and the 01/02 time axis is minutes since
+  midnight, not seconds.
 
 ## Open questions
 
@@ -328,6 +336,5 @@ accepts a store backup, the combined offline JSON, or `steps.csv`.
 - Workout mode: only recoverable from VeryFit app↔watch traffic, if at all.
 - Workout header leftovers: `[12:16]` steps hypothesis, `[48:56]`, segment
   tables.
-- SpO2 and pressure: units and calibration against the watch screen.
 - Skew banner: only exercised by a partial file update; no live/headless test
   yet.

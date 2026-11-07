@@ -8,8 +8,9 @@ const path = require('path');
 const assert = require('assert');
 const { load, ROOT } = require('./test-harness');
 
-const FIXTURE = process.argv[2] && process.argv[2].charAt(0) !== '-'
-  ? path.resolve(process.argv[2])
+const fixtureArg = process.argv.slice(2).find((arg) => !arg.startsWith('-'));
+const FIXTURE = fixtureArg
+  ? path.resolve(fixtureArg)
   : path.join(ROOT, 'tests', 'fixtures', 'history-5day.jsonl');
 const EXPECTED = path.join(ROOT, 'tests', 'fixtures', 'history-5day.expected.json');
 const AS_JSON = process.argv.includes('--json');
@@ -44,15 +45,15 @@ function canonical() {
     })),
     spo2: sorted(byType.spo2).map((r) => ({
       date: r.date,
-      startS: r.startS,
+      startMin: r.startMin,
       items: r.items,
-      samples: (r.samples || []).map((s) => ({ t: s.t, value: s.value })),
+      samples: (r.samples || []).map((s) => ({ tMin: s.tMin, value: s.value })),
     })),
     pressure: sorted(byType.pressure).map((r) => ({
       date: r.date,
-      startS: r.startS,
+      startMin: r.startMin,
       items: r.items,
-      samples: (r.samples || []).map((s) => ({ t: s.t, value: s.value })),
+      samples: (r.samples || []).map((s) => ({ tMin: s.tMin, value: s.value })),
     })),
   };
 }

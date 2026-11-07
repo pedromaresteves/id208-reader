@@ -496,6 +496,60 @@ def parse_hr_day(header: bytes, data: bytes, item_count: int) -> dict[str, objec
     }
 
 
+def guess_header_date(header: bytes) -> str | None:
+    """Best-effort date from a health header (mirrors codec.js guessHeaderDate)."""
+    if len(header) < 5:
+        return None
+    year = int.from_bytes(header[1:3], "little")
+    if 2020 <= year <= 2035 and 1 <= header[3] <= 12 and 1 <= header[4] <= 31:
+        return f"{year:04d}-{header[3]:02d}-{header[4]:02d}"
+    year = int.from_bytes(header[0:2], "little")
+    if 2020 <= year <= 2035 and 1 <= header[2] <= 12 and 1 <= header[3] <= 31:
+        return f"{year:04d}-{header[2]:02d}-{header[3]:02d}"
+    return None
+
+
+def parse_vitals_day(
+    header: bytes, data: bytes, item_count: int, data_type: int
+) -> dict[str, object]:
+    """Parse a dataType 0x01 SpO2 or 0x02 pressure day record.
+
+    Mirrors the type 01/02 branch of decodeHealth() in webapp/codec.js.
+    The header starts like HR: u16 year, month, day, then u32 start minutes
+    since midnight; an implausible date falls back to guess_header_date().
+    Each item is 2 bytes (delta minutes, value); deltas accumulate from
+    the start. SpO2 is percent (kept in 50..100); type 0x02 is the watch's
+    Stress score (0..100). Both matched the watch screen on 2026-11-07.
+    """
+    if data_type not in (0x01, 0x02):
+        raise ValueError("vitals parser only handles dataType 0x01/0x02")
+    if len(header) < 4:
+        raise ValueError("vitals header too short")
+    year = int.from_bytes(header[0:2], "little")
+    month, day = header[2], header[3]
+    start_min = int.from_bytes(header[4:8], "little") if len(header) >= 8 else 0
+    if 2018 <= year <= 2036 and 1 <= month <= 12 and 1 <= day <= 31:
+        date = f"{year:04d}-{month:02d}-{day:02d}"
+    else:
+        date = guess_header_date(header)
+    lo, hi = (50, 100) if data_type == 0x01 else (0, 100)
+    samples: list[dict[str, int]] = []
+    cursor = start_min
+    for i in range(item_count):
+        if 2 * i + 1 >= len(data):
+            break
+        cursor += data[2 * i]
+        value = data[2 * i + 1]
+        if lo <= value <= hi:
+            samples.append({"t_min": cursor, "value": value})
+    return {
+        "date": date,
+        "start_min": start_min,
+        "items": item_count,
+        "samples": samples,
+    }
+
+
 def parse_sleep_summary(header: bytes) -> dict[str, int]:
     """Parse a dataType 0x07 sleep header (>= 16 bytes).
 
