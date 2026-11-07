@@ -87,7 +87,8 @@ These are watch or firmware limits, not missing UI:
   has the same gap.
 - **Completed-day history is a one-shot cursor.** Once it returns `items=0`,
   only new completed days can be captured. The cursor is not rewound by
-  reconnects or a reset of the app.
+  reconnects or a reset of the app; a watch factory reset starts a fresh store
+  and cursor.
 - **Count-data (sleep, workouts, swims) is served once.** A freshly saved
   record can be pulled immediately; older records return `items=0` even when
   the watch screen shows them. Daily accumulation is the fallback.
@@ -106,9 +107,9 @@ These are watch or firmware limits, not missing UI:
 - Completed-day drain for a finished day (2026-11-06).
 - First-run bind/auth after a factory reset (2026-11-06).
 - Workout HR samples from byte 0 of the data blob.
-- Not yet observed live: a swim with lap data, a post-reset completed day
-  (first due 2026-11-07), and the file-skew banner (only triggers on partial
-  file updates).
+- First post-reset completed day (2026-11-06) drained on 2026-11-07.
+- Not yet observed live: a swim with lap data and the file-skew banner (only
+  triggers on partial file updates).
 
 ## Protocol
 

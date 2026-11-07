@@ -95,10 +95,12 @@ Then `head_size` bytes of record header, then `data_size` bytes of data.
   first. One START + matching STOP round = one day.
 - STOP must echo the START's `b14`; a `b14=1` STOP does not advance the
   cursor.
-- `items=0` ends paging. The cursor is one-shot for the watch's lifetime and
-  is not rewound by reconnects, `b14=1`, `0x05` or a bare STOP.
-- The watch was factory reset on 2026-11-06; whether the cursor restarts from
-  the reset date is first observable on 2026-11-07.
+- `items=0` ends paging. The cursor is one-shot: it is not rewound by
+  reconnects, `b14=1`, `0x05` or a bare STOP. It is bound to the BLE store,
+  not the watch's lifetime.
+- A factory reset creates a fresh BLE store and therefore a fresh cursor. The
+  first completed day after the 2026-11-06 reset (2026-11-06) was served on
+  2026-11-07.
 
 ### Count-data history (04/06/07)
 
@@ -283,8 +285,9 @@ accepts a store backup, the combined offline JSON, or `steps.csv`.
 - **Factory reset empties the BLE-accessible store.** The watch UI can still
   show older data from a separate store that BLE cannot read. VeryFit has the
   same gap.
-- **Completed-day cursor is one-shot.** After `items=0`, only new completed
-  days can be captured. Post-reset behavior is first checked on 2026-11-07.
+- **Completed-day cursor is one-shot per BLE store.** After `items=0`, only
+  new completed days can be captured. A factory reset starts a fresh store and
+  cursor (first post-reset day served on 2026-11-07).
 - **Count-data is one-shot.** Fresh sleep/workout/swim records are served
   once; old records return `items=0`.
 - **Workout mode is unavailable** in type-04 data.
@@ -314,10 +317,12 @@ accepts a store backup, the combined offline JSON, or `steps.csv`.
   / pressure 49); fresh sleep 426 min; 39m16s workout; zero-lap swim
   captured; HR samples fixed to start at `data[0]`; factory reset +
   first-run setup verified; sleep page redesigned.
+- **2026-11-07** — first post-reset completed day served (2026-11-06: 2639
+  steps / 1922 m / 183 kcal / 7 active min, plus 129 HR samples); cursor is
+  per-store, not per-watch-lifetime.
 
 ## Open questions
 
-- Post-reset completed-day cursor: check the 2026-11-07 sync.
 - Swim with real laps: validate the per-minute data path live (the Oct 14
   anchor exists, but no live pull has shown `items>0` for swim yet).
 - Workout mode: only recoverable from VeryFit app↔watch traffic, if at all.
