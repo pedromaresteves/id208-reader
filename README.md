@@ -111,8 +111,7 @@ These are watch or firmware limits, not missing UI:
 - First post-reset completed day (2026-11-06) drained on 2026-11-07.
 - SpO2 (98%) and stress (34) matched the watch screen; type 02 is the
   stress index, and its time axis is minutes since midnight.
-- Not yet observed live: a swim with lap data and the file-skew banner (only
-  triggers on partial file updates).
+- Not yet observed live: a swim with lap data.
 
 ## Protocol
 

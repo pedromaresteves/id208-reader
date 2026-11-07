@@ -7,7 +7,7 @@
 | pytest | Builders, parsers, capture replay, store/sync helpers, JS↔Python parity | `.venv/bin/python -m pytest tests/ -q` |
 | ruff | Lint + formatting | `.venv/bin/ruff check src tests sync.py` |
 | Node suites | Codec/capture, charts, store, file-skew, JS parity | `node webapp/<name>.test.js` |
-| Headless UI | Page load, nav, skew banner absent, backup/import | `ui_smoke.py` (Windows Python) |
+| Headless UI | Page load, nav, skew banner absent + fires on a blocked script, backup/import | `ui_smoke.py` (Windows Python) |
 | Live hardware | Real BLE sync, setup, protocol probes | Windows Playwright drivers |
 
 Run everything:

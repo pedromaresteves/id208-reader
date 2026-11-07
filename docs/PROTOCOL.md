@@ -336,5 +336,3 @@ accepts a store backup, the combined offline JSON, or `steps.csv`.
 - Workout mode: only recoverable from VeryFit app↔watch traffic, if at all.
 - Workout header leftovers: `[12:16]` steps hypothesis, `[48:56]`, segment
   tables.
-- Skew banner: only exercised by a partial file update; no live/headless test
-  yet.

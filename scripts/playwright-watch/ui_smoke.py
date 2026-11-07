@@ -4,7 +4,9 @@ ui_smoke.py — headless browser smoke test for the P4 dashboard/settings UX.
 
 No Bluetooth: this only checks that every page loads with cache-busted scripts,
 the skew banner stays away, the dashboard shows last-sync + store summary, and
-backup/import round-trips the store. Run from WSL with Windows Python:
+backup/import round-trips the store. It then blocks one module to prove the
+skew banner actually fires and halts page wiring. Run from WSL with Windows
+Python:
 
     /mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe \
         scripts/playwright-watch/ui_smoke.py
@@ -39,8 +41,8 @@ def fixture():
         ("2026-11-01", "sleep", {"night": "2026-11-01", "total_min": 420, "light_min": 200, "deep_min": 80, "rem_min": 140}),
         ("2026-11-01", "hr", {"date": "2026-11-01", "start_time_s": 42, "silent_hr": 60, "samples": [{"t": 42, "bpm": 70}]}),
         ("2026-11-01 0", "workout", {"date": "2026-11-01", "durationsS": 600, "kcal": 50, "samples": [70, 80]}),
-        ("2026-11-01", "spo2", {"date": "2026-11-01", "items": 1, "samples": [{"t": 1, "value": 97}]}),
-        ("2026-11-01", "pressure", {"date": "2026-11-01", "items": 1, "samples": [{"t": 1, "value": 30}]}),
+        ("2026-11-01", "spo2", {"date": "2026-11-01", "items": 1, "samples": [{"tMin": 1, "value": 97}]}),
+        ("2026-11-01", "pressure", {"date": "2026-11-01", "items": 1, "samples": [{"tMin": 1, "value": 30}]}),
         ("last-sync", "meta", {"day": "2026-11-01", "at": "2026-11-01T20:00:00.000Z", "tag": "ui-smoke"}),
     ]
     doc = {
@@ -52,6 +54,35 @@ def fixture():
     }
     with open(IMPORT_PATH, "w", encoding="utf-8") as f:
         json.dump(doc, f)
+
+
+def check_skew_banner(browser, epoch):
+    """The fail-fast guard must fire when a module is genuinely missing."""
+    context = browser.new_context(viewport={"width": 1280, "height": 900})
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda err: errors.append(str(err)))
+    # Block one module so IDO.transport is undefined, like a partial update.
+    page.route("**/transport.js*", lambda route: route.abort())
+    page.goto(f"{BASE}/index.html?v={epoch}", wait_until="load")
+    page.wait_for_timeout(600)
+    body = page.inner_text("body")
+    failures = []
+    if "App files out of sync" not in body:
+        failures.append("skew: banner did not fire for a blocked transport.js")
+    if "IDO.transport" not in body:
+        failures.append("skew: banner does not name the missing module")
+    if not any("halt:" in e for e in errors):
+        failures.append("skew: page did not halt after the banner: " + str(errors))
+    if page.get_by_role("button", name="Force reload (fresh files)").count() != 1:
+        failures.append("skew: banner has no force-reload button")
+    context.close()
+    if failures:
+        for f in failures:
+            log("FAIL: " + f)
+    else:
+        log("skew firing: banner shown, page halted, reload button present")
+    return failures
 
 
 def main():
@@ -129,6 +160,8 @@ def main():
                 if page.locator(selector).count() != 1:
                     failures.append(f"settings: missing {selector}")
             log("settings: setup/backup/goals controls present")
+
+            failures.extend(check_skew_banner(browser, epoch))
 
             if errors:
                 failures.append("final page errors: " + str(errors))

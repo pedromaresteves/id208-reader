@@ -15,7 +15,10 @@ function makeEl() {
     innerHTML: '',
     disabled: false,
     style: {},
+    firstChild: null,
+    addEventListener() {},
     appendChild() {},
+    insertBefore() {},
   };
 }
 global.window = {};
@@ -64,4 +67,31 @@ eval(
 );
 const missing = globalThis.SKEW.filter((row) => !row[1]).map((row) => row[0]);
 assert.deepStrictEqual(missing, [], 'unresolved need names: ' + missing.join(', '));
-console.log('skew.test.js: all ' + allNames.length + ' need names resolve across ' + PAGES.length + ' pages');
+
+// The guard must also fire, not just resolve: a missing name inserts the
+// banner (naming only that name) and throws so the page's wiring stops.
+const inserted = [];
+global.document.body.insertBefore = (el) => { inserted.push(el); };
+let halted = null;
+try {
+  window.IDO.shell.checkFiles(['IDO.transport', 'IDO.nope.missing']);
+} catch (e) {
+  halted = e.message;
+}
+assert.strictEqual(inserted.length, 1, 'one banner inserted');
+assert.match(inserted[0].textContent, /App files out of sync/, 'banner headline');
+assert.match(inserted[0].textContent, /IDO\.nope\.missing/, 'banner names the missing path');
+assert.ok(
+  !inserted[0].textContent.includes('IDO.transport'),
+  'banner omits paths that resolve',
+);
+assert.match(halted, /^halt: /, 'checkFiles throws after inserting the banner');
+
+inserted.length = 0;
+window.IDO.shell.checkFiles(['IDO.transport', 'IDO.codec']);
+assert.strictEqual(inserted.length, 0, 'no banner when every name resolves');
+
+console.log(
+  'skew.test.js: all ' + allNames.length + ' need names resolve across ' +
+    PAGES.length + ' pages, and the banner fires on a missing one',
+);
