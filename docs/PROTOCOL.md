@@ -324,6 +324,10 @@ files, or `steps.csv`.
 - **Bulk characteristic unusable on this bond** (`0x0AF1` writes refused).
 - **Sleep is totals only**; `sleep.html` marks in-progress nights best-effort
   (zero totals or a future get-up) because the watch sends no flag.
+- **Per-app notification switches are phone-side.** Calendar, email, SMS,
+  missed calls, WhatsApp, Messenger and YouTube are filtered in VeryFit
+  before forwarding; toggling them sends nothing over BLE (2026-11-09). The
+  watch only receives the resulting notifications.
 - **Type 02 is the Stress score**, not blood pressure (0-100 index).
 
 ## Evidence timeline

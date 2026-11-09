@@ -103,6 +103,9 @@ These are watch or firmware limits, not missing UI:
 - **SpO2 and "pressure" are confirmed**: SpO2 is percent; type 02 is the
   watch's Stress score (0-100), not blood pressure. Both matched the screen
   on 2026-11-07.
+- **Per-app notifications are filtered by VeryFit on the phone**, not by the
+  watch. Toggling Calendar, email, SMS, missed calls, WhatsApp, Messenger or
+  YouTube sends nothing over BLE; the watch just displays what it receives.
 
 ## Status (verified on hardware)
 
