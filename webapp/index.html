@@ -30,6 +30,7 @@
 <div id="syncBarOuter"><div id="syncBarInner"></div></div></div>
 <section id="secSteps" onclick="location.href='activity.html'" style="cursor:pointer;"><h2>Activity <span class="go">open ›</span></h2><div class="body muted">Loading…</div></section>
 <section id="secSleep" onclick="location.href='sleep.html'" style="cursor:pointer;"><h2>Sleep <span class="go">open ›</span></h2><div class="body muted">Loading…</div></section>
+<section id="secHealth" onclick="location.href='health.html'" style="cursor:pointer;"><h2>Health <span class="go">open ›</span></h2><div class="body muted">Loading…</div></section>
 <section id="secWorkouts" onclick="location.href='workout.html'" style="cursor:pointer;"><h2>Workouts <span class="go">open ›</span></h2><div class="body muted">Loading…</div></section>
 <section id="secDebug"><h2>Debug</h2><div class="body muted">Raw store contents for troubleshooting — copy from here when reporting an issue.</div><details><summary>Show raw store JSON</summary><pre id="debugDump" style="font-size:0.7rem; max-height:40vh; overflow:auto;"></pre></details></section>
 
@@ -124,6 +125,15 @@ async function renderLastSync() {
     el.textContent = 'Last sync: unavailable (' + e + ')';
   }
 }
+// Latest value from a SpO2/stress record (older rows use t, newer tMin).
+function lastSampleValue(p) {
+  var samples = (p && p.samples) || [];
+  for (var i = samples.length - 1; i >= 0; i--) {
+    var v = samples[i] && samples[i].value;
+    if (v !== undefined && v !== null) return v;
+  }
+  return null;
+}
 // Chart/format helpers live in ui.js (shared with detail pages).
 async function render() {
   document.getElementById('status').textContent = 'Loading…';
@@ -161,6 +171,26 @@ async function render() {
       document.querySelector('#secSleep .body').textContent = 'No data yet — run a sync.';
     }
 
+    // Health: latest SpO2 + stress reading, linked to the detail page.
+    var spo2 = [], press = [];
+    try { spo2 = await Store.list('spo2'); } catch (e) {}
+    try { press = await Store.list('pressure'); } catch (e) {}
+    if (spo2.length || press.length) {
+      var spRec = spo2.length ? spo2[spo2.length - 1].payload : null;
+      var prRec = press.length ? press[press.length - 1].payload : null;
+      var bits = [];
+      var spVal = lastSampleValue(spRec);
+      if (spVal !== null) bits.push(spVal + '% SpO2');
+      var prVal = lastSampleValue(prRec);
+      if (prVal !== null) bits.push('stress ' + prVal);
+      var healthDate = (spRec && spRec.date) || (prRec && prRec.date) || '';
+      document.querySelector('#secHealth .body').innerHTML =
+        '<div class="big">' + esc(bits.length ? bits.join(' · ') : '—') + '</div>' +
+        '<div class="muted">' + esc(healthDate) + '</div>';
+    } else {
+      document.querySelector('#secHealth .body').textContent = 'No data yet — run a sync.';
+    }
+
     // Workouts: most recent only, linked to the full list.
     if (workouts.length) {
       var w = workouts[workouts.length - 1].payload;
@@ -176,7 +206,7 @@ async function render() {
 
     document.getElementById('status').textContent = '';
     document.getElementById('debugDump').textContent = JSON.stringify({
-      steps: steps, sleep: sleep, workouts: workouts,
+      steps: steps, sleep: sleep, workouts: workouts, spo2: spo2, pressure: press,
     }, null, 1).slice(0, 20000);
     renderLastSync();
     IDO.shell.refreshStoreStatus();

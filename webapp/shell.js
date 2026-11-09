@@ -75,6 +75,7 @@ IDO.shell = (function () {
     ['index.html', 'Dashboard'],
     ['activity.html', 'Activity'],
     ['sleep.html', 'Sleep'],
+    ['health.html', 'Health'],
     ['workout.html', 'Workouts'],
     ['watch.html', 'Watch'],
     ['diagnostics.html', 'Diagnostics'],

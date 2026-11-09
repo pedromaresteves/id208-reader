@@ -39,7 +39,7 @@ global.document = {
 
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ui.js'), 'utf8') +
-    '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, kmOrDash, hrStats, hrCell,' +
+    '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, fmtMinutes, kmOrDash, hrStats, hrCell,' +
     ' monthKey, addMonths, daysInMonth, addDays, mondayOf, weeksOf, sleepScore, DEFAULT_GOALS,' +
     ' wireMonthNav, isoWeek, parseNightDateTime, nightInProgress };'
 );
@@ -92,6 +92,13 @@ assert.ok(barLabels.includes('11-08'), 'date label still drawn');
 // fmtHM sanity.
 assert.strictEqual(U.fmtHM(425), '7h05m');
 assert.strictEqual(U.fmtHM(0), '0h00m');
+
+// fmtMinutes: types 01/02 store minutes since midnight (1410 = 23:30).
+assert.strictEqual(U.fmtMinutes(1410), '23:30');
+assert.strictEqual(U.fmtMinutes(6), '00:06');
+assert.strictEqual(U.fmtMinutes(0), '00:00');
+assert.strictEqual(U.fmtMinutes(1440), '00:00');
+assert.strictEqual(U.fmtMinutes(undefined), '—');
 
 // kmOrDash: 2 decimals everywhere, missing stays a dash (never 0-conflated).
 assert.strictEqual(U.kmOrDash(7641), '7.64km');

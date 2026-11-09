@@ -103,6 +103,12 @@ function fmtHM(min) {
   min = Number(min) || 0;
   return Math.floor(min / 60) + 'h' + String(min % 60).padStart(2, '0') + 'm';
 }
+// Minutes since midnight -> "23:30" (types 01/02 store minutes, not seconds).
+function fmtMinutes(min) {
+  if (min === undefined || min === null || min === '') return '—';
+  var m = Math.round(Number(min));
+  return pad2(Math.floor(m / 60) % 24) + ':' + pad2(m % 60);
+}
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 // Workout mode names by sport type — UNMAPPED so far (type 5 seen on both
 // strength and walk records, so the label isn't simply that byte). Add

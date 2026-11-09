@@ -22,6 +22,7 @@ for setup and recovery.
 | **Dashboard** | One-button sync, last-sync stamp, store summary, backup/import |
 | **Activity** | Daily steps, distance, calories, goal markers, HR summary |
 | **Sleep** | Last-night card, week chart with arrows, month history list, stage split and quality rating; in-progress nights are marked |
+| **Health** | SpO2 and stress: latest reading, day chart, 30-day trend, history list |
 | **Workouts** | Workouts and pool swims with duration, distance, HR and samples |
 | **Watch** | First-run setup, auto-detect toggles, goals, backup/import |
 | **Diagnostics** | Connect, full sync, raw commands, JSONL/log export |

@@ -20,7 +20,7 @@ import time
 from playwright.sync_api import sync_playwright
 
 BASE = "http://localhost:8080"
-PAGES = ["index.html", "activity.html", "sleep.html", "workout.html", "watch.html", "diagnostics.html"]
+PAGES = ["index.html", "activity.html", "sleep.html", "health.html", "workout.html", "watch.html", "diagnostics.html"]
 IMPORT_PATH = os.path.join(tempfile.gettempdir(), "id208-ui-smoke-import.json")
 
 
@@ -109,7 +109,7 @@ def main():
                 nav_count = page.evaluate(
                     "() => document.querySelectorAll('nav.tabs a').length"
                 )
-                if nav_count != 6:
+                if nav_count != 7:
                     failures.append(f"{name}: nav rendered {nav_count} links")
                 current_link = page.evaluate(
                     "() => document.querySelector('nav.tabs a[aria-current]')?.textContent || ''"
@@ -160,6 +160,17 @@ def main():
                 if page.locator(selector).count() != 1:
                     failures.append(f"settings: missing {selector}")
             log("settings: setup/backup/goals controls present")
+
+            # Health page: the imported SpO2/stress readings render.
+            page.goto(f"{BASE}/health.html?v={epoch}", wait_until="load")
+            page.wait_for_timeout(400)
+            spo2_text = page.inner_text("#spo2Latest")
+            stress_text = page.inner_text("#stressLatest")
+            if "97" not in spo2_text:
+                failures.append("health: SpO2 reading not rendered: " + spo2_text)
+            if "30" not in stress_text:
+                failures.append("health: stress reading not rendered: " + stress_text)
+            log("health: latest SpO2/stress rendered")
 
             failures.extend(check_skew_banner(browser, epoch))
 

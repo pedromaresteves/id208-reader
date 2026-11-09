@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ID208 Health</title>
+<link rel="stylesheet" href="app.css">
+<style>
+canvas { height: 130px; }
+.history tr { cursor: pointer; }
+.history tr.sel td { font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>Health</h1>
+<p><span id="status" class="muted"></span></p>
+
+<section id="secSpo2">
+  <h2>SpO<sub>2</sub> <span id="spo2Date" class="muted"></span></h2>
+  <div id="spo2Latest">Loading…</div>
+  <canvas id="chSpo2"></canvas>
+</section>
+
+<section id="secStress">
+  <h2>Stress <span id="stressDate" class="muted"></span></h2>
+  <div id="stressLatest">Loading…</div>
+  <canvas id="chStress"></canvas>
+  <div class="muted">The watch reports this as a 0–100 stress score, not blood pressure.</div>
+</section>
+
+<section id="secTrend">
+  <h2>Last 30 days</h2>
+  <div class="muted">SpO<sub>2</sub> daily average</div>
+  <canvas id="chSpo2Trend"></canvas>
+  <div class="muted">Stress daily average</div>
+  <canvas id="chStressTrend"></canvas>
+  <div id="trendNote" class="muted"></div>
+</section>
+
+<section id="secHistory" class="history">
+  <h2>History</h2>
+  <div id="dayList" class="muted">Loading…</div>
+</section>
+<script>
+// Cache-bust every local script when the page has ?v=<epoch> (see index.html).
+(function () {
+  var m = location.search.match(/[?&]v=([^&]+)/);
+  var q = m ? '?v=' + m[1] : '';
+  ['shell.js', 'store.js', 'ui.js'].forEach(function (f) {
+    document.write('<script src="' + f + q + '"><\/script>');
+  });
+})();
+</script>
+<script>
+// Fail fast on file skew (see index.html): banner + fresh reload instead of silent hang.
+(function checkAppFiles() {
+  var need = ['Store', 'lineChart', 'setupCanvas', 'esc', 'num', 'fmtMinutes',
+    'todayStr', 'addDays'];
+  IDO.shell.checkFiles(need);
+})();
+
+var SPO2 = [], STRESS = [], SEL = '', WINDOW = 30;
+
+function payloadOf(r) { return (r && r.payload) || {}; }
+function byDate(rows) {
+  var map = {};
+  rows.forEach(function (r) {
+    var p = payloadOf(r);
+    if (p.date) map[p.date] = p;
+  });
+  return map;
+}
+// Types 01/02 store minutes since midnight; pre-rename rows used startS/t.
+function sampleTime(s) {
+  if (!s || typeof s !== 'object') return null;
+  return s.tMin !== undefined ? s.tMin : s.t;
+}
+function valuesOf(p) {
+  return ((p && p.samples) || []).map(function (s) {
+    return Number(s && s.value);
+  }).filter(function (v) { return isFinite(v); });
+}
+function summaryOf(p) {
+  var vals = valuesOf(p);
+  if (!vals.length) return null;
+  var sum = 0, mn = vals[0], mx = vals[0];
+  vals.forEach(function (v) { sum += v; if (v < mn) mn = v; if (v > mx) mx = v; });
+  var times = ((p && p.samples) || []).map(sampleTime)
+    .filter(function (t) { return isFinite(t); });
+  return {
+    n: vals.length, avg: Math.round(sum / vals.length), min: mn, max: mx,
+    last: vals[vals.length - 1],
+    firstTime: times.length ? times[0] : null,
+    lastTime: times.length ? times[times.length - 1] : null,
+  };
+}
+function cardHTML(s, unit) {
+  if (!s) return '<div class="muted">No readings for this day.</div>';
+  var when = 'at ' + fmtMinutes(s.lastTime) + ' · ' + s.n +
+    (s.n === 1 ? ' reading' : ' readings');
+  if (s.firstTime !== null && s.firstTime !== s.lastTime) {
+    when += ' · ' + fmtMinutes(s.firstTime) + ' → ' + fmtMinutes(s.lastTime);
+  }
+  return '<div class="big">' + esc(s.last) + ' <span class="muted">' +
+    esc(unit) + '</span></div>' +
+    '<div class="muted">' + esc(when) + '</div>' +
+    '<div class="stats">' +
+    '<div><div class="k">Average</div><div class="v">' + esc(s.avg) + '</div></div>' +
+    '<div><div class="k">Range</div><div class="v">' + esc(s.min) + '–' +
+    esc(s.max) + '</div></div>' +
+    '</div>';
+}
+// Hide a chart that cannot say anything: one point is a fact, not a trend.
+function plot(id, values) {
+  var el = document.getElementById(id);
+  if (values.length > 1) {
+    el.style.display = 'block';
+    lineChart(id, values);
+  } else {
+    el.style.display = 'none';
+  }
+}
+function dayCell(s) {
+  if (!s) return '<span class="muted">—</span>';
+  return esc(s.avg) + ' <span class="muted">(' + s.n + ')</span>';
+}
+function render() {
+  var spo2 = byDate(SPO2), stress = byDate(STRESS);
+  var seen = {};
+  Object.keys(spo2).forEach(function (d) { seen[d] = 1; });
+  Object.keys(stress).forEach(function (d) { seen[d] = 1; });
+  var days = Object.keys(seen).sort().reverse();
+  if (!days.length) {
+    document.getElementById('status').textContent =
+      'No SpO2 or stress data yet — run a sync.';
+    document.getElementById('spo2Latest').textContent = '';
+    document.getElementById('stressLatest').textContent = '';
+    document.getElementById('dayList').textContent = 'Nothing stored.';
+    return;
+  }
+  if (days.indexOf(SEL) < 0) SEL = days[0];
+
+  var sp = spo2[SEL], pr = stress[SEL];
+  document.getElementById('spo2Date').textContent = '· ' + SEL;
+  document.getElementById('stressDate').textContent = '· ' + SEL;
+  document.getElementById('spo2Latest').innerHTML = cardHTML(summaryOf(sp), '%');
+  document.getElementById('stressLatest').innerHTML = cardHTML(summaryOf(pr), '/100');
+  plot('chSpo2', valuesOf(sp));
+  plot('chStress', valuesOf(pr));
+
+  // Rolling 30-day trend: one point per day that has readings.
+  var end = todayStr(), start = addDays(end, -(WINDOW - 1));
+  function trend(map, id) {
+    var keys = Object.keys(map).filter(function (d) {
+      return d >= start && d <= end;
+    }).sort();
+    var vals = [];
+    keys.forEach(function (d) {
+      var s = summaryOf(map[d]);
+      if (s) vals.push(s.avg);
+    });
+    plot(id, vals);
+    return vals;
+  }
+  var spDays = trend(spo2, 'chSpo2Trend');
+  var stDays = trend(stress, 'chStressTrend');
+  document.getElementById('trendNote').textContent = (spDays.length || stDays.length) ?
+    spDays.length + ' SpO2 day(s), ' + stDays.length + ' stress day(s) with readings, ' +
+      start + ' to ' + end + '.' :
+    'No readings in the last ' + WINDOW + ' days (' + start + ' to ' + end + ').';
+
+  var rows = days.map(function (d) {
+    return '<tr data-date="' + esc(d) + '"' + (d === SEL ? ' class="sel"' : '') + '>' +
+      '<td>' + esc(d) + '</td>' +
+      '<td>' + dayCell(summaryOf(spo2[d])) + '</td>' +
+      '<td>' + dayCell(summaryOf(stress[d])) + '</td></tr>';
+  }).join('');
+  document.getElementById('dayList').innerHTML =
+    '<table><tr><th>Date</th><th>SpO2 avg (n)</th><th>Stress avg (n)</th></tr>' +
+    rows + '</table>';
+
+  document.getElementById('status').textContent = days.length + ' day(s) with readings · ' +
+    SPO2.length + ' SpO2 and ' + STRESS.length + ' stress records in store.';
+}
+document.getElementById('dayList').addEventListener('click', function (e) {
+  var tr = e.target.closest && e.target.closest('tr[data-date]');
+  if (!tr) return;
+  SEL = tr.getAttribute('data-date');
+  render();
+});
+async function load() {
+  try {
+    SPO2 = await Store.list('spo2');
+    STRESS = await Store.list('pressure');
+    render();
+  } catch (e) {
+    document.getElementById('status').textContent = 'Store unavailable: ' + e;
+  }
+}
+load();
+</script>
+<nav class="tabs"></nav>
+</body>
+</html>
