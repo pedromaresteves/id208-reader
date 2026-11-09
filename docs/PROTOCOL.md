@@ -229,6 +229,22 @@ the mode) is 0 for all of them. `[12:16]` behaves like fixed-point steps
 (`value / 256` ≈ steps) but is unconfirmed; `[48:56]` and the tail tables are
 still partial.
 
+The **live session** does carry it. VeryFit's `10 01` start packet puts the
+sport id at bytes 5-6, and the watch's `0x13` progress frames put it at byte 1
+(0x13 payload: `00 <sport> <year> <month> <day> <hour> <min> <sec> 01 …`).
+Observed on 2026-11-09 from app-started sessions:
+
+| Sport id | Sport |
+|---|---|
+| `0x30` (48) | Outdoor Run |
+| `0x34` (52) | Outdoor Walk |
+
+The Functional Strength session that day was started on the watch, so no app
+start packet exists for it. Because the stored type-04 record keeps only the
+generic marker `5`, labelling **history** would require the app to run a live
+workout session and remember the id; a later sync cannot recover it. This is
+accepted as a limitation of a sync-only reader (2026-11-09).
+
 ### SpO2 (01) and stress (02)
 
 | Offset | Field |
@@ -331,6 +347,10 @@ files, or `steps.csv`.
   / pressure 49); fresh sleep 426 min; 39m16s workout; zero-lap swim
   captured; HR samples fixed to start at `data[0]`; factory reset +
   first-run setup verified; sleep page redesigned.
+- **2026-11-09** — live workout stream decoded from the VeryFit capture:
+  `10 01` start and `0x13` progress frames carry the sport id (`0x30` =
+  Outdoor Run, `0x34` = Outdoor Walk); the saved type-04 header still shows
+  only the generic `5`.
 - **2026-11-09** — wash-hands reminder `03 55` confirmed: VeryFit wrote
   `03 55 00 …` when Hand washing was turned off, and `03 55 01 …` while it was
   enabled.
@@ -348,7 +368,6 @@ files, or `steps.csv`.
 
 - Swim with real laps: validate the per-minute data path live (the Oct 14
   anchor exists, but no live pull has shown `items>0` for swim yet).
-- Workout mode: only recoverable from VeryFit app↔watch traffic, if at all.
 - Workout header leftovers: `[12:16]` steps hypothesis, `[48:56]`, segment
   tables.
 - Drink-water reminder: ON and OFF are ACKed; confirm a prompt fires inside

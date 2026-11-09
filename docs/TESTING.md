@@ -103,11 +103,10 @@ profile can serve stale code.
   are cut). Trust `len`, `head_size` and `data_size`, not the printed line.
 - `watch_test.py` saves full JSONL; `live_dashboard.py` does not.
 
-## Feature captures (swim, workout modes, notifications)
+## Feature captures
 
-These features need hardware data before any decoding or labelling work can
-start. All captures are gitignored; scrub the full Bluetooth MAC (keep the
-first three octets) before sharing.
+All captures are gitignored; scrub the full Bluetooth MAC (keep the first
+three octets) before sharing.
 
 ### Swim with laps
 
@@ -121,34 +120,11 @@ Swims are count-data: a fresh record is served once, so pull immediately.
 
 If the pull still shows `items=0`, the watch does not expose lap data over BLE.
 
-### VeryFit ↔ watch traffic (workout mode, wash-hands reminder)
+### Drink-water prompt timing
 
-The saved type-04 record carries no mode byte (the 2026-11-05 capture has
-`sport_type: 5` for both strength and run), so mode labels and the missing
-reminder toggles can only come from vendor traffic.
-
-1. Android: enable Developer options → **Bluetooth HCI snoop log**, then
-   toggle Bluetooth off/on (or reboot) so logging starts.
-2. Connect VeryFit and perform each action, noting the time:
-   - start/stop three different workout modes (e.g. Strength, Walk, Run);
-   - toggle the wash-hands reminder off and on.
-3. Pull the log:
-   ```bash
-   adb root
-   adb pull /data/misc/bluetooth/logs/btsnoop_hci.log
-   ```
-   Some phones use `/sdcard/btsnoop_hci.log` or include it in a bug report.
-4. Run one normal `watch_test.py --daily` so the matching BLE summaries exist.
-5. Send the HCI log plus the action/time list.
-
-### Drink-water reminder (reference-derived)
-
-`03 60` came from the TOOBUR A200 reference, not the ID208. Toggle it on the
-Watch page and confirm the watch reacts; if the schedule bytes are wrong,
-capture the VeryFit write with the HCI log above.
-
-Wash hands uses `03 55`, confirmed against the VeryFit Hand washing setting
-(2026-11-09: writing OFF flipped it).
+The `03 60` ON/OFF packets are ACKed by the watch (2026-11-09). To observe an
+actual prompt, leave the reminder ON for a day inside the 09:00–18:00 window,
+then turn it OFF from the Watch page.
 
 ## First-run / factory-reset test
 

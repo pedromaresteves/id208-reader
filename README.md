@@ -95,7 +95,9 @@ These are watch or firmware limits, not missing UI:
   the watch screen shows them. Daily accumulation is the fallback.
 - **Workout mode is not exposed** in the type-04 record. The app cannot label
   Strength / Walk / Run from BLE data; the mode byte is not in the header,
-  common header or data blob.
+  common header or data blob. It exists only in the live session
+  (`10 01` start / `0x13` progress), which a sync-only reader never sees —
+  workouts show as "Workout".
 - **Sleep is totals only** (bedtime, wake time, stage minutes). There is no
   per-minute stage timeline in the BLE record.
 - **SpO2 and "pressure" are confirmed**: SpO2 is percent; type 02 is the
@@ -121,11 +123,8 @@ Still open; the protocol unknowns are tracked in
 
 - **Swim lap detail** — the saved summary decodes, but no live pull has ever
   returned `items>0` (per-minute laps), so the lap path is unvalidated.
-- **Workout mode labels** — Strength/Walk/Run is not in the type-04 record;
-  needs a VeryFit↔watch capture to find where the mode is carried.
-- **Drink-water reminder on/off** — implemented (`03 60`, Watch →
-  Reminders); ON and OFF are ACKed by the ID208 (2026-11-09). Prompt timing
-  still unobserved (09:00–18:00 window).
+- **Drink-water prompt timing** — ON/OFF packets are ACKed by the ID208; a
+  prompt firing inside the 09:00–18:00 window is still unobserved.
 
 Already available: walk/run auto-detect prompts (**Watch → Auto-detect**,
 `03 49`), auto-pause/end reminders via the same packet, drink-water reminders,
