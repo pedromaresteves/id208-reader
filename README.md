@@ -124,7 +124,8 @@ Not implemented yet; the protocol unknowns are tracked in
 - **Workout mode labels** — Strength/Walk/Run is not in the type-04 record;
   needs a VeryFit↔watch capture to find where the mode is carried.
 - **Drink-water reminder on/off** — implemented (`03 60`, Watch →
-  Reminders) from the TOOBUR A200 reference; needs a live check on ID208.
+  Reminders); ON and OFF are ACKed by the ID208 (2026-11-09). Prompt timing
+  still unobserved (09:00–18:00 window).
 - **Wash-hands reminder on/off** — command and bytes unknown.
 
 Already available: walk/run auto-detect prompts (**Watch → Auto-detect**,

@@ -253,7 +253,7 @@ score (0-100), not blood pressure. Both matched the screen on 2026-11-07
 | Command | Payload | Status |
 |---|---|---|
 | `03 49` | 9 flags: walk, run, bicycle, auto-pause, auto-end reminder, elliptical, rowing, swim, smart rope | Verified live (Watch → Auto-detect) |
-| `03 60` | 16 bytes: on/off, 09:00–18:00 window, repeat days, 30-minute interval | Reference-derived (TOOBUR A200); unverified on ID208 |
+| `03 60` | 16 bytes: on/off, 09:00–18:00 window, repeat days, 30-minute interval | Reference-derived (TOOBUR A200); ON and OFF ACKed by ID208 (`RX 03 60`) on 2026-11-09 |
 
 ## Builders, parsers and parity
 
@@ -330,6 +330,9 @@ files, or `steps.csv`.
   / pressure 49); fresh sleep 426 min; 39m16s workout; zero-lap swim
   captured; HR samples fixed to start at `data[0]`; factory reset +
   first-run setup verified; sleep page redesigned.
+- **2026-11-09** — drink-water reminder `03 60` accepted by the ID208 for
+  both ON (`TX 03 60 01 …`) and OFF (`TX 03 60 00 …`), each `RX 03 60`;
+  prompt timing still to observe.
 - **2026-11-07** — first post-reset completed day served (2026-11-06: 2639
   steps / 1922 m / 183 kcal / 7 active min, plus 129 HR samples); cursor is
   per-store, not per-watch-lifetime.
@@ -344,6 +347,6 @@ files, or `steps.csv`.
 - Workout mode: only recoverable from VeryFit app↔watch traffic, if at all.
 - Workout header leftovers: `[12:16]` steps hypothesis, `[48:56]`, segment
   tables.
-- Drink-water reminder: `03 60` written from the A200 reference; confirm the
-  ID208 reacts and tune the schedule/repeat bytes if needed.
+- Drink-water reminder: ON and OFF are ACKed; confirm a prompt fires inside
+  the 09:00–18:00 window and tune the schedule/repeat bytes if needed.
 - Wash-hands reminder on/off: command and bytes unknown (no capture yet).
