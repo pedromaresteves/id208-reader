@@ -141,6 +141,9 @@ var Store = (function () {
   function classifyRecord(r) {
     if (!r || typeof r !== 'object') return null;
     if (typeof r.night === 'string') return 'sleep';
+    // SpO2/stress also carry a samples array; their kind wins over the
+    // generic HR shape so `out/spo2.json` / `out/pressure.json` import right.
+    if (r.kind === 'spo2' || r.kind === 'pressure') return r.kind;
     if (
       typeof r.durations_s === 'number' ||
       typeof r.durationsS === 'number' ||

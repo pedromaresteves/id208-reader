@@ -353,7 +353,8 @@ IDO.codec = (function () {
       }
       out.kind = isSpo2 ? 'spo2' : 'pressure';
       out.record = {
-        date: ddate, startMin: st2, items: itemCount, headSize: headSize, dataSize: dataSize,
+        date: ddate, kind: isSpo2 ? 'spo2' : 'pressure',
+        startMin: st2, items: itemCount, headSize: headSize, dataSize: dataSize,
         samples: pts, headHex: IDO.shell.hexStr(h), dataHex: IDO.shell.hexStr(d),
         source: 'v3 type0' + dataType + ' pull',
       };

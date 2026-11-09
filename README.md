@@ -24,7 +24,7 @@ for setup and recovery.
 | **Sleep** | Last-night card, week chart with arrows, month history list, stage split and quality rating; in-progress nights are marked |
 | **Health** | SpO2 and stress: latest reading, day chart, 30-day trend, history list |
 | **Workouts** | Workouts and pool swims with duration, distance, HR and samples |
-| **Watch** | First-run setup, auto-detect toggles, goals, backup/import |
+| **Watch** | First-run setup, auto-detect toggles, goals, backup/import, delete local data |
 | **Diagnostics** | Connect, full sync, raw commands, JSONL/log export |
 
 Everything is a plain static file: no build step, no npm dependencies, no

@@ -16,11 +16,13 @@
 <p><button id="btnAutoOff">Auto-detect OFF</button>
 <button id="btnAutoWalkRun">Auto-detect walk+run</button>
 <span id="watchStatus" class="muted"></span></p></section>
-<section id="secBackup"><h2>Backup & restore</h2><div class="body muted">The store lives only on this phone. Export it before clearing browser data or moving devices.</div>
+<section id="secBackup"><h2>Backup & restore</h2><div class="body muted">The store lives only on this phone. Export it before clearing browser data or moving devices; <b>delete</b> wipes every record and cannot be undone.</div>
 <p><button id="btnBackup">Backup store</button>
 <label for="fileImport" class="btn btn-sec small-text">Import backup</label>
 <input id="fileImport" type="file" accept=".json,.jsonl,.csv" style="display:none;">
-<span id="backupStatus" class="muted"></span></p></section>
+<span id="backupStatus" class="muted"></span></p>
+<p><button id="btnClear">Delete all local data</button>
+<span id="clearStatus" class="muted"></span></p></section>
 <section id="secGoals"><h2>App goals</h2><div class="body muted">Daily targets on this phone (not the watch). Shown against each day on the Activity page.</div>
 <p><label>Steps <input id="goalSteps" class="goal" type="number" min="0" step="500"></label>
 <label>Kcal <input id="goalKcal" class="goal" type="number" min="0" step="500"></label>
@@ -43,7 +45,7 @@
 (function checkAppFiles() {
   var need = ['Store', 'DEFAULT_GOALS', 'IDO.transport.ensureLink',
     'IDO.transport.wr', 'IDO.codec.buildAutoActivity', 'IDO.sync.setupAuto',
-    'downloadStoreBackup', 'importStoreFile'];
+    'downloadStoreBackup', 'importStoreFile', 'IDO.shell.refreshStoreStatus'];
   IDO.shell.checkFiles(need);
 })();
 document.getElementById('btnSetup').addEventListener('click', async function () {
@@ -86,6 +88,20 @@ document.getElementById('btnBackup').addEventListener('click', async function ()
     el.textContent = 'Backup downloaded.';
   } catch (e) {
     el.innerHTML = 'Backup failed (' + esc(e) + ') — <a href="diagnostics.html">open Diagnostics</a>.';
+  }
+});
+document.getElementById('btnClear').addEventListener('click', async function () {
+  var el = document.getElementById('clearStatus');
+  if (!window.confirm('Delete every record stored in this browser? Export a backup first — this cannot be undone.')) {
+    return;
+  }
+  try {
+    await Store.clear();
+    el.textContent = 'All local data deleted.';
+    IDO.shell.refreshStoreStatus();
+    loadGoals();
+  } catch (e) {
+    el.textContent = 'Delete failed: ' + e;
   }
 });
 document.getElementById('fileImport').addEventListener('change', async function (e) {

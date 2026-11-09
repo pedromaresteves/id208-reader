@@ -31,6 +31,15 @@ assert.strictEqual(
   'workout'
 );
 assert.strictEqual(Store.classifyRecord({ date: '2026-10-08', steps: 1 }), 'steps');
+// Vitals carry samples too; kind keeps them out of the HR bucket.
+assert.strictEqual(
+  Store.classifyRecord({ date: '2026-11-07', kind: 'spo2', samples: [] }),
+  'spo2'
+);
+assert.strictEqual(
+  Store.classifyRecord({ date: '2026-11-07', kind: 'pressure', samples: [] }),
+  'pressure'
+);
 assert.strictEqual(Store.classifyRecord({}), null);
 assert.strictEqual(Store.classifyRecord(null), null);
 
@@ -58,6 +67,15 @@ g = Store.routeInput(hr);
 assert.strictEqual(g.hr.length, hr.length);
 g = Store.routeInput(workouts);
 assert.strictEqual(g.workout.length, workouts.length);
+// Per-type offline JSON (sync.py output) routes to its own bucket, not HR.
+const vitals = [
+  { date: '2026-11-07', kind: 'spo2', startMin: 1410, items: 1, samples: [{ tMin: 1410, value: 98 }] },
+  { date: '2026-11-07', kind: 'pressure', startMin: 1410, items: 1, samples: [{ tMin: 1410, value: 34 }] },
+];
+g = Store.routeInput([vitals[0]]);
+assert.deepStrictEqual([g.spo2.length, g.hr.length], [1, 0]);
+g = Store.routeInput([vitals[1]]);
+assert.deepStrictEqual([g.pressure.length, g.hr.length], [1, 0]);
 
 // Combined + backup shapes.
 g = Store.routeInput({ steps: [], sleep: sleep, hr: [], workouts: workouts });

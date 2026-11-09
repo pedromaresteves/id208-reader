@@ -168,6 +168,7 @@ def collect_health(
                 )
                 row = {
                     **record,
+                    "kind": "spo2" if common["data_type"] == 0x01 else "pressure",
                     "head_hex": head.hex(),
                     "data_hex": vitals_data.hex(),
                     "source": source,

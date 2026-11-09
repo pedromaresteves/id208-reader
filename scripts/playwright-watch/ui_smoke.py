@@ -172,6 +172,23 @@ def main():
                 failures.append("health: stress reading not rendered: " + stress_text)
             log("health: latest SpO2/stress rendered")
 
+            # Settings: the clear-store action empties the DB after confirming.
+            page.on("dialog", lambda dialog: dialog.accept())
+            page.goto(f"{BASE}/watch.html?v={epoch}", wait_until="load")
+            page.wait_for_timeout(300)
+            page.click("#btnClear")
+            page.wait_for_timeout(600)
+            clear_text = page.inner_text("#clearStatus").lower()
+            if "deleted" not in clear_text:
+                failures.append("settings: clear-store status: " + clear_text)
+            left = page.evaluate(
+                "async () => (await Store.list('steps')).length"
+                " + (await Store.list('sleep')).length"
+            )
+            if left:
+                failures.append(f"settings: clear-store left {left} record(s)")
+            log("settings: clear-store emptied the store")
+
             failures.extend(check_skew_banner(browser, epoch))
 
             if errors:

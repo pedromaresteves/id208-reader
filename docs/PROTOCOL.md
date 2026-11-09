@@ -278,12 +278,13 @@ of duplicating history.
 | `sleep` | night date | night, fall_asleep, get_up, total_min, wake_min, light_min, rem_min, deep_min, source |
 | `hr` | `YYYY-MM-DD` | start_time_s, silent_hr, zones, samples `[{t, bpm}]`, source |
 | `workout` | `date + ' ' + startS` | workout or swim fields + samples |
-| `spo2` | `YYYY-MM-DD` | startMin, items, samples `[{tMin, value}]`, headHex, dataHex |
-| `pressure` | `YYYY-MM-DD` | same shape as SpO2 (watch Stress score) |
+| `spo2` | `YYYY-MM-DD` | kind, startMin, items, samples `[{tMin, value}]`, headHex, dataHex |
+| `pressure` | `YYYY-MM-DD` | same shape as SpO2 (kind=`pressure`, watch Stress score) |
 | `meta` | `last-sync` | day, at, tag |
 
 Backups are JSON `{app: 'id208-reader', version: 1, rows: [...]}`. Import
-accepts a store backup, the combined offline JSON, or `steps.csv`.
+accepts a store backup, the combined offline JSON, the per-type `out/*.json`
+files, or `steps.csv`.
 
 ## Known limitations
 
