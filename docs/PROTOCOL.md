@@ -337,3 +337,5 @@ files, or `steps.csv`.
 - Workout mode: only recoverable from VeryFit app↔watch traffic, if at all.
 - Workout header leftovers: `[12:16]` steps hypothesis, `[48:56]`, segment
   tables.
+- Drink-water reminder on/off: command and bytes unknown (no capture yet).
+- Wash-hands reminder on/off: command and bytes unknown (no capture yet).

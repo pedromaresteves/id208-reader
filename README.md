@@ -114,6 +114,22 @@ These are watch or firmware limits, not missing UI:
   stress index, and its time axis is minutes since midnight.
 - Not yet observed live: a swim with lap data.
 
+## Roadmap
+
+Not implemented yet; the protocol unknowns are tracked in
+[`docs/PROTOCOL.md`](docs/PROTOCOL.md#open-questions):
+
+- **Swim lap detail** — the saved summary decodes, but no live pull has ever
+  returned `items>0` (per-minute laps), so the lap path is unvalidated.
+- **Workout mode labels** — Strength/Walk/Run is not in the type-04 record;
+  needs a VeryFit↔watch capture to find where the mode is carried.
+- **Drink-water reminder on/off** — command and bytes unknown.
+- **Wash-hands reminder on/off** — command and bytes unknown.
+
+Already available: walk/run auto-detect prompts (**Watch → Auto-detect**,
+`03 49`), auto-pause/end reminders via the same packet, daily goals,
+backup/import and delete-local-data.
+
 ## Protocol
 
 Summary: service `0x0AF0`; `0x0AF6`/`0x0AF7` carry short v3 frames (including
