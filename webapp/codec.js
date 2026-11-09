@@ -146,6 +146,14 @@ IDO.codec = (function () {
     return pkt;
   }
 
+  // Drink-water reminder (SET 03 60, 16 bytes). Vectors from the TOOBUR A200
+  // reference (htmlapp/confirmed-only.html); not yet verified on ID208.
+  var DRINK_WATER_OFF = '03 60 00 09 00 12 00 3E 1E 00 01 00 00 00 00 00';
+  var DRINK_WATER_ON = '03 60 01 09 00 12 00 3F 1E 00 01 00 00 00 00 00';
+  function buildDrinkWater(enabled) {
+    return parseHex(enabled ? DRINK_WATER_ON : DRINK_WATER_OFF);
+  }
+
   function buildV3FuncTable1A() {
     var pkt = parseHex('33 DA AD DA AD 01 0B 00 1A 00 00 00 00 00');
     var seq = nextSeq();
@@ -393,6 +401,7 @@ IDO.codec = (function () {
     buildGoalsSample: buildGoalsSample,
     buildWeatherOff: buildWeatherOff,
     buildAutoActivity: buildAutoActivity,
+    buildDrinkWater: buildDrinkWater,
     guessHeaderDate: guessHeaderDate,
     decodeHealth: decodeHealth,
   };

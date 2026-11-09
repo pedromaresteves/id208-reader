@@ -15,6 +15,7 @@ const B = {
   syncNow: IDO.sync.syncNow,
   buildV3Start04: IDO.codec.buildV3Start04,
   buildV3Stop04: IDO.codec.buildV3Stop04,
+  buildDrinkWater: IDO.codec.buildDrinkWater,
   pullToday: IDO.sync.pullToday,
   pageDayHistory: IDO.sync.pageDayHistory,
   _setSeq: IDO.codec.setSeq,
@@ -42,6 +43,20 @@ assert.strictEqual(
   'JS buildV3Start04 default b14 must be byte-identical with decoder.py',
 );
 console.log('capture.test.js: buildV3Start04 byte14 vectors match decoder.py');
+
+// Drink-water reminder vectors (TOOBUR A200 reference): same bytes in
+// decoder.py build_drink_water / tests/test_decoder.py.
+assert.strictEqual(
+  Buffer.from(B.buildDrinkWater(true)).toString('hex').toUpperCase(),
+  '036001090012003F1E00010000000000',
+  'JS drink-water ON must match the reference vector',
+);
+assert.strictEqual(
+  Buffer.from(B.buildDrinkWater(false)).toString('hex').toUpperCase(),
+  '036000090012003E1E00010000000000',
+  'JS drink-water OFF must match the reference vector',
+);
+console.log('capture.test.js: drink-water vectors match decoder.py');
 
 // Real v3 sport reply, 2026-10-03: 10065 steps / 7641 m / 631 kcal (watch-verified).
 const CHUNKS = [

@@ -63,6 +63,10 @@ Manual pulls show decoded text here but do not save to the dashboard store
 <button id="btnAutoOff" disabled>Auto-detect OFF</button>
 <button id="btnAutoWalkRun" disabled>Auto-detect walk+run</button>
 </p>
+<p>
+<button id="btnWaterOn" disabled>Drink water ON (03 60)</button>
+<button id="btnWaterOff" disabled>Drink water OFF (03 60)</button>
+</p>
 </details>
 <button id="btnCopy">Copy log</button>
 <button id="btnJsonl">Download JSONL</button>
@@ -93,7 +97,8 @@ Manual pulls show decoded text here but do not save to the dashboard store
     'IDO.codec.buildV3Start04', 'IDO.codec.buildV3Stop04', 'IDO.codec.buildV3Sizes05',
     'IDO.codec.buildBindStart', 'IDO.codec.buildBindStop', 'IDO.codec.buildSetTimeNow',
     'IDO.codec.buildUserInfoSample', 'IDO.codec.buildBindAuthPacket',
-    'IDO.codec.buildAutoActivity', 'IDO.sync.saveCaptured',
+    'IDO.codec.buildAutoActivity', 'IDO.codec.buildDrinkWater',
+    'IDO.sync.saveCaptured',
     'IDO.shell.refreshStoreStatus', 'IDO.transport.wait', 'todayStr'];
   IDO.shell.checkFiles(need);
 })();
@@ -103,7 +108,8 @@ PAGE_BASIC_BUTTONS = ['btnInfo', 'btnLive', 'btnSetupAuto'];
 PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSleepStop',
   'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth',
   'btnWorkout', 'btnWorkoutStop', 'btnSwim', 'btnSwimStop', 'btnSpo2', 'btnSpo2Stop',
-  'btnPress', 'btnPressStop', 'btnAutoOff', 'btnAutoWalkRun'];
+  'btnPress', 'btnPressStop', 'btnAutoOff', 'btnAutoWalkRun',
+  'btnWaterOn', 'btnWaterOff'];
 document.getElementById('btnConnect').addEventListener('pointerup', function () {
   T.connectAndSync().then(null, function () {});
 });
@@ -139,6 +145,8 @@ document.getElementById('btnPress').addEventListener('pointerup', function () { 
 document.getElementById('btnPressStop').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildV3Stop04(2)); });
 document.getElementById('btnAutoOff').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildAutoActivity(null)); });
 document.getElementById('btnAutoWalkRun').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildAutoActivity([1, 1])); });
+document.getElementById('btnWaterOn').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildDrinkWater(true)); });
+document.getElementById('btnWaterOff').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildDrinkWater(false)); });
 document.getElementById('btnCopy').addEventListener('pointerup', function () {
   var text = document.getElementById('log').textContent;
   function fallback() {

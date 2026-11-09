@@ -24,7 +24,7 @@ for setup and recovery.
 | **Sleep** | Last-night card, week chart with arrows, month history list, stage split and quality rating; in-progress nights are marked |
 | **Health** | SpO2 and stress: latest reading, day chart, 30-day trend, history list |
 | **Workouts** | Workouts and pool swims with duration, distance, HR and samples |
-| **Watch** | First-run setup, auto-detect toggles, goals, backup/import, delete local data |
+| **Watch** | First-run setup, auto-detect toggles, drink-water reminder, goals, backup/import, delete local data |
 | **Diagnostics** | Connect, full sync, raw commands, JSONL/log export |
 
 Everything is a plain static file: no build step, no npm dependencies, no
@@ -123,12 +123,13 @@ Not implemented yet; the protocol unknowns are tracked in
   returned `items>0` (per-minute laps), so the lap path is unvalidated.
 - **Workout mode labels** — Strength/Walk/Run is not in the type-04 record;
   needs a VeryFit↔watch capture to find where the mode is carried.
-- **Drink-water reminder on/off** — command and bytes unknown.
+- **Drink-water reminder on/off** — implemented (`03 60`, Watch →
+  Reminders) from the TOOBUR A200 reference; needs a live check on ID208.
 - **Wash-hands reminder on/off** — command and bytes unknown.
 
 Already available: walk/run auto-detect prompts (**Watch → Auto-detect**,
-`03 49`), auto-pause/end reminders via the same packet, daily goals,
-backup/import and delete-local-data.
+`03 49`), auto-pause/end reminders via the same packet, drink-water reminders,
+daily goals, backup/import and delete-local-data.
 
 ## Protocol
 

@@ -13,6 +13,7 @@ from ido.decoder import (
     build_bind_auth,
     build_bind_start,
     build_bind_stop,
+    build_drink_water,
     build_goals_sample,
     build_hr_mode,
     build_set_23_sample,
@@ -137,6 +138,18 @@ def test_setup_prelude_samples_match_logcat() -> None:
         "0343F40100000000000008070000FA000E060C00"
     )
     assert build_weather_off() == bytes.fromhex("032D55000000")
+
+
+def test_drink_water_vectors() -> None:
+    # TOOBUR A200 reference (htmlapp/confirmed-only.html); JS mirror is
+    # webapp/codec.js buildDrinkWater, pinned in capture.test.js.
+    assert build_drink_water(True) == bytes.fromhex(
+        "03 60 01 09 00 12 00 3F 1E 00 01 00 00 00 00 00"
+    )
+    assert build_drink_water(False) == bytes.fromhex(
+        "03 60 00 09 00 12 00 3E 1E 00 01 00 00 00 00 00"
+    )
+    assert len(build_drink_water(True)) == 16
 
 
 def test_auto_activity_matches_fork_captures() -> None:

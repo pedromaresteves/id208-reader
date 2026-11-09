@@ -16,6 +16,10 @@
 <p><button id="btnAutoOff">Auto-detect OFF</button>
 <button id="btnAutoWalkRun">Auto-detect walk+run</button>
 <span id="watchStatus" class="muted"></span></p></section>
+<section id="secReminders"><h2>Reminders</h2><div class="body muted">Drink-water prompts (03 60, 09:00–18:00, every 30 min). Reference-derived and not yet confirmed on ID208 — check the watch after toggling.</div>
+<p><button id="btnWaterOn">Drink water ON</button>
+<button id="btnWaterOff">Drink water OFF</button>
+<span id="waterStatus" class="muted"></span></p></section>
 <section id="secBackup"><h2>Backup & restore</h2><div class="body muted">The store lives only on this phone. Export it before clearing browser data or moving devices; <b>delete</b> wipes every record and cannot be undone.</div>
 <p><button id="btnBackup">Backup store</button>
 <label for="fileImport" class="btn btn-sec small-text">Import backup</label>
@@ -44,8 +48,9 @@
 // Fail fast on file skew (see index.html): banner instead of silent hang.
 (function checkAppFiles() {
   var need = ['Store', 'DEFAULT_GOALS', 'IDO.transport.ensureLink',
-    'IDO.transport.wr', 'IDO.codec.buildAutoActivity', 'IDO.sync.setupAuto',
-    'downloadStoreBackup', 'importStoreFile', 'IDO.shell.refreshStoreStatus'];
+    'IDO.transport.wr', 'IDO.codec.buildAutoActivity', 'IDO.codec.buildDrinkWater',
+    'IDO.sync.setupAuto', 'downloadStoreBackup', 'importStoreFile',
+    'IDO.shell.refreshStoreStatus'];
   IDO.shell.checkFiles(need);
 })();
 document.getElementById('btnSetup').addEventListener('click', async function () {
@@ -77,6 +82,19 @@ async function sendAutoDetect(flags, okMsg) {
     await IDO.transport.ensureLink();
     await IDO.transport.wr(IDO.transport.writeChar, '0x0AF6', IDO.codec.buildAutoActivity(flags));
     el.textContent = okMsg;
+  } catch (e) {
+    el.innerHTML = 'Failed (' + esc(e) + ') — <a href="diagnostics.html">open Diagnostics</a>.';
+  }
+}
+document.getElementById('btnWaterOn').addEventListener('click', function () { sendDrinkWater(true); });
+document.getElementById('btnWaterOff').addEventListener('click', function () { sendDrinkWater(false); });
+async function sendDrinkWater(on) {
+  var el = document.getElementById('waterStatus');
+  el.textContent = 'Connecting…';
+  try {
+    await IDO.transport.ensureLink();
+    await IDO.transport.wr(IDO.transport.writeChar, '0x0AF6', IDO.codec.buildDrinkWater(on));
+    el.textContent = 'Drink water ' + (on ? 'ON' : 'OFF') + ' sent.';
   } catch (e) {
     el.innerHTML = 'Failed (' + esc(e) + ') — <a href="diagnostics.html">open Diagnostics</a>.';
   }

@@ -158,7 +158,9 @@ def main():
                 "() => (document.getElementById('syncLabel')?.textContent || '') + "
                 "'\\n' + (document.getElementById('status')?.textContent || '') + "
                 "'\\n' + (document.getElementById('storeStatus')?.textContent || '') + "
-                "'\\n' + (document.getElementById('lastSync')?.textContent || '')"
+                "'\\n' + (document.getElementById('lastSync')?.textContent || '') + "
+                "'\\n' + (document.getElementById('waterStatus')?.textContent || '') + "
+                "'\\n' + (document.getElementById('watchStatus')?.textContent || '')"
             )
             for line in console_lines[seen:]:
                 if any(k in line for k in KEYWORDS):
@@ -167,7 +169,7 @@ def main():
             if args.done in text:
                 done = True
                 break
-            if "Sync failed" in text or "Store unavailable" in text:
+            if "Sync failed" in text or "Store unavailable" in text or "Failed (" in text:
                 log("ERROR status: " + text.replace("\n", " | ")[:500])
                 break
             time.sleep(2)
@@ -176,7 +178,9 @@ def main():
             "() => [document.getElementById('syncLabel')?.textContent, "
             "document.getElementById('status')?.textContent, "
             "document.getElementById('storeStatus')?.textContent, "
-            "document.getElementById('lastSync')?.textContent]"
+            "document.getElementById('lastSync')?.textContent, "
+            "document.getElementById('waterStatus')?.textContent, "
+            "document.getElementById('watchStatus')?.textContent]"
             ".filter(Boolean).join(' | ')"
         ))
         if not done:

@@ -156,7 +156,8 @@ def main():
             # Settings page: the first-run/setup and backup controls exist.
             page.goto(f"{BASE}/watch.html?v={epoch}", wait_until="load")
             page.wait_for_timeout(400)
-            for selector in ("#btnSetup", "#btnBackup", "#fileImport", "#btnAutoOff", "#goalSteps"):
+            for selector in ("#btnSetup", "#btnBackup", "#fileImport", "#btnAutoOff", "#goalSteps",
+                             "#btnWaterOn", "#btnWaterOff"):
                 if page.locator(selector).count() != 1:
                     failures.append(f"settings: missing {selector}")
             log("settings: setup/backup/goals controls present")

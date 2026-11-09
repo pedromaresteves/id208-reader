@@ -60,6 +60,11 @@ CMD_AUTO_ACTIVITY_FLAGS = (
     "swim",
     "smart_rope",
 )
+# Drink-water reminder (SET 03 60, 16 bytes): on/off, 09:00-18:00 window,
+# repeat days, 30-minute interval. Vectors from the TOOBUR A200 reference
+# (htmlapp/confirmed-only.html); not yet verified on ID208.
+CMD_DRINK_WATER_OFF = bytes.fromhex("03 60 00 09 00 12 00 3E 1E 00 01 00 00 00 00 00")
+CMD_DRINK_WATER_ON = bytes.fromhex("03 60 01 09 00 12 00 3F 1E 00 01 00 00 00 00 00")
 # v3 HR-mode payload transplanted from reinstall-bind logcat (12 bytes after
 # seq). Only seq + CRC are refreshed per send; stale schedule bytes tolerated.
 HR_MODE_PAYLOAD = bytes.fromhex("0000000000010000173B0000")
@@ -268,6 +273,16 @@ def build_auto_activity(
         )
     )
     return bytes((0x03, 0x49)) + flags
+
+
+def build_drink_water(enabled: bool) -> bytes:
+    """Build the 16-byte `03 60` drink-water reminder packet.
+
+    Reference-derived from the TOOBUR A200 (same 0x0AF0 protocol family);
+    the exact schedule/repeat bytes may need tuning once the ID208 is seen
+    acknowledging it.
+    """
+    return CMD_DRINK_WATER_ON if enabled else CMD_DRINK_WATER_OFF
 
 
 def build_v3_1a(seq: int) -> bytes:

@@ -248,6 +248,13 @@ score (0-100), not blood pressure. Both matched the screen on 2026-11-07
 (98% and 34). Decoded by the webapp and `sync.py` (`spo2.json`,
 `pressure.json`).
 
+## Watch settings writes (legacy)
+
+| Command | Payload | Status |
+|---|---|---|
+| `03 49` | 9 flags: walk, run, bicycle, auto-pause, auto-end reminder, elliptical, rowing, swim, smart rope | Verified live (Watch → Auto-detect) |
+| `03 60` | 16 bytes: on/off, 09:00–18:00 window, repeat days, 30-minute interval | Reference-derived (TOOBUR A200); unverified on ID208 |
+
 ## Builders, parsers and parity
 
 `webapp/codec.js` and `src/ido/decoder.py` must stay byte-identical for
@@ -337,5 +344,6 @@ files, or `steps.csv`.
 - Workout mode: only recoverable from VeryFit app↔watch traffic, if at all.
 - Workout header leftovers: `[12:16]` steps hypothesis, `[48:56]`, segment
   tables.
-- Drink-water reminder on/off: command and bytes unknown (no capture yet).
+- Drink-water reminder: `03 60` written from the A200 reference; confirm the
+  ID208 reacts and tune the schedule/repeat bytes if needed.
 - Wash-hands reminder on/off: command and bytes unknown (no capture yet).
