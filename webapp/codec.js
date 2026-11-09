@@ -154,6 +154,14 @@ IDO.codec = (function () {
     return parseHex(enabled ? DRINK_WATER_ON : DRINK_WATER_OFF);
   }
 
+  // Wash-hands reminder (SET 03 55, 10 bytes), captured from VeryFit on the
+  // ID208 and confirmed against the Hand washing setting (2026-11-09).
+  var WASH_HANDS_OFF = '03 55 00 09 00 12 00 3E 3C 00';
+  var WASH_HANDS_ON = '03 55 01 09 00 12 00 3E 3C 00';
+  function buildWashHands(enabled) {
+    return parseHex(enabled ? WASH_HANDS_ON : WASH_HANDS_OFF);
+  }
+
   function buildV3FuncTable1A() {
     var pkt = parseHex('33 DA AD DA AD 01 0B 00 1A 00 00 00 00 00');
     var seq = nextSeq();
@@ -402,6 +410,7 @@ IDO.codec = (function () {
     buildWeatherOff: buildWeatherOff,
     buildAutoActivity: buildAutoActivity,
     buildDrinkWater: buildDrinkWater,
+    buildWashHands: buildWashHands,
     guessHeaderDate: guessHeaderDate,
     decodeHealth: decodeHealth,
   };

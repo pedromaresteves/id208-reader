@@ -24,6 +24,7 @@ from ido.decoder import (
     build_v3_sizes_05,
     build_v3_start_04,
     build_v3_stop_04,
+    build_wash_hands,
     build_weather_off,
     crc16_ccitt,
     parse_basic_info,
@@ -150,6 +151,14 @@ def test_drink_water_vectors() -> None:
         "03 60 00 09 00 12 00 3E 1E 00 01 00 00 00 00 00"
     )
     assert len(build_drink_water(True)) == 16
+
+
+def test_wash_hands_vectors() -> None:
+    # Captured from VeryFit and confirmed against the Hand washing setting
+    # (2026-11-09). JS mirror: codec.js buildWashHands.
+    assert build_wash_hands(True) == bytes.fromhex("03 55 01 09 00 12 00 3E 3C 00")
+    assert build_wash_hands(False) == bytes.fromhex("03 55 00 09 00 12 00 3E 3C 00")
+    assert len(build_wash_hands(True)) == 10
 
 
 def test_auto_activity_matches_fork_captures() -> None:

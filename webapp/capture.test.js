@@ -16,6 +16,7 @@ const B = {
   buildV3Start04: IDO.codec.buildV3Start04,
   buildV3Stop04: IDO.codec.buildV3Stop04,
   buildDrinkWater: IDO.codec.buildDrinkWater,
+  buildWashHands: IDO.codec.buildWashHands,
   pullToday: IDO.sync.pullToday,
   pageDayHistory: IDO.sync.pageDayHistory,
   _setSeq: IDO.codec.setSeq,
@@ -57,6 +58,19 @@ assert.strictEqual(
   'JS drink-water OFF must match the reference vector',
 );
 console.log('capture.test.js: drink-water vectors match decoder.py');
+
+// Wash-hands vectors (VeryFit capture on ID208, confirmed 2026-11-09).
+assert.strictEqual(
+  Buffer.from(B.buildWashHands(true)).toString('hex').toUpperCase(),
+  '035501090012003E3C00',
+  'JS wash-hands ON must match the capture vector',
+);
+assert.strictEqual(
+  Buffer.from(B.buildWashHands(false)).toString('hex').toUpperCase(),
+  '035500090012003E3C00',
+  'JS wash-hands OFF must match the capture vector',
+);
+console.log('capture.test.js: wash-hands vectors match decoder.py');
 
 // Real v3 sport reply, 2026-10-03: 10065 steps / 7641 m / 631 kcal (watch-verified).
 const CHUNKS = [

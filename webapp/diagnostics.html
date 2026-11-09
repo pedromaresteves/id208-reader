@@ -67,6 +67,10 @@ Manual pulls show decoded text here but do not save to the dashboard store
 <button id="btnWaterOn" disabled>Drink water ON (03 60)</button>
 <button id="btnWaterOff" disabled>Drink water OFF (03 60)</button>
 </p>
+<p>
+<button id="btnWashOn" disabled>Wash hands ON (03 55)</button>
+<button id="btnWashOff" disabled>Wash hands OFF (03 55)</button>
+</p>
 </details>
 <button id="btnCopy">Copy log</button>
 <button id="btnJsonl">Download JSONL</button>
@@ -98,7 +102,7 @@ Manual pulls show decoded text here but do not save to the dashboard store
     'IDO.codec.buildBindStart', 'IDO.codec.buildBindStop', 'IDO.codec.buildSetTimeNow',
     'IDO.codec.buildUserInfoSample', 'IDO.codec.buildBindAuthPacket',
     'IDO.codec.buildAutoActivity', 'IDO.codec.buildDrinkWater',
-    'IDO.sync.saveCaptured',
+    'IDO.codec.buildWashHands', 'IDO.sync.saveCaptured',
     'IDO.shell.refreshStoreStatus', 'IDO.transport.wait', 'todayStr'];
   IDO.shell.checkFiles(need);
 })();
@@ -109,7 +113,7 @@ PAGE_FULL_BUTTONS = ['btnSizes', 'btnSport', 'btnSleep', 'btnSportStop', 'btnSle
   'btnHr', 'btnHrStop', 'btnBind', 'btnTime', 'btnUser', 'btnUnbind', 'btnAuth',
   'btnWorkout', 'btnWorkoutStop', 'btnSwim', 'btnSwimStop', 'btnSpo2', 'btnSpo2Stop',
   'btnPress', 'btnPressStop', 'btnAutoOff', 'btnAutoWalkRun',
-  'btnWaterOn', 'btnWaterOff'];
+  'btnWaterOn', 'btnWaterOff', 'btnWashOn', 'btnWashOff'];
 document.getElementById('btnConnect').addEventListener('pointerup', function () {
   T.connectAndSync().then(null, function () {});
 });
@@ -147,6 +151,8 @@ document.getElementById('btnAutoOff').addEventListener('pointerup', function () 
 document.getElementById('btnAutoWalkRun').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildAutoActivity([1, 1])); });
 document.getElementById('btnWaterOn').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildDrinkWater(true)); });
 document.getElementById('btnWaterOff').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildDrinkWater(false)); });
+document.getElementById('btnWashOn').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildWashHands(true)); });
+document.getElementById('btnWashOff').addEventListener('pointerup', function () { T.wr(T.writeChar, '0x0AF6', C.buildWashHands(false)); });
 document.getElementById('btnCopy').addEventListener('pointerup', function () {
   var text = document.getElementById('log').textContent;
   function fallback() {

@@ -65,6 +65,11 @@ CMD_AUTO_ACTIVITY_FLAGS = (
 # (htmlapp/confirmed-only.html); not yet verified on ID208.
 CMD_DRINK_WATER_OFF = bytes.fromhex("03 60 00 09 00 12 00 3E 1E 00 01 00 00 00 00 00")
 CMD_DRINK_WATER_ON = bytes.fromhex("03 60 01 09 00 12 00 3F 1E 00 01 00 00 00 00 00")
+# Wash-hands reminder (SET 03 55, 10 bytes): on/off, 09:00-18:00 window,
+# repeat days, 60-minute interval. Captured from VeryFit on the ID208 and
+# confirmed by toggling the Hand washing setting (2026-11-09).
+CMD_WASH_HANDS_OFF = bytes.fromhex("03 55 00 09 00 12 00 3E 3C 00")
+CMD_WASH_HANDS_ON = bytes.fromhex("03 55 01 09 00 12 00 3E 3C 00")
 # v3 HR-mode payload transplanted from reinstall-bind logcat (12 bytes after
 # seq). Only seq + CRC are refreshed per send; stale schedule bytes tolerated.
 HR_MODE_PAYLOAD = bytes.fromhex("0000000000010000173B0000")
@@ -283,6 +288,15 @@ def build_drink_water(enabled: bool) -> bytes:
     acknowledging it.
     """
     return CMD_DRINK_WATER_ON if enabled else CMD_DRINK_WATER_OFF
+
+
+def build_wash_hands(enabled: bool) -> bytes:
+    """Build the 10-byte `03 55` wash-hands reminder packet.
+
+    Captured from VeryFit on the ID208 and confirmed against the Hand washing
+    setting (2026-11-09).
+    """
+    return CMD_WASH_HANDS_ON if enabled else CMD_WASH_HANDS_OFF
 
 
 def build_v3_1a(seq: int) -> bytes:

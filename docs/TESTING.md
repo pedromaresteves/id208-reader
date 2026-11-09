@@ -147,6 +147,9 @@ reminder toggles can only come from vendor traffic.
 Watch page and confirm the watch reacts; if the schedule bytes are wrong,
 capture the VeryFit write with the HCI log above.
 
+Wash hands uses `03 55`, confirmed against the VeryFit Hand washing setting
+(2026-11-09: writing OFF flipped it).
+
 ## First-run / factory-reset test
 
 Use this only when you need to exercise bind/auth. A reset **empties the

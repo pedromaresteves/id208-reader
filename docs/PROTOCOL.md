@@ -254,6 +254,7 @@ score (0-100), not blood pressure. Both matched the screen on 2026-11-07
 |---|---|---|
 | `03 49` | 9 flags: walk, run, bicycle, auto-pause, auto-end reminder, elliptical, rowing, swim, smart rope | Verified live (Watch → Auto-detect) |
 | `03 60` | 16 bytes: on/off, 09:00–18:00 window, repeat days, 30-minute interval | Reference-derived (TOOBUR A200); ON and OFF ACKed by ID208 (`RX 03 60`) on 2026-11-09 |
+| `03 55` | 10 bytes: on/off, 09:00–18:00 window, repeat days, 60-minute interval | Captured from VeryFit and confirmed against the Hand washing setting (2026-11-09) |
 
 ## Builders, parsers and parity
 
@@ -330,6 +331,9 @@ files, or `steps.csv`.
   / pressure 49); fresh sleep 426 min; 39m16s workout; zero-lap swim
   captured; HR samples fixed to start at `data[0]`; factory reset +
   first-run setup verified; sleep page redesigned.
+- **2026-11-09** — wash-hands reminder `03 55` confirmed: VeryFit wrote
+  `03 55 00 …` when Hand washing was turned off, and `03 55 01 …` while it was
+  enabled.
 - **2026-11-09** — drink-water reminder `03 60` accepted by the ID208 for
   both ON (`TX 03 60 01 …`) and OFF (`TX 03 60 00 …`), each `RX 03 60`;
   prompt timing still to observe.
@@ -349,4 +353,3 @@ files, or `steps.csv`.
   tables.
 - Drink-water reminder: ON and OFF are ACKed; confirm a prompt fires inside
   the 09:00–18:00 window and tune the schedule/repeat bytes if needed.
-- Wash-hands reminder on/off: command and bytes unknown (no capture yet).

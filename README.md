@@ -116,7 +116,7 @@ These are watch or firmware limits, not missing UI:
 
 ## Roadmap
 
-Not implemented yet; the protocol unknowns are tracked in
+Still open; the protocol unknowns are tracked in
 [`docs/PROTOCOL.md`](docs/PROTOCOL.md#open-questions):
 
 - **Swim lap detail** — the saved summary decodes, but no live pull has ever
@@ -126,11 +126,11 @@ Not implemented yet; the protocol unknowns are tracked in
 - **Drink-water reminder on/off** — implemented (`03 60`, Watch →
   Reminders); ON and OFF are ACKed by the ID208 (2026-11-09). Prompt timing
   still unobserved (09:00–18:00 window).
-- **Wash-hands reminder on/off** — command and bytes unknown.
 
 Already available: walk/run auto-detect prompts (**Watch → Auto-detect**,
 `03 49`), auto-pause/end reminders via the same packet, drink-water reminders,
-daily goals, backup/import and delete-local-data.
+wash-hands reminders (`03 55`), daily goals, backup/import and
+delete-local-data.
 
 ## Protocol
 

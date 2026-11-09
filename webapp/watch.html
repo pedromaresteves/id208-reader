@@ -16,10 +16,13 @@
 <p><button id="btnAutoOff">Auto-detect OFF</button>
 <button id="btnAutoWalkRun">Auto-detect walk+run</button>
 <span id="watchStatus" class="muted"></span></p></section>
-<section id="secReminders"><h2>Reminders</h2><div class="body muted">Drink-water prompts (03 60, 09:00–18:00, every 30 min). Reference-derived and not yet confirmed on ID208 — check the watch after toggling.</div>
+<section id="secReminders"><h2>Reminders</h2><div class="body muted">Drink water (03 60) and wash hands (03 55) prompts. Both use a 09:00–18:00 window.</div>
 <p><button id="btnWaterOn">Drink water ON</button>
 <button id="btnWaterOff">Drink water OFF</button>
-<span id="waterStatus" class="muted"></span></p></section>
+<span id="waterStatus" class="muted"></span></p>
+<p><button id="btnWashOn">Wash hands ON</button>
+<button id="btnWashOff">Wash hands OFF</button>
+<span id="washStatus" class="muted"></span></p></section>
 <section id="secBackup"><h2>Backup & restore</h2><div class="body muted">The store lives only on this phone. Export it before clearing browser data or moving devices; <b>delete</b> wipes every record and cannot be undone.</div>
 <p><button id="btnBackup">Backup store</button>
 <label for="fileImport" class="btn btn-sec small-text">Import backup</label>
@@ -49,8 +52,8 @@
 (function checkAppFiles() {
   var need = ['Store', 'DEFAULT_GOALS', 'IDO.transport.ensureLink',
     'IDO.transport.wr', 'IDO.codec.buildAutoActivity', 'IDO.codec.buildDrinkWater',
-    'IDO.sync.setupAuto', 'downloadStoreBackup', 'importStoreFile',
-    'IDO.shell.refreshStoreStatus'];
+    'IDO.codec.buildWashHands', 'IDO.sync.setupAuto', 'downloadStoreBackup',
+    'importStoreFile', 'IDO.shell.refreshStoreStatus'];
   IDO.shell.checkFiles(need);
 })();
 document.getElementById('btnSetup').addEventListener('click', async function () {
@@ -95,6 +98,19 @@ async function sendDrinkWater(on) {
     await IDO.transport.ensureLink();
     await IDO.transport.wr(IDO.transport.writeChar, '0x0AF6', IDO.codec.buildDrinkWater(on));
     el.textContent = 'Drink water ' + (on ? 'ON' : 'OFF') + ' sent.';
+  } catch (e) {
+    el.innerHTML = 'Failed (' + esc(e) + ') — <a href="diagnostics.html">open Diagnostics</a>.';
+  }
+}
+document.getElementById('btnWashOn').addEventListener('click', function () { sendWashHands(true); });
+document.getElementById('btnWashOff').addEventListener('click', function () { sendWashHands(false); });
+async function sendWashHands(on) {
+  var el = document.getElementById('washStatus');
+  el.textContent = 'Connecting…';
+  try {
+    await IDO.transport.ensureLink();
+    await IDO.transport.wr(IDO.transport.writeChar, '0x0AF6', IDO.codec.buildWashHands(on));
+    el.textContent = 'Wash hands ' + (on ? 'ON' : 'OFF') + ' sent.';
   } catch (e) {
     el.innerHTML = 'Failed (' + esc(e) + ') — <a href="diagnostics.html">open Diagnostics</a>.';
   }

@@ -157,7 +157,7 @@ def main():
             page.goto(f"{BASE}/watch.html?v={epoch}", wait_until="load")
             page.wait_for_timeout(400)
             for selector in ("#btnSetup", "#btnBackup", "#fileImport", "#btnAutoOff", "#goalSteps",
-                             "#btnWaterOn", "#btnWaterOff"):
+                             "#btnWaterOn", "#btnWaterOff", "#btnWashOn", "#btnWashOff"):
                 if page.locator(selector).count() != 1:
                     failures.append(f"settings: missing {selector}")
             log("settings: setup/backup/goals controls present")
