@@ -117,6 +117,7 @@ These are watch or firmware limits, not missing UI:
 - First post-reset completed day (2026-11-06) drained on 2026-11-07.
 - SpO2 (98%) and stress (34) matched the watch screen; type 02 is the
   stress index, and its time axis is minutes since midnight.
+- Drink-water reminder prompts inside the 09:00–18:00 window (2026-11-10).
 - Not yet observed live: a swim with lap data.
 
 ## Roadmap
@@ -126,8 +127,6 @@ Still open; the protocol unknowns are tracked in
 
 - **Swim lap detail** — the saved summary decodes, but no live pull has ever
   returned `items>0` (per-minute laps), so the lap path is unvalidated.
-- **Drink-water prompt timing** — ON/OFF packets are ACKed by the ID208; a
-  prompt firing inside the 09:00–18:00 window is still unobserved.
 
 Already available: walk/run auto-detect prompts (**Watch → Auto-detect**,
 `03 49`), auto-pause/end reminders via the same packet, drink-water reminders,

@@ -120,12 +120,6 @@ Swims are count-data: a fresh record is served once, so pull immediately.
 
 If the pull still shows `items=0`, the watch does not expose lap data over BLE.
 
-### Drink-water prompt timing
-
-The `03 60` ON/OFF packets are ACKed by the watch (2026-11-09). To observe an
-actual prompt, leave the reminder ON for a day inside the 09:00–18:00 window,
-then turn it OFF from the Watch page.
-
 ## First-run / factory-reset test
 
 Use this only when you need to exercise bind/auth. A reset **empties the

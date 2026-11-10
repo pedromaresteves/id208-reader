@@ -269,7 +269,7 @@ score (0-100), not blood pressure. Both matched the screen on 2026-11-07
 | Command | Payload | Status |
 |---|---|---|
 | `03 49` | 9 flags: walk, run, bicycle, auto-pause, auto-end reminder, elliptical, rowing, swim, smart rope | Verified live (Watch → Auto-detect) |
-| `03 60` | 16 bytes: on/off, 09:00–18:00 window, repeat days, 30-minute interval | Reference-derived (TOOBUR A200); ON and OFF ACKed by ID208 (`RX 03 60`) on 2026-11-09 |
+| `03 60` | 16 bytes: on/off, 09:00–18:00 window, repeat days, 30-minute interval | ON/OFF ACKed by ID208 (`RX 03 60`) and prompts observed working (2026-11-10) |
 | `03 55` | 10 bytes: on/off, 09:00–18:00 window, repeat days, 60-minute interval | Captured from VeryFit and confirmed against the Hand washing setting (2026-11-09) |
 
 ## Builders, parsers and parity
@@ -351,6 +351,8 @@ files, or `steps.csv`.
   / pressure 49); fresh sleep 426 min; 39m16s workout; zero-lap swim
   captured; HR samples fixed to start at `data[0]`; factory reset +
   first-run setup verified; sleep page redesigned.
+- **2026-11-10** — drink-water reminder prompts observed working inside the
+  09:00–18:00 window.
 - **2026-11-09** — live workout stream decoded from the VeryFit capture:
   `10 01` start and `0x13` progress frames carry the sport id (`0x30` =
   Outdoor Run, `0x34` = Outdoor Walk); the saved type-04 header still shows
@@ -374,5 +376,3 @@ files, or `steps.csv`.
   anchor exists, but no live pull has shown `items>0` for swim yet).
 - Workout header leftovers: `[12:16]` steps hypothesis, `[48:56]`, segment
   tables.
-- Drink-water reminder: ON and OFF are ACKed; confirm a prompt fires inside
-  the 09:00–18:00 window and tune the schedule/repeat bytes if needed.
