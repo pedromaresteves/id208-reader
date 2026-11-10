@@ -115,29 +115,42 @@ function lineChart(id, values, lo, hi, options) {
   g.el._points = [];
   var lineColor = opts.color || t.line;
   g.ctx.strokeStyle = lineColor; g.ctx.lineWidth = 2; g.ctx.lineJoin = 'round'; g.ctx.lineCap = 'round';
-  var started = false, segment = [];
+  var segments = [], segment = [];
+  function finishSegment() {
+    if (!segment.length) return;
+    if (segment.length > 1) {
+      g.ctx.beginPath(); g.ctx.moveTo(segment[0].x, segment[0].y);
+      for (var p = 1; p < segment.length; p++) g.ctx.lineTo(segment[p].x, segment[p].y);
+      g.ctx.stroke();
+    }
+    segments.push(segment);
+    segment = [];
+  }
   nums.forEach(function (v, i) {
     if (v === null || !isFinite(v)) {
-      if (segment.length > 1) g.ctx.stroke();
-      started = false; segment = []; return;
+      finishSegment();
+      return;
     }
     var x = pointX(i), y = pointY(v);
-    if (!started) { g.ctx.beginPath(); g.ctx.moveTo(x, y); started = true; }
-    else g.ctx.lineTo(x, y);
     segment.push({ x: x, y: y, value: v, index: i });
     g.el._points.push({ x: x, y: y, value: v, index: i });
-    if (i === nums.length - 1 && segment.length > 1) g.ctx.stroke();
   });
+  finishSegment();
   if (opts.fill && g.el._points.length > 1) {
-    var points = g.el._points;
     g.ctx.save(); g.ctx.globalAlpha = .1; g.ctx.fillStyle = lineColor;
-    g.ctx.beginPath(); g.ctx.moveTo(points[0].x, a.top + a.height);
-    points.forEach(function (p) { g.ctx.lineTo(p.x, p.y); });
-    g.ctx.lineTo(points[points.length - 1].x, a.top + a.height); g.ctx.closePath(); g.ctx.fill(); g.ctx.restore();
+    segments.forEach(function (points) {
+      if (points.length < 2) return;
+      g.ctx.beginPath(); g.ctx.moveTo(points[0].x, a.top + a.height);
+      points.forEach(function (p) { g.ctx.lineTo(p.x, p.y); });
+      g.ctx.lineTo(points[points.length - 1].x, a.top + a.height); g.ctx.closePath(); g.ctx.fill();
+    });
+    g.ctx.restore();
   }
   g.ctx.fillStyle = lineColor;
-  if (valid.length <= 12 || opts.dots) g.el._points.forEach(function (p) {
-    g.ctx.beginPath(); g.ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); g.ctx.fill();
+  segments.forEach(function (points) {
+    if (points.length === 1 || valid.length <= 12 || opts.dots) points.forEach(function (p) {
+      g.ctx.beginPath(); g.ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); g.ctx.fill();
+    });
   });
   g.ctx.font = '10px system-ui, sans-serif';
   if (times.length) {

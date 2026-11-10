@@ -134,7 +134,7 @@ label.chip { cursor: pointer; }
 .pager button { width: 44px; padding: 0; font-size: 1.25rem; }
 .month-label { min-width: 8em; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
 .seg-ctrl { display: inline-flex; gap: 3px; padding: 3px; border-radius: 12px; background: var(--surface-2); }
-.seg-ctrl button { min-height: 38px; border-color: transparent; background: transparent; }
+.seg-ctrl button { min-height: 44px; border-color: transparent; background: transparent; }
 .seg-ctrl button[aria-pressed="true"] { border-color: var(--border); background: var(--surface); }
 .list { display: grid; gap: 8px; }
 .list-row, .day-row, .workout-card {
@@ -177,10 +177,11 @@ canvas { display: block; width: 100%; height: 176px; }
 .nightrow .nr-top { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; }
 .nightrow .nr-sub { display: block; margin-top: 2px; color: var(--text-muted); font-size: .8rem; }
 .nr-mini { display: flex; height: 6px; margin-top: 7px; overflow: hidden; border-radius: 4px; background: var(--surface-2); }
-.heatmap-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.heatmap-grid { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 3px; overflow-x: auto; }
 .heatmap-head { padding: 4px 0; color: var(--text-muted); font-size: .68rem; font-weight: 700; text-align: center; }
-.heatmap-day, .heatmap-blank { min-width: 0; min-height: 44px; }
-.heatmap-day { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1px; padding: 3px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-2); color: var(--text); font-size: .75rem; }
+.heatmap-day, .heatmap-blank { min-height: 44px; }
+.heatmap-blank { min-width: 0; }
+.heatmap-day { min-width: 44px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1px; padding: 3px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-2); color: var(--text); font-size: .75rem; }
 .heatmap-day[data-level="1"] { background: color-mix(in srgb, var(--sleep-light) 34%, var(--surface)); }
 .heatmap-day[data-level="2"] { background: color-mix(in srgb, var(--sleep-light) 56%, var(--surface)); }
 .heatmap-day[data-level="3"] { background: color-mix(in srgb, var(--sleep-deep) 60%, var(--surface)); }
@@ -218,7 +219,6 @@ pre, #log { max-width: 100%; overflow: auto; white-space: pre-wrap; overflow-wra
 #syncBarOuter { height: 8px; margin: 6px 0; border-radius: 5px; background: var(--surface-2); }
 #syncBarInner { width: 0; height: 8px; border-radius: 5px; background: var(--accent); }
 .dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
-.dashboard-grid section { cursor: pointer; }
 .detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
 nav.tabs {
   position: fixed;

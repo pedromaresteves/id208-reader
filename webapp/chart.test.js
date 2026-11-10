@@ -131,6 +131,24 @@ assert.strictEqual(elements['chTime']._points.length, 3, 'line chart retains sam
 assert.ok(U.goalRingSVG(4000, 8000).includes('50%'), 'goal ring shows percent completion');
 assert.ok(U.emptyStateHTML('<empty>', 'hint').includes('&lt;empty&gt;'), 'empty-state helper escapes HTML');
 
+// Gaps split line and fill segments; large sparse trends keep isolated points visible.
+const sparseValues = Array.from({ length: 25 }, (_, i) => (i % 2 === 0 ? 90 + i / 10 : null));
+U.lineChart('chSparse', sparseValues, 80, 100, { xLabels: sparseValues.map(() => ''), fill: true });
+const sparseCanvas = elements['chSparse'];
+assert.strictEqual(sparseCanvas.calls.filter((c) => c[0] === 'stroke').length, 3,
+  'isolated sparse values do not connect across missing days');
+assert.strictEqual(sparseCanvas.calls.filter((c) => c[0] === 'arc').length, 13,
+  'isolated sparse values remain visible as points');
+assert.strictEqual(sparseCanvas.calls.filter((c) => c[0] === 'closePath').length, 0,
+  'area fill does not bridge missing-day gaps');
+
+U.lineChart('chGaps', [90, 92, null, 95, 93], 80, 100, { fill: true });
+const gapCalls = elements['chGaps'].calls;
+assert.strictEqual(gapCalls.filter((c) => c[0] === 'stroke').length, 5,
+  'two contiguous data segments are stroked independently');
+assert.strictEqual(gapCalls.filter((c) => c[0] === 'closePath').length, 2,
+  'filled chart areas are closed per contiguous segment');
+
 // Month/week date helpers (Monday-start weeks).
 assert.strictEqual(U.monthKey('2026-10-03'), '2026-10');
 assert.strictEqual(U.addMonths('2026-10', 1), '2026-11');

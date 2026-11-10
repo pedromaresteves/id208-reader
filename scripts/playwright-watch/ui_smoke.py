@@ -109,17 +109,17 @@ def visual_fixture():
 
 def check_visual_accessibility(page, name, width):
     """Check compact viewport overflow, common target sizes, and text contrast."""
-    if width == 390:
+    if width in (320, 390):
         overflow = page.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
         if overflow > 1:
-            return [f"{name}: horizontal overflow at 390px ({overflow}px)"]
+            return [f"{name}: horizontal overflow at {width}px ({overflow}px)"]
 
     too_small = page.evaluate("""() => {
       const selector = 'nav.tabs a, nav.tabs button, button, a.btn, a.go, a.chip, label.btn, label.chip, .day-row, .workout-card, .nightrow, .heatmap-day, .pager button';
       return [...document.querySelectorAll(selector)].filter((el) => {
         const r = el.getBoundingClientRect(), s = getComputedStyle(el);
         if (!r.width || !r.height || s.visibility === 'hidden' || s.display === 'none') return false;
-        return r.height < 44 || r.width < 40;
+        return r.height < 44 || r.width < 44;
       }).map((el) => `${el.id || el.tagName.toLowerCase()}.${String(el.className).replace(/\\s+/g, '.')}: ${Math.round(el.getBoundingClientRect().width)}x${Math.round(el.getBoundingClientRect().height)}`);
     }""")
     failures = [f"{name}: touch target under 44px: {target}" for target in too_small]
@@ -304,6 +304,11 @@ def main():
                             errors.clear()
             failures.extend(screenshot_failures)
             log("responsive screenshots: " + SCREENSHOT_DIR)
+
+            page.set_viewport_size({"width": 320, "height": 844})
+            page.goto(f"{BASE}/sleep.html?v={epoch}", wait_until="load")
+            page.wait_for_timeout(300)
+            failures.extend(check_visual_accessibility(page, "sleep-min-width", 320))
 
             page.goto(f"{BASE}/activity.html?v={epoch}", wait_until="load")
             page.locator(".day-row[data-date]").nth(1).click()
