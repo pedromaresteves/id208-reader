@@ -19,16 +19,17 @@ for setup and recovery.
 
 | Page | Contents |
 |---|---|
-| **Dashboard** | One-button sync, last-sync stamp, store summary, backup/import |
-| **Activity** | Daily steps, distance, calories, goal markers, HR summary |
-| **Sleep** | Last-night card, week chart with arrows, month history list, stage split and quality rating; in-progress nights are marked |
-| **Health** | SpO2 and stress: latest reading, day chart, 30-day trend, history list |
-| **Workouts** | Workouts and pool swims with duration, distance, HR and samples |
+| **Home** | One-button sync, last-sync stamp, store summary, backup/import and latest metric cards |
+| **Activity** | Steps goal ring, calories, distance, HR, 7-day chart and selectable day cards |
+| **Sleep** | Last-night stage summary, week chart, month calendar/history; in-progress nights are marked |
+| **Health** | SpO2 and stress: timed daily charts, 30-day trends and selectable history cards |
+| **Workouts** | Workout/swim cards, duration, distance, HR, details and swim lap summaries |
 | **Watch** | First-run setup, auto-detect toggles, drink-water reminder, goals, backup/import, delete local data |
 | **Diagnostics** | Connect, full sync, raw commands, JSONL/log export |
 
 Everything is a plain static file: no build step, no npm dependencies, no
-network calls.
+network calls. The bottom bar keeps Home, Activity, Sleep and Health visible;
+Workouts, Watch settings and Diagnostics are grouped under **More** on every page.
 
 ## Normal use (phone)
 

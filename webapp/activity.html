@@ -8,14 +8,28 @@
 </head>
 <body>
 <h1>Activity</h1>
-<p><a href="index.html">← Dashboard</a> <span id="status" class="muted"></span></p>
-<section id="secActivity"><h2>Steps & kcal</h2>
-<p><button id="btnPrevW" title="Previous 7 days" aria-label="Previous 7 days">‹ Prev 7</button>
-<span id="rangeLabel" class="month-label"></span>
-<button id="btnNextW" title="Next 7 days" aria-label="Next 7 days">Next 7 ›</button></p>
-<div class="body muted">Loading…</div><canvas id="chActivity"></canvas><div id="weekAvg" class="muted"></div></section>
+<p id="status" class="muted" aria-live="polite"></p>
+
+<section id="secHero" class="hero-card">
+  <div class="section-head"><h2 id="heroTitle">Daily activity</h2><span id="heroDate" class="muted"></span></div>
+  <div id="heroBody" class="muted">Loading activity…</div>
+</section>
+
+<section id="secActivity">
+  <div class="section-head"><h2>Steps · last 7 days</h2></div>
+  <div class="pager">
+    <button id="btnPrevW" title="Previous 7 days" aria-label="Previous 7 days">‹</button>
+    <span id="rangeLabel" class="month-label"></span>
+    <button id="btnNextW" title="Next 7 days" aria-label="Next 7 days">›</button>
+  </div>
+  <div class="chart-wrap"><canvas id="chActivity" aria-label="Daily steps chart"></canvas></div>
+  <div class="chart-legend"><span class="goal-line-key"></span> Daily goal (<span id="goalLegend"></span> steps)</div>
+  <div id="weekAvg" class="muted"></div>
+  <h2 style="margin-top:18px">Days</h2>
+  <div class="body history-list" aria-live="polite">Loading…</div>
+</section>
+
 <script>
-// Cache-bust every local script when the page has ?v=<epoch> (see index.html).
 (function () {
   var m = location.search.match(/[?&]v=([^&]+)/);
   var q = m ? '?v=' + m[1] : '';
@@ -25,69 +39,79 @@
 })();
 </script>
 <script>
-// Fail fast on file skew (see index.html): banner + fresh reload instead of silent hang.
 (function checkAppFiles() {
-  var need = ['Store', 'barChart', 'esc', 'num', 'kmOrDash', 'hrStats', 'hrCell',
-    'addDays', 'DEFAULT_GOALS', 'todayStr'];
+  var need = ['Store', 'barChart', 'goalRingSVG', 'emptyStateHTML', 'esc', 'num', 'kmOrDash',
+    'hrStats', 'addDays', 'parseDay', 'DEFAULT_GOALS', 'todayStr'];
   IDO.shell.checkFiles(need);
 })();
-var STEPS = [], HRMAP = {}, GOALS = DEFAULT_GOALS, END = todayStr();
-function met(v, g) {
-  return v !== undefined && v !== null && v !== '' && Number(v) >= g;
+var STEPS = [], HRMAP = {}, GOALS = DEFAULT_GOALS, END = todayStr(), SELECTED = END;
+var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function dayShort(ds) {
+  var d = parseDay(ds);
+  return DAY_NAMES[d.getDay()] + ' ' + d.getDate();
 }
-function goalCell(v, g) {
-  return esc(num(v)) + ' / ' + esc(num(g)) + (met(v, g) ? ' <span class="met">✓</span>' : '');
-}
-function renderWeek() {
+function dayMap() {
   var map = {};
   STEPS.forEach(function (r) { map[r.date] = r.payload; });
-  // Rolling 7-day window ending at END (today first, then back).
-  var daysAsc = [];
+  return map;
+}
+function renderHero() {
+  var map = dayMap(), s = map[SELECTED], hr = hrStats(HRMAP[SELECTED]);
+  document.getElementById('heroDate').textContent = SELECTED;
+  document.getElementById('heroTitle').textContent = SELECTED === todayStr() ? 'Today' : 'Daily activity';
+  if (!s) {
+    document.getElementById('heroBody').innerHTML = emptyStateHTML('No activity recorded', 'This day has no step record in the local store.');
+    return;
+  }
+  var steps = Number(s.steps) || 0;
+  document.getElementById('heroBody').innerHTML =
+    '<div class="goal-hero"><div><div class="stat-label">Steps</div><div class="big metric-steps">' + esc(num(s.steps)) +
+    '</div><div class="chip-row" style="margin-top:10px"><span class="chip ' + (steps >= GOALS.steps ? 'ok' : 'accent') + '">' +
+    (steps >= GOALS.steps ? 'Goal reached' : esc(num(GOALS.steps - steps)) + ' to goal') + '</span></div></div>' +
+    goalRingSVG(steps, GOALS.steps, { label: 'Steps goal', center: Math.round(Math.min(steps / Math.max(1, GOALS.steps), 1) * 100) + '%' }) + '</div>' +
+    '<div class="stat-grid cols-4">' +
+    '<div class="stat-tile"><span class="stat-label">Calories</span><span class="stat-value metric-kcal">' + esc(num(s.kcal, ' kcal')) + '</span><span class="muted">goal ' + esc(num(GOALS.kcal)) + '</span></div>' +
+    '<div class="stat-tile"><span class="stat-label">Distance</span><span class="stat-value">' + esc(kmOrDash(s.distance_m)) + '</span></div>' +
+    '<div class="stat-tile"><span class="stat-label">Avg heart rate</span><span class="stat-value metric-hr">' + esc(hr ? num(hr.avg, ' bpm') : '—') + '</span><span class="muted">' + (hr ? esc(hr.min + '–' + hr.max + ' bpm') : 'No samples') + '</span></div>' +
+    '<div class="stat-tile"><span class="stat-label">Resting HR</span><span class="stat-value">' + esc(hr && hr.silent !== null && hr.silent !== '' ? num(hr.silent, ' bpm') : '—') + '</span></div>' +
+    '</div>';
+}
+function renderWeek() {
+  var map = dayMap(), daysAsc = [];
   for (var i = 6; i >= 0; i--) daysAsc.push(addDays(END, -i));
   var start = daysAsc[0];
   document.getElementById('rangeLabel').textContent = start.slice(5) + ' – ' + END.slice(5);
   document.getElementById('btnNextW').disabled = END >= todayStr();
+  if (daysAsc.indexOf(SELECTED) < 0) SELECTED = END;
+  document.getElementById('goalLegend').textContent = GOALS.steps;
+  barChart('chActivity', daysAsc.map(dayShort), daysAsc.map(function (d) {
+    return (map[d] && Number(map[d].steps)) || 0;
+  }), { goal: GOALS.steps, max: GOALS.steps, goalLabel: false, labelEvery: 1 });
   var rows = daysAsc.slice().reverse().map(function (ds) {
-    var s = map[ds];
-    var bpm = esc(hrCell(HRMAP[ds]));
-    if (!s) {
-      return '<tr><td>' + esc(ds) + '</td><td>—</td><td>—</td><td>—</td><td>' + bpm + '</td></tr>';
-    }
-    return '<tr><td>' + esc(ds) + '</td><td>' + goalCell(s.steps, GOALS.steps) + '</td>' +
-      '<td>' + goalCell(s.kcal, GOALS.kcal) + '</td><td>' + esc(kmOrDash(s.distance_m)) + '</td><td>' + bpm + '</td></tr>';
+    var s = map[ds], bpm = hrStats(HRMAP[ds]), selected = ds === SELECTED ? ' selected' : '';
+    var steps = s ? Number(s.steps) || 0 : 0;
+    var goal = s && steps >= GOALS.steps ? '<span class="chip ok">Goal met</span>' : '';
+    return '<button type="button" class="day-row' + selected + '" data-date="' + ds + '" aria-pressed="' + (ds === SELECTED) + '">' +
+      '<span class="row-top"><span class="row-title">' + esc(dayShort(ds)) + (ds === todayStr() ? ' · Today' : '') + '</span><span class="row-value">' +
+      (s ? esc(num(s.steps)) + ' steps' : 'No step data') + '</span></span><span class="row-meta">' + goal +
+      (s ? '<span class="chip">' + esc(num(s.kcal, ' kcal')) + '</span><span class="chip">' + esc(kmOrDash(s.distance_m)) + '</span>' : '') +
+      '<span class="chip">HR ' + esc(bpm ? bpm.avg + ' (' + bpm.min + '–' + bpm.max + ')' : '—') + '</span></span></button>';
   }).join('');
-  document.querySelector('#secActivity .body').innerHTML =
-    '<table><tr><th>Date</th><th>Steps / goal</th><th>Kcal / goal</th><th>Dist</th><th>BPM avg (min–max)</th></tr>' + rows + '</table>';
-  barChart('chActivity', daysAsc.map(function (d) { return d.slice(5); }),
-    daysAsc.map(function (d) { return (map[d] && Number(map[d].steps)) || 0; }));
+  document.querySelector('#secActivity .body').innerHTML = rows || emptyStateHTML('No days to show', '');
   var withData = daysAsc.filter(function (d) { return map[d]; });
   if (withData.length) {
-    var tSteps = 0, tKcal = 0, nKcal = 0, tBpm = 0, nBpm = 0, tRest = 0, nRest = 0;
+    var tSteps = 0, tKcal = 0, nKcal = 0;
     withData.forEach(function (d) {
       tSteps += Number(map[d].steps) || 0;
-      if (map[d].kcal !== undefined && map[d].kcal !== null && map[d].kcal !== '') {
-        tKcal += Number(map[d].kcal) || 0; nKcal++;
-      }
-      var hs = hrStats(HRMAP[d]);
-      if (hs) {
-        tBpm += hs.avg; nBpm++;
-        if (hs.silent !== null && hs.silent !== undefined && hs.silent !== '') {
-          tRest += Number(hs.silent) || 0; nRest++;
-        }
-      }
+      if (map[d].kcal !== undefined && map[d].kcal !== null && map[d].kcal !== '') { tKcal += Number(map[d].kcal) || 0; nKcal++; }
     });
-    document.getElementById('weekAvg').innerHTML =
-      '<div><b>7 days ' + esc(start.slice(5)) + ' – ' + esc(END.slice(5)) + '</b>' +
-      ' (avg of ' + withData.length + ' days with data)</div>' +
-      '<div>Steps <b>' + Math.round(tSteps / withData.length) + '</b>' +
-      (nKcal ? ' · Kcal <b>' + Math.round(tKcal / nKcal) + '</b>' : '') +
-      (nBpm ? ' · BPM <b>' + Math.round(tBpm / nBpm) + '</b> avg (' + nBpm + 'd)' : '') +
-      (nRest ? ' · Rest <b>' + Math.round(tRest / nRest) + '</b>' : '') + '</div>' +
-      '<div class="muted">Goals ' + esc(num(GOALS.steps)) + ' steps / ' + esc(num(GOALS.kcal)) +
-      ' kcal (<a href="watch.html">edit in Settings</a>)</div>';
+    document.getElementById('weekAvg').innerHTML = '<div class="chip-row"><span class="chip">Avg ' + Math.round(tSteps / withData.length) + ' steps/day</span>' +
+      (nKcal ? '<span class="chip">' + Math.round(tKcal / nKcal) + ' kcal/day</span>' : '') +
+      '<a class="chip" href="watch.html">Goals: ' + esc(num(GOALS.steps)) + ' steps / ' + esc(num(GOALS.kcal)) + ' kcal · edit</a></div>';
   } else {
-    document.getElementById('weekAvg').textContent = 'No data ' + start + ' – ' + END + '.';
+    document.getElementById('weekAvg').innerHTML = emptyStateHTML('No activity this week', 'Sync the watch to add step history.');
   }
+  renderHero();
 }
 async function render() {
   try {
@@ -101,25 +125,22 @@ async function render() {
       var grec = await Store.get('goals', 'settings');
       if (grec && grec.payload) GOALS = grec.payload;
     } catch (e) {}
-    if (!STEPS.length && !Object.keys(HRMAP).length) {
-      document.querySelector('#secActivity .body').textContent = 'No data yet — run a sync.';
-    }
-    END = todayStr(); // each visit re-anchors on today
+    END = todayStr();
+    SELECTED = END;
     renderWeek();
-    document.getElementById('status').textContent = STEPS.length + ' step days, ' +
-      Object.keys(HRMAP).length + ' HR days in store.';
+    document.getElementById('status').textContent = STEPS.length + ' step days · ' + Object.keys(HRMAP).length + ' HR days stored';
   } catch (e) {
     document.getElementById('status').textContent = 'Store unavailable: ' + e;
   }
 }
-document.getElementById('btnPrevW').addEventListener('click', function () {
-  END = addDays(END, -7);
-  renderWeek();
-});
+document.getElementById('btnPrevW').addEventListener('click', function () { END = addDays(END, -7); SELECTED = END; renderWeek(); });
 document.getElementById('btnNextW').addEventListener('click', function () {
-  var today = todayStr();
-  END = addDays(END, 7) > today ? today : addDays(END, 7);
-  renderWeek();
+  var next = addDays(END, 7); END = next > todayStr() ? todayStr() : next; SELECTED = END; renderWeek();
+});
+document.querySelector('#secActivity .body').addEventListener('click', function (event) {
+  var row = event.target.closest && event.target.closest('.day-row');
+  if (!row) return;
+  SELECTED = row.getAttribute('data-date'); renderWeek();
 });
 render();
 </script>

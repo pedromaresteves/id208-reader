@@ -32,14 +32,14 @@ function makeCanvas() {
 global.window = { devicePixelRatio: 2, matchMedia: () => ({ matches: false }) };
 global.document = {
   getElementById(id) {
-    if (!elements[id]) elements[id] = (id === 'chSleepWeek') ? makeCanvas() : { textContent: '' };
+    if (!elements[id]) elements[id] = id.indexOf('ch') === 0 ? makeCanvas() : { textContent: '' };
     return elements[id];
   },
 };
 
 eval(
   fs.readFileSync(path.join(ROOT, 'webapp', 'ui.js'), 'utf8') +
-    '\nglobalThis.U = { stackedBarChart, barAt, setupCanvas, fmtHM, fmtMinutes, kmOrDash, hrStats, hrCell,' +
+    '\nglobalThis.U = { stackedBarChart, barChart, lineChart, goalRingSVG, emptyStateHTML, barAt, setupCanvas, fmtHM, fmtMinutes, kmOrDash, hrStats, hrCell,' +
     ' monthKey, addMonths, daysInMonth, addDays, mondayOf, weeksOf, sleepScore, DEFAULT_GOALS,' +
     ' wireMonthNav, isoWeek, parseNightDateTime, nightInProgress };'
 );
@@ -106,6 +106,30 @@ assert.strictEqual(U.kmOrDash(1469), '1.47km');
 assert.strictEqual(U.kmOrDash(0), '0.00km');
 assert.strictEqual(U.kmOrDash(null), '—');
 assert.strictEqual(U.kmOrDash(undefined), '—');
+
+// Shared charts render axes, date labels, and goal markers; time charts use
+// explicit local-time ticks across the complete watch day.
+U.barChart('chActivity', ['Mon 10', 'Tue 11'], [2000, 8000], { goal: 8000, labelEvery: 1 });
+const activityCanvas = elements['chActivity'];
+assert.strictEqual(activityCanvas._bars.length, 2, 'bar chart keeps hit-test geometry');
+const activityText = activityCanvas.calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
+assert.ok(activityText.includes('Mon 10') && activityText.includes('Tue 11'), 'bar chart labels each day');
+assert.ok(activityText.includes('Goal 8000'), 'bar chart labels the goal marker');
+assert.ok(activityCanvas.calls.filter((c) => c[0] === 'lineTo').length >= 4, 'bar chart draws grid and goal lines');
+U.barChart('chMonth', ['1', '2'], [60, 420], { yFormat: (minutes) => (minutes / 60).toFixed(1) + 'h' });
+const monthText = elements['chMonth'].calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
+assert.ok(monthText.includes('7.0h') && monthText.includes('3.5h'), 'bar chart supports formatted axis units');
+
+U.lineChart('chTime', [95, 97, 94], 80, 100, {
+  times: [5, 720, 1435], timeRange: [0, 1440],
+  timeLabels: ['00:00', '06:00', '12:00', '18:00', '24:00'], fill: true,
+});
+const timeText = elements['chTime'].calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
+['00:00', '06:00', '12:00', '18:00', '24:00'].forEach((label) =>
+  assert.ok(timeText.includes(label), 'intraday chart includes ' + label + ' tick'));
+assert.strictEqual(elements['chTime']._points.length, 3, 'line chart retains sample points');
+assert.ok(U.goalRingSVG(4000, 8000).includes('50%'), 'goal ring shows percent completion');
+assert.ok(U.emptyStateHTML('<empty>', 'hint').includes('&lt;empty&gt;'), 'empty-state helper escapes HTML');
 
 // Month/week date helpers (Monday-start weeks).
 assert.strictEqual(U.monthKey('2026-10-03'), '2026-10');

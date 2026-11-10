@@ -15,44 +15,154 @@ function setupCanvas(id) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { ctx: ctx, w: w, h: h, el: c };
 }
-// Text ink follows the OS theme (matchMedia needs no JS theme state).
+// Chart ink follows the active CSS theme when available, with a safe canvas
+// test fallback. The drawing API remains in CSS pixels.
+function uiColor(name, fallback) {
+  try {
+    var value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    if (value) return value;
+  } catch (e) {}
+  return fallback;
+}
 function ink() {
   try {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return { text: '#b3b3b3', bright: '#e5e5e5', bar: '#60a5fa' };
-    }
+    return {
+      text: uiColor('--text-muted', '#526174'),
+      bright: uiColor('--text', '#182230'),
+      grid: uiColor('--border-subtle', '#e8ecf2'),
+      bar: uiColor('--accent', '#245bd8'),
+      line: uiColor('--hr', '#c0264f'),
+    };
   } catch (e) {}
-  return { text: '#666', bright: '#333', bar: '#2563eb' };
+  return { text: '#526174', bright: '#182230', grid: '#e8ecf2', bar: '#245bd8', line: '#c0264f' };
 }
 
-function barChart(id, labels, values) {
-  var g = setupCanvas(id), t = ink(), max = Math.max.apply(null, values.concat([1]));
-  var bw = g.w / Math.max(1, values.length);
-  g.ctx.fillStyle = t.bar;
-  values.forEach(function (v, i) {
-    var h = (v / max) * (g.h - 20);
-    g.ctx.fillRect(i * bw + 1, g.h - 14 - h, bw - 2, h);
-  });
-  g.ctx.fillStyle = t.text; g.ctx.font = '10px sans-serif';
-  g.ctx.fillText('max ' + max, 4, 10);
-  if (labels.length) g.ctx.fillText(labels[0] + ' → ' + labels[labels.length - 1], 4, g.h - 2);
+function chartText(ctx, text, x, y, align, color) {
+  ctx.fillStyle = color;
+  ctx.textAlign = align || 'left';
+  ctx.fillText(String(text), x, y);
+  ctx.textAlign = 'left';
 }
 
-function lineChart(id, values, lo, hi) {
-  var g = setupCanvas(id), t = ink();
-  if (!values.length) return;
-  var mn = (lo !== undefined) ? lo : Math.min.apply(null, values);
-  var mx = (hi !== undefined) ? hi : Math.max.apply(null, values);
-  if (mx === mn) mx = mn + 1;
-  g.ctx.strokeStyle = '#dc2626'; g.ctx.lineWidth = 1.5; g.ctx.beginPath();
-  values.forEach(function (v, i) {
-    var x = (i / Math.max(1, values.length - 1)) * (g.w - 8) + 4;
-    var y = g.h - 14 - ((v - mn) / (mx - mn)) * (g.h - 30);
-    if (i === 0) g.ctx.moveTo(x, y); else g.ctx.lineTo(x, y);
+function chartAxes(g, t, min, max, opts) {
+  var ctx = g.ctx, left = opts.left || 38, right = opts.right || 8;
+  var top = opts.top || 12, bottom = opts.bottom || 25;
+  var plotW = Math.max(1, g.w - left - right), plotH = Math.max(1, g.h - top - bottom);
+  ctx.font = '10px system-ui, sans-serif';
+  ctx.lineWidth = 1;
+  for (var i = 0; i <= 2; i++) {
+    var y = top + plotH * i / 2;
+    var value = max - (max - min) * i / 2;
+    ctx.strokeStyle = t.grid;
+    ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(g.w - right, y); ctx.stroke();
+    chartText(ctx, opts.yFormat ? opts.yFormat(value) : Math.round(value), left - 6, y + 3, 'right', t.text);
+  }
+  return { left: left, right: right, top: top, bottom: bottom, width: plotW, height: plotH };
+}
+
+function barChart(id, labels, values, options) {
+  var opts = options || {}, g = setupCanvas(id), t = ink();
+  var nums = values.map(function (v) { return Number(v) || 0; });
+  var max = Math.max.apply(null, nums.concat([1]));
+  if (opts.max !== undefined && Number(opts.max) > max) max = Number(opts.max);
+  if (opts.goal !== undefined && Number(opts.goal) > max) max = Number(opts.goal);
+  var a = chartAxes(g, t, 0, max, opts), bw = a.width / Math.max(1, nums.length);
+  g.el._bars = [];
+  if (opts.goal !== undefined && Number(opts.goal) >= 0) {
+    var gy = a.top + a.height - (Number(opts.goal) / max) * a.height;
+    g.ctx.save(); g.ctx.strokeStyle = t.text; g.ctx.lineWidth = 1;
+    g.ctx.setLineDash([4, 3]); g.ctx.beginPath();
+    g.ctx.moveTo(a.left, gy); g.ctx.lineTo(g.w - a.right, gy); g.ctx.stroke();
+    g.ctx.restore();
+  }
+  nums.forEach(function (v, i) {
+    var x = a.left + i * bw, h = (v / max) * a.height;
+    g.ctx.fillStyle = t.bar;
+    if (h > 0) g.ctx.fillRect(x + Math.max(1, bw * .12), a.top + a.height - h,
+      Math.max(1, bw * .76), h);
+    g.el._bars.push({ x0: x, x1: x + bw, index: i });
   });
-  g.ctx.stroke();
-  g.ctx.fillStyle = t.text; g.ctx.font = '10px sans-serif';
-  g.ctx.fillText('min ' + mn + '   max ' + mx, 4, 10);
+  g.ctx.font = '10px system-ui, sans-serif';
+  var stride = opts.labelEvery || (labels.length > 14 ? 5 : 1);
+  labels.forEach(function (label, i) {
+    if (!label || (i % stride !== 0 && i !== labels.length - 1)) return;
+    chartText(g.ctx, label, a.left + (i + .5) * bw, g.h - 5, 'center', t.text);
+  });
+  if (opts.goal !== undefined && opts.goalLabel !== false) {
+    chartText(g.ctx, opts.goalLabel || 'Goal ' + opts.goal, g.w - a.right, a.top + 10, 'right', t.text);
+  }
+}
+
+function lineChart(id, values, lo, hi, options) {
+  var opts = options || {}, g = setupCanvas(id), t = ink();
+  var nums = values.map(function (v) { return v === null || v === '' || v === undefined ? null : Number(v); });
+  var valid = nums.filter(function (v) { return typeof v === 'number' && isFinite(v); });
+  if (!valid.length) { g.el._points = []; return; }
+  var mn = (lo !== undefined && lo !== null) ? Number(lo) : Math.min.apply(null, valid);
+  var mx = (hi !== undefined && hi !== null) ? Number(hi) : Math.max.apply(null, valid);
+  if (mx === mn) { mx += 1; mn = Math.max(0, mn - 1); }
+  var a = chartAxes(g, t, mn, mx, opts), times = opts.times || [];
+  var timeMin = opts.timeRange ? Number(opts.timeRange[0]) : (times.length ? Math.min.apply(null, times) : 0);
+  var timeMax = opts.timeRange ? Number(opts.timeRange[1]) : (times.length ? Math.max.apply(null, times) : 1);
+  if (timeMax === timeMin) timeMax = timeMin + 1;
+  function pointX(i) {
+    if (times.length && times[i] !== undefined) {
+      return a.left + ((times[i] - timeMin) / (timeMax - timeMin)) * a.width;
+    }
+    return a.left + (i / Math.max(1, nums.length - 1)) * a.width;
+  }
+  function pointY(v) { return a.top + a.height - ((v - mn) / (mx - mn)) * a.height; }
+  g.el._points = [];
+  var lineColor = opts.color || t.line;
+  g.ctx.strokeStyle = lineColor; g.ctx.lineWidth = 2; g.ctx.lineJoin = 'round'; g.ctx.lineCap = 'round';
+  var started = false, segment = [];
+  nums.forEach(function (v, i) {
+    if (v === null || !isFinite(v)) {
+      if (segment.length > 1) g.ctx.stroke();
+      started = false; segment = []; return;
+    }
+    var x = pointX(i), y = pointY(v);
+    if (!started) { g.ctx.beginPath(); g.ctx.moveTo(x, y); started = true; }
+    else g.ctx.lineTo(x, y);
+    segment.push({ x: x, y: y, value: v, index: i });
+    g.el._points.push({ x: x, y: y, value: v, index: i });
+    if (i === nums.length - 1 && segment.length > 1) g.ctx.stroke();
+  });
+  if (opts.fill && g.el._points.length > 1) {
+    var points = g.el._points;
+    g.ctx.save(); g.ctx.globalAlpha = .1; g.ctx.fillStyle = lineColor;
+    g.ctx.beginPath(); g.ctx.moveTo(points[0].x, a.top + a.height);
+    points.forEach(function (p) { g.ctx.lineTo(p.x, p.y); });
+    g.ctx.lineTo(points[points.length - 1].x, a.top + a.height); g.ctx.closePath(); g.ctx.fill(); g.ctx.restore();
+  }
+  g.ctx.fillStyle = lineColor;
+  if (valid.length <= 12 || opts.dots) g.el._points.forEach(function (p) {
+    g.ctx.beginPath(); g.ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); g.ctx.fill();
+  });
+  g.ctx.font = '10px system-ui, sans-serif';
+  if (times.length) {
+    var start = timeMin, end = timeMax, span = end - start;
+    [0, .25, .5, .75, 1].forEach(function (fraction) {
+      var value = Math.round(start + span * fraction);
+      var label = opts.timeLabels && opts.timeLabels[fraction * 4] || fmtMinutes(value);
+      chartText(g.ctx, label, a.left + a.width * fraction, g.h - 5,
+        fraction === 0 ? 'left' : fraction === 1 ? 'right' : 'center', t.text);
+    });
+  } else if (opts.xLabels && opts.xLabels.length) {
+    var labels = opts.xLabels;
+    labels.forEach(function (label, i) {
+      if (!label) return;
+      var x = a.left + (i / Math.max(1, labels.length - 1)) * a.width;
+      chartText(g.ctx, label, x, g.h - 5, i === 0 ? 'left' : i === labels.length - 1 ? 'right' : 'center', t.text);
+    });
+  } else if (opts.elapsed) {
+    var duration = Number(opts.duration) || (nums.length > 1 ? nums.length * 5 : 0);
+    [0, .5, 1].forEach(function (f) {
+      var seconds = Math.round(duration * f);
+      chartText(g.ctx, Math.floor(seconds / 60) + 'm', a.left + a.width * f, g.h - 5,
+        f === 0 ? 'left' : f === 1 ? 'right' : 'center', t.text);
+    });
+  }
 }
 
 // Stacked bars: nights = [{ label, total, parts: [{ v, color, name }] }].
@@ -62,27 +172,35 @@ function stackedBarChart(id, nights, selected) {
   var g = setupCanvas(id), t = ink();
   g.el._bars = [];
   if (!nights.length) return;
-  var max = 0, i;
+  var max = 0, i, left = 34, top = 18, bottom = 25, right = 5;
   for (i = 0; i < nights.length; i++) max = Math.max(max, nights[i].total);
   if (!max) max = 1;
-  var bw = g.w / nights.length;
+  var scale = Math.max(max, 720), plotH = g.h - top - bottom, plotW = g.w - left - right;
+  g.ctx.font = '10px system-ui, sans-serif';
+  [0, .5, 1].forEach(function (f) {
+    var y = top + plotH * f;
+    g.ctx.strokeStyle = t.grid; g.ctx.lineWidth = 1;
+    g.ctx.beginPath(); g.ctx.moveTo(left, y); g.ctx.lineTo(g.w - right, y); g.ctx.stroke();
+    chartText(g.ctx, Math.round(scale * (1 - f) / 60) + 'h', left - 5, y + 3, 'right', t.text);
+  });
+  var bw = plotW / nights.length;
   for (i = 0; i < nights.length; i++) {
-    var n = nights[i], y = g.h - 14, x0 = i * bw + 1, x1 = (i + 1) * bw - 1;
+    var n = nights[i], y = g.h - bottom, x0 = left + i * bw + 1, x1 = left + (i + 1) * bw - 1;
     var dimmed = (selected !== undefined && selected >= 0 && selected !== i);
     if (dimmed) g.ctx.globalAlpha = 0.5;
     for (var s = 0; s < n.parts.length; s++) {
-      var h = (n.parts[s].v / max) * (g.h - 30);
+      var h = (n.parts[s].v / scale) * plotH;
       y -= h;
       g.ctx.fillStyle = n.parts[s].color;
       g.ctx.fillRect(x0, y, x1 - x0, h);
     }
     g.ctx.globalAlpha = 1;
     g.el._bars.push({ x0: x0, x1: x1, index: i });
-    g.ctx.fillStyle = t.bright; g.ctx.font = '10px sans-serif';
+    g.ctx.fillStyle = t.bright; g.ctx.font = '10px system-ui, sans-serif';
     // totalText lets a page hide labels for empty days or mark partial nights.
-    g.ctx.fillText(n.totalText !== undefined ? n.totalText : fmtHM(n.total), x0, y - 2);
+    chartText(g.ctx, n.totalText !== undefined ? n.totalText : fmtHM(n.total), (x0 + x1) / 2, y - 2, 'center', t.bright);
     g.ctx.fillStyle = t.text;
-    g.ctx.fillText(n.label, x0, g.h - 2);
+    chartText(g.ctx, n.label, (x0 + x1) / 2, g.h - 5, 'center', t.text);
   }
 }
 
@@ -109,7 +227,23 @@ function fmtMinutes(min) {
   var m = Math.round(Number(min));
   return pad2(Math.floor(m / 60) % 24) + ':' + pad2(m % 60);
 }
-function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function emptyStateHTML(title, hint) {
+  return '<div class="empty-state"><strong>' + esc(title) + '</strong>' +
+    (hint ? '<span class="muted">' + esc(hint) + '</span>' : '') + '</div>';
+}
+function goalRingSVG(value, goal, options) {
+  var opts = options || {}, v = Math.max(0, Number(value) || 0), g = Math.max(0, Number(goal) || 0);
+  var pct = g ? Math.min(1, v / g) : 0, r = 40, circumference = 2 * Math.PI * r;
+  var progress = circumference * pct, shown = opts.center || (g ? Math.round(pct * 100) + '%' : '—');
+  var label = opts.label || 'Daily step goal';
+  return '<svg class="goal-ring" viewBox="0 0 100 100" role="img" aria-label="' +
+    esc(label + ': ' + shown) + '"><circle class="ring-track" cx="50" cy="50" r="' + r +
+    '" fill="none" stroke-width="8"></circle><circle class="ring-progress" cx="50" cy="50" r="' + r +
+    '" fill="none" stroke-width="8" stroke-linecap="round" transform="rotate(-90 50 50)" stroke-dasharray="' +
+    progress.toFixed(2) + ' ' + circumference.toFixed(2) + '"></circle><text x="50" y="54" text-anchor="middle" font-size="18" font-weight="750" fill="currentColor">' +
+    esc(shown) + '</text><text x="50" y="68" text-anchor="middle" font-size="8" fill="currentColor">of goal</text></svg>';
+}
 // Workout mode names by sport type — UNMAPPED so far (type 5 seen on both
 // strength and walk records, so the label isn't simply that byte). Add
 // entries only from observed watch-icon → record pairs.

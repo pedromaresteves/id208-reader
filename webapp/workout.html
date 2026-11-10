@@ -5,19 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ID208 Workouts</title>
 <link rel="stylesheet" href="app.css">
-<style>
-#workoutDetail { margin-top: 8px; }
-</style>
 </head>
 <body>
 <h1>Workouts</h1>
-<p><a href="index.html">← Dashboard</a> <span id="status" class="muted"></span></p>
-<section id="secList"><h2 id="listHead">All workouts — tap one for details</h2><p class="muted"><label><input type="checkbox" id="chkHidden"> Show hidden empty records</label></p><div class="body muted">Loading…</div><canvas id="chWorkoutDetail"></canvas><div id="workoutDetail" class="muted">Tap a row above.</div></section>
+<p id="status" class="muted" aria-live="polite"></p>
+<section id="secList"><div class="section-head"><h2 id="listHead">Workouts</h2><label class="chip"><input type="checkbox" id="chkHidden"> Show empty</label></div><div class="body list muted">Loading…</div><div id="workoutDetail" class="card" aria-live="polite">Select a workout to see details.</div><canvas id="chWorkoutDetail" aria-label="Workout heart-rate chart"></canvas><div id="workoutChartNote" class="muted"></div></section>
 <section id="secMonth"><h2>Month</h2>
-<p><button id="btnPrevM" title="Previous month" aria-label="Previous month">‹</button>
+<p class="pager"><button id="btnPrevM" title="Previous month" aria-label="Previous month">‹</button>
 <span id="monthLabel" class="month-label"></span>
 <button id="btnNextM" title="Next month" aria-label="Next month">›</button></p>
-<canvas id="chMonth"></canvas><div id="weekList" class="body muted"></div></section>
+<canvas id="chMonth" aria-label="Daily workout calories by month"></canvas><div id="weekList" class="body muted table-wrap"></div></section>
 <script>
 // Cache-bust every local script when the page has ?v=<epoch> (see index.html).
 (function () {
@@ -31,22 +28,23 @@
 <script>
 // Fail fast on file skew (see index.html): banner + fresh reload instead of silent hang.
 (function checkAppFiles() {
-  var need = ['Store', 'lineChart', 'setupCanvas', 'barChart', 'esc', 'num', 'fmtDur', 'sportName', 'pad2',
+  var need = ['Store', 'lineChart', 'setupCanvas', 'barChart', 'emptyStateHTML', 'esc', 'num', 'fmtDur', 'sportName', 'kmOrDash', 'pad2',
     'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'wireMonthNav',
     'isoWeek', 'todayStr'];
   IDO.shell.checkFiles(need);
 })();
-var WORKOUTS = [], ALL = [], SEL = null, CUR = null, SHOW_HIDDEN = false;
+var WORKOUTS = [], ALL = [], SEL = null, CUR = null, SHOW_HIDDEN = false, CURRENT_INDEX = 0;
 function isEmptyWorkout(w) {
   if (!w || typeof w !== 'object') return true;
   if (!w.date || /^no-date-/.test(w.date)) return true; // dateless imports
   var hasDur = Number(w.durationsS) > 0;
   var hasKcal = Number(w.kcal) > 0;
   var hasSamples = Array.isArray(w.samples) && w.samples.length > 0;
+  var hasSwimSummary = w.laps !== undefined || w.strokes !== undefined || w.swolf !== undefined;
   var hasHr = [w.avgHr, w.maxHr, w.minHr].some(function (v) {
     return v !== undefined && v !== null && v !== '' && Number(v) > 0;
   });
-  return !(hasDur || hasKcal || hasSamples || hasHr);
+  return !(hasDur || hasKcal || hasSamples || hasHr || hasSwimSummary || Number(w.distanceM || w.distance_m) > 0);
 }
 function visibleAll() {
   return SHOW_HIDDEN ? ALL.slice() : ALL.filter(function (r) { return !isEmptyWorkout(r.payload); });
@@ -56,6 +54,7 @@ function inWeek(r) {
   return d >= SEL.start && d <= SEL.end;
 }
 function showWorkout(i) {
+  CURRENT_INDEX = i;
   var w = WORKOUTS[i].payload;
   var bpms = (w.samples || []).map(function (s) {
     return s && typeof s === 'object' ? s.bpm : s;
@@ -77,53 +76,67 @@ function showWorkout(i) {
     formRows += '<div><div class="k">Pace</div><div class="v">' +
       Math.floor(w.avgPaceS / 60) + "'" + (w.avgPaceS % 60) + '"/km</div></div>';
   }
-  if (w.laps) {
-    formRows += '<div><div class="k">Laps</div><div class="v">' +
-      esc(w.laps) + (w.poolLengthM ? ' × ' + esc(w.poolLengthM) + 'm' : '') + '</div></div>';
-  }
-  if (w.strokes) {
-    formRows += '<div><div class="k">Strokes</div><div class="v">' +
-      esc(w.strokes) + (w.strokeRateSpm ? ' · ' + esc(w.strokeRateSpm) + ' spm' : '') + '</div></div>';
-  }
-  if (w.swolf) {
-    formRows += '<div><div class="k">SWOLF</div><div class="v">' + esc(w.swolf) + '</div></div>';
-  }
+  var isSwim = w.kind === 'swim';
+  var swimSummary = isSwim ? '<div class="section-head"><h3>Swim summary</h3><span class="chip accent">Pool swim</span></div>' : '';
+  var swimRows = isSwim ? '<div class="stats">' +
+    '<div><div class="k">Laps</div><div class="v">' + (Number(w.laps) === 0 ? '0 · no laps recorded' : esc(num(w.laps))) + '</div></div>' +
+    '<div><div class="k">Pool length</div><div class="v">' + esc(num(w.poolLengthM, ' m')) + '</div></div>' +
+    '<div><div class="k">Strokes</div><div class="v">' + esc(num(w.strokes)) + '</div></div>' +
+    '<div><div class="k">SWOLF</div><div class="v">' + esc(num(w.swolf)) + '</div></div></div>' : '';
   document.getElementById('workoutDetail').innerHTML =
-    '<div class="big">' + esc(sportName(w)) + '</div>' +
-    '<div class="muted">' + esc(w.date || '') + ' · start ' + startHM + '</div>' +
-    '<div class="stats">' +
-    '<div><div class="k">Duration</div><div class="v">' + esc(fmtDur(w.durationsS || 0)) + '</div></div>' +
-    '<div><div class="k">Calories</div><div class="v">' + esc(num(w.kcal)) + '</div></div>' +
-    '<div><div class="k">Distance</div><div class="v">' +
-    esc(kmOrDash(w.distanceM)) + '</div></div>' +
-    '<div><div class="k">Avg HR</div><div class="v">' + esc(num(w.avgHr)) + ' bpm</div></div>' +
-    '<div><div class="k">Max HR</div><div class="v">' + esc(num(w.maxHr)) + ' bpm</div></div>' +
-    '<div><div class="k">Min HR</div><div class="v">' + esc(num(w.minHr)) + ' bpm</div></div>' +
-    (formRows ? '<h3>Form</h3>' + formRows : '') +
-    '</div>' +
-    '<div class="muted">' + bpms.length + ' HR samples</div>';
-  lineChart('chWorkoutDetail', bpms);
+    '<div class="section-head"><div><div class="big">' + esc(sportName(w)) + '</div><div class="muted">' + esc(w.date || '') + ' · ' + startHM + '</div></div>' +
+    '<span class="chip">' + bpms.length + ' HR samples</span></div>' +
+    '<div class="stat-grid cols-4">' +
+    '<div class="stat-tile"><span class="stat-label">Duration</span><span class="stat-value">' + esc(fmtDur(w.durationsS || 0)) + '</span></div>' +
+    '<div class="stat-tile"><span class="stat-label">Distance</span><span class="stat-value">' + esc(kmOrDash(w.distanceM)) + '</span></div>' +
+    '<div class="stat-tile"><span class="stat-label">Calories</span><span class="stat-value metric-kcal">' + esc(num(w.kcal, ' kcal')) + '</span></div>' +
+    '<div class="stat-tile"><span class="stat-label">Avg HR</span><span class="stat-value metric-hr">' + esc(num(w.avgHr, ' bpm')) + '</span></div>' +
+    '</div>' + swimSummary + swimRows +
+    (formRows ? '<h3>Workout metrics</h3><div class="stats">' + formRows + '</div>' : '');
+  var chart = document.getElementById('chWorkoutDetail');
+  if (bpms.length > 1) {
+    chart.style.display = 'block';
+    document.getElementById('workoutChartNote').textContent = 'Heart rate · elapsed time';
+    lineChart('chWorkoutDetail', bpms, undefined, undefined, { elapsed: true, duration: w.durationsS || 0, fill: true });
+  } else {
+    chart.style.display = 'none';
+    document.getElementById('workoutChartNote').innerHTML = emptyStateHTML('No heart-rate samples', 'This session has no heart-rate trace.');
+  }
+  document.querySelectorAll('.workout-card').forEach(function (card) {
+    var selected = Number(card.getAttribute('data-i')) === i;
+    card.classList.toggle('selected', selected);
+    card.setAttribute('aria-pressed', String(selected));
+  });
 }
 function renderList() {
   document.getElementById('listHead').textContent =
-    'Week ' + SEL.start.slice(5) + ' – ' + SEL.end.slice(5) + ' — tap one for details';
+    'Week ' + SEL.start.slice(5) + ' – ' + SEL.end.slice(5);
   if (!WORKOUTS.length) {
-    document.querySelector('#secList .body').textContent = 'No workouts in week ' + SEL.start + ' – ' + SEL.end + '.';
-    document.getElementById('workoutDetail').textContent = '';
-    setupCanvas('chWorkoutDetail'); // resize clears the previous curve
+    document.querySelector('#secList .body').innerHTML = emptyStateHTML('No workouts this week', 'Record a workout or swim, then sync the watch.');
+    document.getElementById('workoutDetail').innerHTML = '';
+    document.getElementById('chWorkoutDetail').style.display = 'none';
+    document.getElementById('workoutChartNote').textContent = '';
     return;
   }
   var rows = WORKOUTS.map(function (r, i) {
     var w = r.payload;
-    return '<tr class="pick" data-i="' + i + '"><td>' + esc(w.date || '') + '</td><td>' +
-      esc(sportName(w)) + '</td><td>' + esc(num(w.kcal)) + '</td><td>›</td></tr>';
+    var start = Number(w.startS) || 0;
+    var at = pad2(Math.floor(start / 3600)) + ':' + pad2(Math.floor((start % 3600) / 60));
+    var selected = i === CURRENT_INDEX ? ' selected' : '';
+    return '<button type="button" class="workout-card' + selected + '" data-i="' + i + '" aria-pressed="' + (i === CURRENT_INDEX) + '">' +
+      '<span class="row-top"><span class="row-title">' + esc(sportName(w)) + '</span><span class="chip">' + esc(w.date || 'Undated') + ' · ' + at + '</span></span>' +
+      '<span class="stat-grid cols-4"><span class="stat-tile"><span class="stat-label">Duration</span><span class="stat-value">' + esc(fmtDur(w.durationsS || 0)) + '</span></span>' +
+      '<span class="stat-tile"><span class="stat-label">Distance</span><span class="stat-value">' + esc(kmOrDash(w.distanceM)) + '</span></span>' +
+      '<span class="stat-tile"><span class="stat-label">Calories</span><span class="stat-value">' + esc(num(w.kcal, ' kcal')) + '</span></span>' +
+      '<span class="stat-tile"><span class="stat-label">Avg HR</span><span class="stat-value">' + esc(num(w.avgHr, ' bpm')) + '</span></span></span></button>';
   }).join('');
   document.querySelector('#secList .body').innerHTML =
-    '<table><tr><th>Date</th><th>Workout</th><th>Kcal</th><th></th></tr>' + rows + '</table>';
-  document.querySelectorAll('section tr.pick').forEach(function (tr) {
-    tr.addEventListener('click', function () { showWorkout(Number(tr.dataset.i)); });
+    rows;
+  document.querySelectorAll('#secList .workout-card').forEach(function (card) {
+    card.addEventListener('click', function () { showWorkout(Number(card.dataset.i)); });
   });
-  showWorkout(0); // latest by default
+  if (CURRENT_INDEX >= WORKOUTS.length) CURRENT_INDEX = 0;
+  showWorkout(CURRENT_INDEX); // latest by default
 }
 function selectWeek() {
   WORKOUTS = visibleAll().filter(inWeek).slice().reverse(); // latest first
@@ -141,7 +154,7 @@ function renderMonth() {
   for (var d = 1; d <= n; d++) {
     values.push(kcalByDay[CUR + '-' + String(d).padStart(2, '0')] || 0);
   }
-  barChart('chMonth', ['1', String(n)], values);
+  barChart('chMonth', values.map(function (_, i) { return String(i + 1); }), values, { labelEvery: 5 });
   var rows = weeksOf(CUR).map(function (w) {
     var count = 0, kcal = 0;
     vis.forEach(function (r) {
@@ -167,8 +180,12 @@ async function render() {
   try {
     ALL = await Store.list('workout'); // oldest first
     if (!ALL.length) {
-      document.querySelector('#secList .body').textContent = 'No workouts yet — record one, then pull.';
-      document.getElementById('status').textContent = '';
+      CUR = monthKey(todayStr());
+      SEL = { start: mondayOf(todayStr()), end: addDays(mondayOf(todayStr()), 6) };
+      CURRENT_INDEX = 0;
+      selectWeek();
+      renderMonth();
+      document.getElementById('status').textContent = 'No workouts yet — record one, then sync the watch.';
       return;
     }
     // Newest dated record anchors the week (dateless imports sort last but

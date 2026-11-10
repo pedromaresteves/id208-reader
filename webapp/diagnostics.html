@@ -5,23 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ID208 Diagnostics</title>
 <link rel="stylesheet" href="app.css">
-<style>
-#log { white-space: pre-wrap; font-family: monospace; font-size: 0.8rem; background: #f4f4f4; padding: 10px; max-height: 40vh; overflow: auto; }
-.ok { color: #047857; font-weight: bold; }
-details { margin: 12px 0; border: 1px solid #ddd; border-radius: 8px; padding: 8px 12px; }
-summary { font-weight: bold; cursor: pointer; padding: 6px 0; }
-</style>
 </head>
 <body>
 <h1>ID208 Diagnostics</h1>
-<p>Daily use lives on the <a href="index.html">dashboard</a>.
-This page is for first-time setup, recovery, and raw diagnostics.
-Ground truth 2026-10-01 18:31: <b>5736 steps / 468 kcal</b>, sleep
-<b>07h05m (23:47 → 06:52)</b>.</p>
+<p class="muted">Recovery tools and protocol diagnostics · daily use is on Home.</p>
+<section class="hero-card"><h2>Connection & sync</h2>
 <button id="btnConnect">Connect (auto-sync when bound)</button>
 <button id="btnSyncAll">Full sync (drain all queued days)</button>
 <button id="btnSetupAuto" disabled>Setup watch (bind + auth)</button>
-<br>
+<p class="muted">Full sync drains days queued by the watch. Raw commands below do not automatically save to the dashboard store.</p>
+</section>
+<section><h2>Protocol tools</h2>
 <p>
 <button id="btnInfo" disabled>Device info (02 01)</button>
 <button id="btnLive" disabled>Live data (02 A0)</button>
@@ -72,6 +66,8 @@ Manual pulls show decoded text here but do not save to the dashboard store
 <button id="btnWashOff" disabled>Wash hands OFF (03 55)</button>
 </p>
 </details>
+ </section>
+<section><h2>Logs & backup</h2>
 <button id="btnCopy">Copy log</button>
 <button id="btnJsonl">Download JSONL</button>
 <button id="btnStoreExport">Export store backup</button>
@@ -82,6 +78,7 @@ Manual pulls show decoded text here but do not save to the dashboard store
 <p id="decoded"></p>
 <h2>Log (TX on write chars, RX on notify chars)</h2>
 <div id="log"></div>
+</section>
 <script>
 // Cache-bust every local script when the page has ?v=<epoch> (see index.html).
 (function () {

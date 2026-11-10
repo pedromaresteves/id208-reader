@@ -70,25 +70,57 @@ IDO.shell = (function () {
     throw new Error('halt: ' + missing.join(','));
   }
 
-  // One nav renderer for every page.
+  // Five thumb-zone destinations; lower-frequency pages live under More.
   var NAV = [
-    ['index.html', 'Dashboard'],
-    ['activity.html', 'Activity'],
-    ['sleep.html', 'Sleep'],
-    ['health.html', 'Health'],
-    ['workout.html', 'Workouts'],
-    ['watch.html', 'Watch'],
-    ['diagnostics.html', 'Diagnostics'],
+    ['index.html', 'Home', '⌂'],
+    ['activity.html', 'Activity', '▥'],
+    ['sleep.html', 'Sleep', '◒'],
+    ['health.html', 'Health', '♡'],
+  ];
+  var MORE = [
+    ['workout.html', 'Workouts', '◷'],
+    ['watch.html', 'Watch settings', '⚙'],
+    ['diagnostics.html', 'Diagnostics', '⌁'],
   ];
   function renderNav() {
     var nav = document.querySelector('nav.tabs');
     if (!nav) return;
     var current = location.pathname.split('/').pop() || 'index.html';
     if (current.indexOf('.html') < 0) current = 'index.html';
-    nav.innerHTML = NAV.map(function (item) {
+    var primary = NAV.map(function (item) {
       var here = item[0] === current ? ' aria-current="page"' : '';
-      return '<a href="' + item[0] + '"' + here + '>' + item[1] + '</a>';
+      return '<a href="' + item[0] + '"' + here + '><span class="tab-icon" aria-hidden="true">' +
+        item[2] + '</span><span>' + item[1] + '</span></a>';
     }).join('');
+    var morePage = MORE.some(function (item) { return item[0] === current; });
+    var submenu = MORE.map(function (item) {
+      var here = item[0] === current ? ' aria-current="page"' : '';
+      return '<a href="' + item[0] + '" role="menuitem"' + here + '><span class="tab-icon" aria-hidden="true">' +
+        item[2] + '</span><span>' + item[1] + '</span></a>';
+    }).join('');
+    nav.innerHTML = '<div class="tab-main">' + primary +
+      '<div class="more-wrap"><button type="button" class="more-trigger" aria-haspopup="true" aria-controls="moreMenu" aria-expanded="false"' +
+      (morePage ? ' aria-current="page"' : '') + '><span class="tab-icon" aria-hidden="true">···</span><span>More</span></button>' +
+      '<div id="moreMenu" class="more-menu" role="menu" aria-label="More pages" aria-hidden="true">' + submenu + '</div></div></div>';
+    var wrap = nav.querySelector('.more-wrap');
+    var trigger = nav.querySelector('.more-trigger');
+    function closeMenu() {
+      wrap.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+      nav.querySelector('.more-menu').setAttribute('aria-hidden', 'true');
+    }
+    trigger.addEventListener('click', function () {
+      var open = !wrap.classList.contains('open');
+      wrap.classList.toggle('open', open);
+      trigger.setAttribute('aria-expanded', String(open));
+      nav.querySelector('.more-menu').setAttribute('aria-hidden', String(!open));
+    });
+    document.addEventListener('click', function (event) {
+      if (!wrap.contains(event.target)) closeMenu();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { closeMenu(); trigger.focus(); }
+    });
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', renderNav);

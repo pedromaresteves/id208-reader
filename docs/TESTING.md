@@ -7,7 +7,7 @@
 | pytest | Builders, parsers, capture replay, store/sync helpers, JS↔Python parity | `.venv/bin/python -m pytest tests/ -q` |
 | ruff | Lint + formatting | `.venv/bin/ruff check src tests sync.py` |
 | Node suites | Codec/capture, charts, store, file-skew, JS parity | `node webapp/<name>.test.js` |
-| Headless UI | Page load, nav, skew banner absent + fires on a blocked script, backup/import | `ui_smoke.py` (Windows Python) |
+| Headless UI | Page load, 5-tab/More navigation, backup/import, responsive screenshots, mobile overflow, touch targets, contrast and detail selection | `ui_smoke.py` (Windows Python) |
 | Live hardware | Real BLE sync, setup, protocol probes | Windows Playwright drivers |
 
 Run everything:
@@ -69,7 +69,7 @@ WINPY=/mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe
 |---|---|---|
 | `watch_test.py` | `diagnostics.html`: Connect (auto-sync) then Full sync | `connect*`, `auto-sync*`, `full-sync*` (JSONL, log, store, decoded HTML) |
 | `live_dashboard.py` | `index.html`: one **Sync Data** click | `dashboard-sync-log.txt`, `dashboard-sync-store.json` |
-| `ui_smoke.py` | all pages, headless, no Bluetooth | pass/fail only |
+| `ui_smoke.py` | all pages, headless, no Bluetooth | pass/fail + 390/1280px light/dark screenshots under Windows `%TEMP%/id208-ui-smoke-screenshots/` |
 
 Useful flags:
 

@@ -5,41 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ID208 Health</title>
 <link rel="stylesheet" href="app.css">
-<style>
-canvas { height: 130px; }
-.history tr { cursor: pointer; }
-.history tr.sel td { font-weight: bold; }
-</style>
 </head>
 <body>
 <h1>Health</h1>
 <p><span id="status" class="muted"></span></p>
 
-<section id="secSpo2">
+<div class="detail-grid">
+<section id="secSpo2" class="hero-card">
   <h2>SpO<sub>2</sub> <span id="spo2Date" class="muted"></span></h2>
   <div id="spo2Latest">Loading…</div>
-  <canvas id="chSpo2"></canvas>
+  <canvas id="chSpo2" aria-label="SpO2 readings by time of day"></canvas>
 </section>
 
-<section id="secStress">
+<section id="secStress" class="hero-card">
   <h2>Stress <span id="stressDate" class="muted"></span></h2>
   <div id="stressLatest">Loading…</div>
-  <canvas id="chStress"></canvas>
+  <canvas id="chStress" aria-label="Stress readings by time of day"></canvas>
   <div class="muted">The watch reports this as a 0–100 stress score, not blood pressure.</div>
 </section>
+</div>
 
 <section id="secTrend">
   <h2>Last 30 days</h2>
-  <div class="muted">SpO<sub>2</sub> daily average</div>
-  <canvas id="chSpo2Trend"></canvas>
-  <div class="muted">Stress daily average</div>
-  <canvas id="chStressTrend"></canvas>
+  <div class="chart-duo">
+    <div><div class="muted">SpO<sub>2</sub> daily average</div><canvas id="chSpo2Trend" aria-label="30-day SpO2 trend"></canvas></div>
+    <div><div class="muted">Stress daily average</div><canvas id="chStressTrend" aria-label="30-day stress trend"></canvas></div>
+  </div>
   <div id="trendNote" class="muted"></div>
 </section>
 
 <section id="secHistory" class="history">
   <h2>History</h2>
-  <div id="dayList" class="muted">Loading…</div>
+  <div id="dayList" class="history-list muted">Loading…</div>
 </section>
 <script>
 // Cache-bust every local script when the page has ?v=<epoch> (see index.html).
@@ -54,7 +51,7 @@ canvas { height: 130px; }
 <script>
 // Fail fast on file skew (see index.html): banner + fresh reload instead of silent hang.
 (function checkAppFiles() {
-  var need = ['Store', 'lineChart', 'setupCanvas', 'esc', 'num', 'fmtMinutes',
+  var need = ['Store', 'lineChart', 'setupCanvas', 'emptyStateHTML', 'uiColor', 'esc', 'num', 'fmtMinutes',
     'todayStr', 'addDays'];
   IDO.shell.checkFiles(need);
 })();
@@ -80,13 +77,23 @@ function valuesOf(p) {
     return Number(s && s.value);
   }).filter(function (v) { return isFinite(v); });
 }
+function seriesOf(p) {
+  var values = [], times = [];
+  ((p && p.samples) || []).forEach(function (sample) {
+    var value = Number(sample && sample.value), time = sampleTime(sample);
+    if (!isFinite(value)) return;
+    values.push(value);
+    times.push(time !== null && time !== undefined && time !== '' && isFinite(Number(time)) ? Number(time) : null);
+  });
+  return { values: values, times: times };
+}
 function summaryOf(p) {
   var vals = valuesOf(p);
   if (!vals.length) return null;
   var sum = 0, mn = vals[0], mx = vals[0];
   vals.forEach(function (v) { sum += v; if (v < mn) mn = v; if (v > mx) mx = v; });
   var times = ((p && p.samples) || []).map(sampleTime)
-    .filter(function (t) { return isFinite(t); });
+    .filter(function (t) { return t !== null && t !== undefined && t !== '' && isFinite(Number(t)); });
   return {
     n: vals.length, avg: Math.round(sum / vals.length), min: mn, max: mx,
     last: vals[vals.length - 1],
@@ -94,28 +101,41 @@ function summaryOf(p) {
     lastTime: times.length ? times[times.length - 1] : null,
   };
 }
-function cardHTML(s, unit) {
-  if (!s) return '<div class="muted">No readings for this day.</div>';
+function cardHTML(s, unit, record, chartId) {
+  var chart = document.getElementById(chartId);
+  if (!s) {
+    chart.style.display = 'none';
+    return emptyStateHTML('No readings for this day', 'No measurements were saved for the selected date.');
+  }
   var when = 'at ' + fmtMinutes(s.lastTime) + ' · ' + s.n +
     (s.n === 1 ? ' reading' : ' readings');
   if (s.firstTime !== null && s.firstTime !== s.lastTime) {
     when += ' · ' + fmtMinutes(s.firstTime) + ' → ' + fmtMinutes(s.lastTime);
   }
-  return '<div class="big">' + esc(s.last) + ' <span class="muted">' +
-    esc(unit) + '</span></div>' +
-    '<div class="muted">' + esc(when) + '</div>' +
-    '<div class="stats">' +
-    '<div><div class="k">Average</div><div class="v">' + esc(s.avg) + '</div></div>' +
-    '<div><div class="k">Range</div><div class="v">' + esc(s.min) + '–' +
-    esc(s.max) + '</div></div>' +
-    '</div>';
+  var metric = unit === '%' ? 'spo2' : 'stress';
+  var series = seriesOf(record);
+  if (series.values.length > 1 && series.times.every(function (t) { return t !== null; })) {
+    chart.style.display = 'block';
+    lineChart(chartId, series.values, metric === 'spo2' ? 80 : 0, 100, {
+      times: series.times, timeRange: [0, 1440], timeLabels: ['00:00', '06:00', '12:00', '18:00', '24:00'],
+      color: uiColor(metric === 'spo2' ? '--spo2' : '--stress', metric === 'spo2' ? '#087e8b' : '#7c3aed'), fill: true,
+    });
+  } else {
+    chart.style.display = 'none';
+  }
+  return '<div class="goal-hero"><div><span class="stat-label">Latest reading</span><div class="big metric-' + metric + '">' + esc(s.last) +
+    ' <span class="muted">' + esc(unit) + '</span></div><div class="chip-row" style="margin-top:8px"><span class="chip accent">' +
+    esc(fmtMinutes(s.lastTime)) + '</span><span class="chip">' + s.n + (s.n === 1 ? ' reading' : ' readings') + '</span></div></div></div>' +
+    '<div class="stat-grid"><div class="stat-tile"><span class="stat-label">Daily average</span><span class="stat-value">' + esc(s.avg) + esc(unit) + '</span></div>' +
+    '<div class="stat-tile"><span class="stat-label">Range</span><span class="stat-value">' + esc(s.min) + '–' + esc(s.max) + esc(unit) + '</span></div></div>' +
+    '<div class="chart-legend">Intraday readings · local watch time (00:00–24:00)</div>';
 }
 // Hide a chart that cannot say anything: one point is a fact, not a trend.
-function plot(id, values) {
+function plot(id, values, options, lo, hi) {
   var el = document.getElementById(id);
-  if (values.length > 1) {
+  if (values.filter(function (v) { return v !== null && isFinite(v); }).length > 1) {
     el.style.display = 'block';
-    lineChart(id, values);
+    lineChart(id, values, lo, hi, options);
   } else {
     el.style.display = 'none';
   }
@@ -133,9 +153,12 @@ function render() {
   if (!days.length) {
     document.getElementById('status').textContent =
       'No SpO2 or stress data yet — run a sync.';
-    document.getElementById('spo2Latest').textContent = '';
-    document.getElementById('stressLatest').textContent = '';
-    document.getElementById('dayList').textContent = 'Nothing stored.';
+    document.getElementById('spo2Latest').innerHTML = emptyStateHTML('No SpO₂ readings', 'Sync the watch to see oxygen readings.');
+    document.getElementById('stressLatest').innerHTML = emptyStateHTML('No stress readings', 'Sync the watch to see stress measurements.');
+    document.getElementById('dayList').innerHTML = emptyStateHTML('Nothing stored', 'Health history will appear after a sync.');
+    ['chSpo2', 'chStress', 'chSpo2Trend', 'chStressTrend'].forEach(function (id) {
+      document.getElementById(id).style.display = 'none';
+    });
     return;
   }
   if (days.indexOf(SEL) < 0) SEL = days[0];
@@ -143,49 +166,45 @@ function render() {
   var sp = spo2[SEL], pr = stress[SEL];
   document.getElementById('spo2Date').textContent = '· ' + SEL;
   document.getElementById('stressDate').textContent = '· ' + SEL;
-  document.getElementById('spo2Latest').innerHTML = cardHTML(summaryOf(sp), '%');
-  document.getElementById('stressLatest').innerHTML = cardHTML(summaryOf(pr), '/100');
-  plot('chSpo2', valuesOf(sp));
-  plot('chStress', valuesOf(pr));
+  document.getElementById('spo2Latest').innerHTML = cardHTML(summaryOf(sp), '%', sp, 'chSpo2');
+  document.getElementById('stressLatest').innerHTML = cardHTML(summaryOf(pr), '/100', pr, 'chStress');
 
   // Rolling 30-day trend: one point per day that has readings.
   var end = todayStr(), start = addDays(end, -(WINDOW - 1));
-  function trend(map, id) {
-    var keys = Object.keys(map).filter(function (d) {
-      return d >= start && d <= end;
-    }).sort();
-    var vals = [];
-    keys.forEach(function (d) {
-      var s = summaryOf(map[d]);
-      if (s) vals.push(s.avg);
-    });
-    plot(id, vals);
-    return vals;
+  function trend(map, id, metric) {
+    var vals = [], labels = [];
+    for (var offset = 0; offset < WINDOW; offset++) {
+      var date = addDays(start, offset), s = summaryOf(map[date]);
+      vals.push(s ? s.avg : null);
+      labels.push(offset === 0 || offset === 6 || offset === 13 || offset === 20 || offset === 29 ? date.slice(5) : '');
+    }
+    plot(id, vals, { xLabels: labels, color: uiColor(metric === 'spo2' ? '--spo2' : '--stress', metric === 'spo2' ? '#087e8b' : '#7c3aed'), fill: true }, metric === 'spo2' ? 80 : 0, 100);
+    return vals.filter(function (v) { return v !== null; });
   }
-  var spDays = trend(spo2, 'chSpo2Trend');
-  var stDays = trend(stress, 'chStressTrend');
+  var spDays = trend(spo2, 'chSpo2Trend', 'spo2');
+  var stDays = trend(stress, 'chStressTrend', 'stress');
   document.getElementById('trendNote').textContent = (spDays.length || stDays.length) ?
     spDays.length + ' SpO2 day(s), ' + stDays.length + ' stress day(s) with readings, ' +
       start + ' to ' + end + '.' :
     'No readings in the last ' + WINDOW + ' days (' + start + ' to ' + end + ').';
 
   var rows = days.map(function (d) {
-    return '<tr data-date="' + esc(d) + '"' + (d === SEL ? ' class="sel"' : '') + '>' +
-      '<td>' + esc(d) + '</td>' +
-      '<td>' + dayCell(summaryOf(spo2[d])) + '</td>' +
-      '<td>' + dayCell(summaryOf(stress[d])) + '</td></tr>';
+    var selected = d === SEL ? ' selected' : '';
+    return '<button type="button" class="day-row' + selected + '" data-date="' + esc(d) + '" aria-pressed="' + (d === SEL) + '">' +
+      '<span class="row-top"><span class="row-title">' + esc(d) + '</span><span class="muted">' + (d === SEL ? 'Selected day' : 'View day') + '</span></span>' +
+      '<span class="row-meta history-values"><span class="chip">SpO<sub>2</sub> ' + dayCell(summaryOf(spo2[d])) + '</span>' +
+      '<span class="chip">Stress ' + dayCell(summaryOf(stress[d])) + '</span></span></button>';
   }).join('');
   document.getElementById('dayList').innerHTML =
-    '<table><tr><th>Date</th><th>SpO2 avg (n)</th><th>Stress avg (n)</th></tr>' +
-    rows + '</table>';
+    rows || emptyStateHTML('No health history', 'Sync SpO2 and stress readings from the watch.');
 
   document.getElementById('status').textContent = days.length + ' day(s) with readings · ' +
     SPO2.length + ' SpO2 and ' + STRESS.length + ' stress records in store.';
 }
 document.getElementById('dayList').addEventListener('click', function (e) {
-  var tr = e.target.closest && e.target.closest('tr[data-date]');
-  if (!tr) return;
-  SEL = tr.getAttribute('data-date');
+  var row = e.target.closest && e.target.closest('.day-row[data-date]');
+  if (!row) return;
+  SEL = row.getAttribute('data-date');
   render();
 });
 async function load() {

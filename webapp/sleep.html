@@ -5,45 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ID208 Sleep</title>
 <link rel="stylesheet" href="app.css">
-<style>
-canvas { height: 140px; cursor: pointer; }
-.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 2px; }
-#nightDetail { margin-top: 8px; }
-.badge {
-  display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 10px;
-  background: #fef3c7; color: #92400e; font-size: 0.75rem; font-weight: bold;
-  vertical-align: middle;
-}
-.stagebar {
-  display: flex; height: 12px; border-radius: 6px; overflow: hidden;
-  margin: 8px 0; background: #e5e7eb;
-}
-.stagebar span, .nr-mini span { display: block; height: 100%; }
-.week-nav { margin: 4px 0 8px; }
-.nightrow {
-  display: block; width: 100%; box-sizing: border-box; text-align: left;
-  margin: 6px 0; padding: 10px; border: 1px solid #ddd; border-radius: 8px;
-  background: #fafafa; color: inherit; font: inherit; min-height: 44px;
-  cursor: pointer;
-}
-.nightrow:hover { background: #f0f0f0; }
-.nightrow.inprog { border-style: dashed; }
-.nightrow .nr-top {
-  display: flex; justify-content: space-between; gap: 8px; font-weight: bold;
-}
-.nightrow .nr-sub { display: block; color: #595959; font-size: 0.8rem; margin-top: 2px; }
-.nightrow .nr-mini {
-  display: flex; height: 6px; border-radius: 3px; overflow: hidden;
-  margin-top: 6px; background: #e5e7eb;
-}
-@media (prefers-color-scheme: dark) {
-  .stagebar, .nightrow .nr-mini { background: #333; }
-  .nightrow { background: #1f1f1f; border-color: #444; }
-  .nightrow:hover { background: #262626; }
-  .nightrow .nr-sub { color: #b3b3b3; }
-  .badge { background: #78350f; color: #fde68a; }
-}
-</style>
 </head>
 <body>
 <h1>Sleep</h1>
@@ -56,15 +17,15 @@ canvas { height: 140px; cursor: pointer; }
 
 <section id="secWeek">
   <h2>Week</h2>
-  <p class="week-nav">
+  <p class="pager">
     <button id="btnPrevW" title="Previous week" aria-label="Previous week">‹</button>
     <span id="weekLabel" class="month-label"></span>
     <button id="btnNextW" title="Next week" aria-label="Next week">›</button>
   </p>
-  <div class="muted"><span class="swatch" style="background:#1d4ed8;"></span>deep
-  <span class="swatch" style="background:#a78bfa;"></span>REM
-  <span class="swatch" style="background:#93c5fd;"></span>light
-  <span class="swatch" style="background:#e5e7eb;"></span>awake</div>
+  <div class="chart-legend"><span><i class="swatch deep"></i>deep</span>
+  <span><i class="swatch rem"></i>REM</span>
+  <span><i class="swatch light"></i>light</span>
+  <span><i class="swatch awake"></i>awake</span></div>
   <canvas id="chSleepWeek"></canvas>
   <div id="nightDetail" class="muted">Tap a bar above.</div>
   <div id="sleepAvg" class="muted"></div>
@@ -76,6 +37,8 @@ canvas { height: 140px; cursor: pointer; }
   <span id="monthLabel" class="month-label"></span>
   <button id="btnNextM" title="Next month" aria-label="Next month">›</button></p>
   <canvas id="chMonth"></canvas>
+  <h3>Sleep calendar</h3>
+  <div id="monthHeatmap" class="heatmap-grid" aria-label="Monthly sleep calendar"></div>
   <div id="monthSummary" class="muted"></div>
   <div id="nightList"></div>
 </section>
@@ -94,11 +57,11 @@ canvas { height: 140px; cursor: pointer; }
 (function checkAppFiles() {
   var need = ['Store', 'stackedBarChart', 'barChart', 'barAt', 'esc', 'num', 'fmtHM',
     'monthKey', 'addMonths', 'daysInMonth', 'weeksOf', 'mondayOf', 'addDays', 'sleepScore',
-    'wireMonthNav', 'isoWeek', 'todayStr', 'dayDiff', 'nightInProgress', 'parseDay', 'pad2'];
+    'wireMonthNav', 'isoWeek', 'todayStr', 'dayDiff', 'nightInProgress', 'parseDay', 'pad2', 'uiColor', 'emptyStateHTML'];
   IDO.shell.checkFiles(need);
 })();
 
-var ALL = [], NIGHTS = [], SEL = null, CUR = null, DAYS = [];
+var ALL = [], NIGHTS = [], SEL = null, CUR = null, DAYS = [], PICKED = null;
 var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 var WDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -119,10 +82,10 @@ function stampIso(stamp) {
 }
 function partsOf(n) {
   return [
-    { v: Number(n.deep_min) || 0, color: '#1d4ed8', name: 'deep' },
-    { v: Number(n.rem_min) || 0, color: '#a78bfa', name: 'REM' },
-    { v: Number(n.light_min) || 0, color: '#93c5fd', name: 'light' },
-    { v: Number(n.wake_min) || 0, color: '#e5e7eb', name: 'awake' },
+    { v: Number(n.deep_min) || 0, color: uiColor('--sleep-deep', '#3156b8'), name: 'deep' },
+    { v: Number(n.rem_min) || 0, color: uiColor('--sleep-rem', '#8857c7'), name: 'REM' },
+    { v: Number(n.light_min) || 0, color: uiColor('--sleep-light', '#70a9df'), name: 'light' },
+    { v: Number(n.wake_min) || 0, color: uiColor('--sleep-wake', '#aab4c2'), name: 'awake' },
   ];
 }
 function stageBar(n) {
@@ -191,7 +154,7 @@ function showDay(ds) {
   for (var i = 0; i < NIGHTS.length; i++) {
     if (NIGHTS[i].payload.night === ds) { showNight(i); return; }
   }
-  document.getElementById('nightDetail').textContent = 'No data for ' + ds + ' — tap a filled bar.';
+  document.getElementById('nightDetail').innerHTML = emptyStateHTML('No sleep data for ' + ds, 'Tap a filled bar or choose another night.');
 }
 function drawSelected(selDate, showDetail) {
   // Always 7 Mon–Sun columns; missing days draw flat instead of stretching the rest.
@@ -199,6 +162,7 @@ function drawSelected(selDate, showDetail) {
   ALL.forEach(function (r) { map[r.payload.night] = r.payload; });
   DAYS = [];
   for (var i = 0; i < 7; i++) DAYS.push(addDays(SEL.start, i));
+  PICKED = selDate;
   var selIdx = DAYS.indexOf(selDate);
   if (selIdx < 0) selIdx = DAYS.length - 1;
   stackedBarChart('chSleepWeek', DAYS.map(function (ds) {
@@ -209,7 +173,9 @@ function drawSelected(selDate, showDetail) {
     if (p.night) txt = prog ? (total ? fmtHM(total) + '…' : '…') : fmtHM(total);
     return { label: ds.slice(5), total: total, parts: partsOf(p), totalText: txt };
   }), showDetail === false ? -1 : selIdx);
-  if (showDetail === false) {
+  if (!ALL.length) {
+    document.getElementById('nightDetail').innerHTML = emptyStateHTML('No sleep data this week', 'Sync the watch to add sleep history.');
+  } else if (showDetail === false) {
     document.getElementById('nightDetail').textContent = 'Tap a bar above.';
   } else {
     showDay(DAYS[selIdx]);
@@ -255,7 +221,26 @@ function renderMonth() {
     var ds = CUR + '-' + String(d).padStart(2, '0');
     values.push((map[ds] && Number(map[ds].total_min)) || 0);
   }
-  barChart('chMonth', ['1', String(n)], values);
+  barChart('chMonth', values.map(function (_, i) { return String(i + 1); }), values, {
+    labelEvery: 5, left: 42, yFormat: function (minutes) { return (minutes / 60).toFixed(1) + 'h'; },
+  });
+  var firstOffset = (parseDay(CUR + '-01').getDay() + 6) % 7;
+  var heat = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(function (d) {
+    return '<span class="heatmap-head">' + d + '</span>';
+  }).join('');
+  for (var pad = 0; pad < firstOffset; pad++) heat += '<span class="heatmap-blank" aria-hidden="true"></span>';
+  for (var day = 1; day <= n; day++) {
+    var heatDate = CUR + '-' + String(day).padStart(2, '0'), night = map[heatDate];
+    var mins = night ? Number(night.total_min) || 0 : 0;
+    var level = mins >= 480 ? 4 : mins >= 420 ? 3 : mins >= 300 ? 2 : mins > 0 ? 1 : 0;
+    var heatSelected = heatDate === PICKED ? ' selected' : '';
+    heat += '<button type="button" class="heatmap-day' + heatSelected + '" data-night="' + heatDate + '" data-level="' + level + '" aria-pressed="' + (heatDate === PICKED) + '" aria-label="' +
+      esc(heatDate + (night ? ': ' + fmtHM(mins) : ': no sleep data')) + '"><span>' + day + '</span>' +
+      (mins ? '<span class="heat-hours">' + Math.floor(mins / 60) + 'h</span>' : '') + '</button>';
+  }
+  var cellsUsed = firstOffset + n;
+  while (cellsUsed % 7) { heat += '<span class="heatmap-blank" aria-hidden="true"></span>'; cellsUsed++; }
+  document.getElementById('monthHeatmap').innerHTML = heat;
   var nights = ALL.filter(function (r) {
     return monthKey(r.payload.night) === CUR;
   }).slice().reverse();
@@ -267,24 +252,30 @@ function renderMonth() {
   });
   document.getElementById('monthSummary').textContent = nights.length ?
     nights.length + ' night(s)' + (partials ? ' · ' + partials + ' in progress' : '') +
-    (count ? ' · avg ' + fmtHM(Math.round(total / count)) + '/night' : '') : '';
+    (count ? ' · avg ' + fmtHM(Math.round(total / count)) + '/night' : '') : 'No nights in ' + CUR + '.';
   document.getElementById('nightList').innerHTML = nights.length ?
     nights.map(function (r) { return nightRowHTML(r.payload); }).join('') :
-    '<p class="muted">No nights in ' + esc(CUR) + '.</p>';
+    emptyStateHTML('No nights in ' + CUR, 'Sleep history will appear after a sync.');
 }
 function selectNight(ds) {
   SEL = { start: mondayOf(ds), end: addDays(mondayOf(ds), 6) };
-  if (monthKey(ds) !== CUR) {
-    CUR = monthKey(ds);
-    renderMonth();
-  }
+  CUR = monthKey(ds);
   selectWeek(ds, true);
+  renderMonth();
   var sec = document.getElementById('secWeek');
   if (sec.scrollIntoView) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 document.getElementById('nightList').addEventListener('click', function (e) {
   var btn = e.target.closest && e.target.closest('.nightrow');
   if (btn) selectNight(btn.getAttribute('data-night'));
+});
+document.getElementById('monthHeatmap').addEventListener('click', function (e) {
+  var btn = e.target.closest && e.target.closest('.heatmap-day');
+  if (btn) {
+    document.querySelectorAll('.heatmap-day').forEach(function (day) { day.setAttribute('aria-pressed', 'false'); day.classList.remove('selected'); });
+    btn.setAttribute('aria-pressed', 'true');
+    selectNight(btn.getAttribute('data-night'));
+  }
 });
 async function render() {
   try {
