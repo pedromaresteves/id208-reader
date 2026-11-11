@@ -233,6 +233,22 @@ IDO.sync = (function () {
     IDO.shell.log(label + ' today: items=' + items);
   }
 
+  // Read the watch's live daily summary. Preserve an earlier successful
+  // snapshot if this later request gets no reply, so a transient timeout does
+  // not discard usable live data.
+  async function pullLive(label) {
+    var previous = capLive;
+    capLive = null;
+    IDO.shell.log(label + '...');
+    await IDO.transport.wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0]));
+    await IDO.transport.waitFor(function () { return capLive !== null; }, 8000, label);
+    if (capLive === null && previous !== null) {
+      capLive = previous;
+      IDO.shell.log(label + ' had no reply — keeping the earlier live snapshot.');
+    }
+    return capLive;
+  }
+
   async function pageDayHistory(dataType, label, maxRounds, freshFn, onRound) {
     var stale = 0;
     for (var r = 0; r < maxRounds; r++) {
@@ -278,9 +294,7 @@ IDO.sync = (function () {
       await IDO.transport.wr(writeChar, '0x0AF6', IDO.codec.buildSetTimeNow());
       await IDO.transport.wait(2000);
       setProgress(1, 8, 'Live data');
-      IDO.shell.log('[Sync 1/8] Live data...');
-      await IDO.transport.wr(writeChar, '0x0AF6', new Uint8Array([0x02, 0xA0]));
-      await IDO.transport.waitFor(function () { return capLive !== null; }, 8000, 'live reply');
+      await pullLive('[Sync 1/8] Initial live data');
       setProgress(2, 8, 'Sport days');
       IDO.shell.log('[Sync 2/8] Sport days (today + completed-day cursor)...');
       await pullToday(8, 'Sport');
@@ -313,6 +327,8 @@ IDO.sync = (function () {
       await pullToday(2, 'Pressure');
       await pageDayHistory(2, 'Pressure', historyCap, function () { return capPress.length; },
         function (r) { setProgress(8, 8, 'Pressure day ' + r); });
+      setProgress(8, 8, 'Final live data');
+      await pullLive('[Sync 8/8] Final live data');
       await saveCaptured((opts.deep ? 'full ' : 'daily ') + todayStr());
       IDO.shell.show((opts.deep ? 'Full sync done' : 'Daily sync done') +
         ' — everything saved. <a href="index.html">Open dashboard →</a> (JSONL download kept as audit trail).');

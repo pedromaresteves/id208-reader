@@ -328,24 +328,34 @@ var Store = (function () {
     var spo2 = c.spo2 || [];
     var press = c.press || [];
 
+    var liveTodaySaved = false;
+    var today = todayStr();
+    var liveHasSteps = live && typeof live.steps === 'number' && isFinite(live.steps);
+    var liveHasDistance = live && typeof live.distanceM === 'number' && isFinite(live.distanceM);
     if (sportDays.length) {
       for (var si = 0; si < sportDays.length; si++) {
         var sd = sportDays[si];
+        var mergeLive = sd.date === today && liveHasSteps;
+        if (sd.date === today) liveTodaySaved = true;
         await write(sd.date, 'steps', {
-          date: sd.date, steps: sd.steps, distance_m: sd.distanceM,
+          date: sd.date,
+          steps: mergeLive ? live.steps : sd.steps,
+          distance_m: mergeLive && liveHasDistance ? live.distanceM : sd.distanceM,
           kcal: sd.displayKcal !== null ? sd.displayKcal : '',
           active_min: sd.activeMin !== null ? sd.activeMin : '',
-          source: 'v3 sport type08 diagnostics.html ' + tag,
+          source: mergeLive ? 'v3 sport type08 + live 02A0 diagnostics.html ' + tag
+            : 'v3 sport type08 diagnostics.html ' + tag,
         });
       }
       saved.push(sportDays.length + ' step day(s)');
-    } else if (live) {
-      await write(todayStr(), 'steps', {
-        date: todayStr(), steps: live.steps, distance_m: live.distanceM,
+    }
+    if (live && !liveTodaySaved && liveHasSteps) {
+      await write(today, 'steps', {
+        date: today, steps: live.steps, distance_m: live.distanceM,
         kcal: '', active_min: '',
         source: 'live 02A0 diagnostics.html ' + tag,
       });
-      saved.push('steps(live)');
+      saved.push(sportDays.length ? 'steps(live today)' : 'steps(live)');
     }
     for (var i = 0; i < sleepNights.length; i++) {
       var n = sleepNights[i];

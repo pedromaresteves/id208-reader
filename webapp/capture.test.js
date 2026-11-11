@@ -13,12 +13,14 @@ const B = {
   dayDiff: globalThis.dayDiff,
   upsertDay: IDO.sync.upsertDay,
   syncNow: IDO.sync.syncNow,
+  setLive: IDO.sync.setLive,
   buildV3Start04: IDO.codec.buildV3Start04,
   buildV3Stop04: IDO.codec.buildV3Stop04,
   buildDrinkWater: IDO.codec.buildDrinkWater,
   buildWashHands: IDO.codec.buildWashHands,
   pullToday: IDO.sync.pullToday,
   pageDayHistory: IDO.sync.pageDayHistory,
+  todayStr: globalThis.todayStr,
   _setSeq: IDO.codec.setSeq,
   _stub: function (w, wf, wt) {
     IDO.transport.wr = w;
@@ -402,4 +404,99 @@ const CHUNKS = [
   const emptyHr = puts.slice(putsBeforeEmpty).filter((p) => p.type === 'hr');
   assert.strictEqual(emptyHr.length, 0, 'empty HR marker saves no 0-0-0 day');
   console.log('capture.test.js: empty sport/HR markers ignored');
+
+  // Live 02A0 can be fresher than the type-08 daily summary. Sync should
+  // request it both early and just before saving, then merge it into today's
+  // sport record without losing sport-only calorie/activity fields.
+  function sportForDate(date, steps, seq) {
+    const parts = date.split('-').map(Number);
+    const head = Buffer.alloc(36, 0);
+    head.writeUInt16LE(parts[0], 1); head[3] = parts[1]; head[4] = parts[2];
+    head.writeUInt32LE(steps, 8);
+    head.writeUInt32LE(999, 12);
+    head.writeUInt32LE(3100, 16);
+    head.writeUInt32LE(42, 20);
+    head.writeUInt16LE(321, 26);
+    const pay = Buffer.concat([
+      Buffer.from([0x00, 0x08, 0x00, 0x00, 0x00, 1, 0, 36, 0, 0, 0, 0, 0, 0]),
+      head,
+    ]);
+    const buf = Buffer.concat([
+      Buffer.from([0xDA, 0xAD, 0xDA, 0xAD, 0x01, 0, 0, 0x04, 0x00, seq & 0xFF, (seq >> 8) & 0xFF]),
+      pay,
+    ]);
+    buf.writeUInt16LE(buf.length, 5);
+    return new Uint8Array(Buffer.concat([Buffer.from([0x33]), buf]));
+  }
+  function emptyHealthFrame(type, seq) {
+    const pay = Buffer.from([0x00, type, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0]);
+    const buf = Buffer.concat([
+      Buffer.from([0xDA, 0xAD, 0xDA, 0xAD, 0x01, 0, 0, 0x04, 0x00, seq & 0xFF, (seq >> 8) & 0xFF]),
+      pay,
+    ]);
+    buf.writeUInt16LE(buf.length, 5);
+    return new Uint8Array(Buffer.concat([Buffer.from([0x33]), buf]));
+  }
+  function yesterdayStr() {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') +
+      '-' + String(date.getDate()).padStart(2, '0');
+  }
+  async function runLiveMerge(finalLiveSteps) {
+    B.resetCaptures();
+    let liveReads = 0;
+    let historySent = false;
+    let seq = 0x180;
+    B._stub(
+      function (ch, name, bytes) {
+        if (bytes[0] === 0x02 && bytes[1] === 0xA0) {
+          liveReads++;
+          const value = liveReads === 1 ? 2191 : finalLiveSteps;
+          if (value !== null && value !== undefined) {
+            B.setLive({ steps: value, distanceM: value + 2000, ts: new Date().toISOString() });
+          }
+          return Promise.resolve();
+        }
+        if (!(bytes && bytes.length >= 17 && bytes[0] === 0x33)) return Promise.resolve();
+        const cmd = bytes[8] | (bytes[9] << 8);
+        if (cmd !== 0x04 || bytes[12] !== 0x00) return Promise.resolve();
+        const type = bytes[13], b14 = bytes[14];
+        let frame;
+        if (type === 0x08 && b14 === 1) frame = sportForDate(B.todayStr(), 2113, seq++);
+        else if (type === 0x08 && !historySent) {
+          historySent = true;
+          frame = sportForDate(yesterdayStr(), 5000, seq++);
+        } else frame = emptyHealthFrame(type, seq++);
+        B.handleV3(frame);
+        return Promise.resolve();
+      },
+      function () { return Promise.resolve(); },
+      function () { return Promise.resolve(); },
+    );
+    const start = puts.length;
+    await B.syncNow({});
+    return {
+      liveReads,
+      steps: puts.slice(start).filter((p) => p.type === 'steps'),
+    };
+  }
+
+  const latestSync = await runLiveMerge(2218);
+  const latestToday = latestSync.steps.find((r) => r.date === B.todayStr());
+  assert.strictEqual(latestSync.liveReads, 2, 'sync requests a final live snapshot');
+  assert.ok(latestToday, 'today sport row was saved');
+  assert.strictEqual(latestToday.payload.steps, 2218, 'final live steps win over stale sport summary');
+  assert.strictEqual(latestToday.payload.distance_m, 4218, 'final live distance is used');
+  assert.strictEqual(latestToday.payload.kcal, 321, 'sport display calories survive the merge');
+  assert.strictEqual(latestToday.payload.active_min, 42, 'sport active minutes survive the merge');
+  const latestYesterday = latestSync.steps.find((r) => r.date === yesterdayStr());
+  assert.strictEqual(latestYesterday.payload.steps, 5000, 'completed-day sport history stays unchanged');
+  console.log('capture.test.js: final live snapshot merged into today sport row');
+
+  const fallbackSync = await runLiveMerge(null);
+  const fallbackToday = fallbackSync.steps.find((r) => r.date === B.todayStr());
+  assert.strictEqual(fallbackSync.liveReads, 2, 'sync still attempts final live snapshot');
+  assert.strictEqual(fallbackToday.payload.steps, 2191, 'failed final read retains the earlier live snapshot');
+  console.log('capture.test.js: earlier live snapshot retained when final read is missing');
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

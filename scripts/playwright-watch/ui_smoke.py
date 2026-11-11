@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """
-ui_smoke.py — headless responsive UI, navigation, and store smoke test.
+    ui_smoke.py — headless UI/store smoke test plus a mocked BLE dashboard sync.
 
-No Bluetooth: this only checks that every page loads with cache-busted scripts,
-the skew banner stays away, the dashboard shows last-sync + store summary, and
-backup/import round-trips the store. It then blocks one module to prove the
-skew banner actually fires and halts page wiring. Run from WSL with Windows
-Python:
+No Bluetooth: browser sync uses synthetic WebBluetooth replies. The smoke test
+also checks every page, the skew banner, backup/import, and responsive UI. Run
+from WSL with Windows Python:
 
     /mnt/c/Users/pedro/AppData/Local/Programs/Python/Python313/python.exe \
         scripts/playwright-watch/ui_smoke.py
@@ -191,6 +189,155 @@ def check_skew_banner(browser, epoch):
     return failures
 
 
+def check_mock_sync(browser, epoch):
+    """Exercise dashboard Sync Data with deterministic, synthetic BLE replies."""
+    context = browser.new_context(viewport={"width": 1280, "height": 900})
+    context.add_init_script(script=r"""
+      (() => {
+        // Keep the app's intentional protocol delays short in this mock-only test.
+        const nativeTimeout = window.setTimeout.bind(window);
+        window.setTimeout = (fn, delay, ...args) =>
+          nativeTimeout(fn, Math.min(Number(delay) || 0, 10), ...args);
+
+        const chars = new Map();
+        let liveReads = 0;
+        let seq = 1;
+        function emit(characteristic, bytes) {
+          const copy = Uint8Array.from(bytes);
+          const event = { target: { value: new DataView(copy.buffer) } };
+          (characteristic.listeners['characteristicvaluechanged'] || []).forEach((fn) => fn(event));
+        }
+        function setU32(bytes, offset, value) {
+          bytes[offset] = value & 0xFF;
+          bytes[offset + 1] = (value >>> 8) & 0xFF;
+          bytes[offset + 2] = (value >>> 16) & 0xFF;
+          bytes[offset + 3] = (value >>> 24) & 0xFF;
+        }
+        function healthFrame(type, steps) {
+          const payload = new Uint8Array(steps === null ? 14 : 50);
+          payload[1] = type;
+          if (steps !== null) {
+            payload[5] = 1;
+            payload[7] = 36;
+            const now = new Date();
+            const year = now.getFullYear();
+            payload[15] = year & 0xFF;
+            payload[16] = (year >>> 8) & 0xFF;
+            payload[17] = now.getMonth() + 1;
+            payload[18] = now.getDate();
+            setU32(payload, 22, steps);
+            setU32(payload, 30, 3100);
+            setU32(payload, 34, 42);
+            payload[40] = 0x41;
+            payload[41] = 0x01;
+          }
+          const out = new Uint8Array(12 + payload.length);
+          out.set([0x33, 0xDA, 0xAD, 0xDA, 0xAD, 0x01], 0);
+          const total = out.length - 1;
+          out[6] = total & 0xFF;
+          out[7] = (total >>> 8) & 0xFF;
+          out[8] = 0x04;
+          out[10] = seq++ & 0xFF;
+          out.set(payload, 12);
+          return out;
+        }
+        function notifyLive(steps) {
+          const bytes = new Uint8Array(19);
+          bytes[0] = 0x02;
+          bytes[1] = 0xA0;
+          setU32(bytes, 2, steps);
+          setU32(bytes, 10, steps + 2000);
+          emit(chars.get(0x0AF7), bytes);
+        }
+        class Characteristic {
+          constructor(id) {
+            this.id = id;
+            this.properties = { write: true, notify: true };
+            this.listeners = {};
+          }
+          addEventListener(name, fn) {
+            (this.listeners[name] || (this.listeners[name] = [])).push(fn);
+          }
+          removeEventListener(name, fn) {
+            this.listeners[name] = (this.listeners[name] || []).filter((item) => item !== fn);
+          }
+          startNotifications() { return Promise.resolve(this); }
+          writeValue(value) {
+            const bytes = new Uint8Array(value.buffer || value, value.byteOffset || 0, value.byteLength);
+            if (this.id !== 0x0AF6) return Promise.resolve();
+            if (bytes[0] === 0x02 && bytes[1] === 0x01) {
+              const reply = new Uint8Array(14);
+              reply[0] = 0x02;
+              reply[1] = 0x01;
+              reply[8] = 1;
+              emit(chars.get(0x0AF7), reply);
+            } else if (bytes[0] === 0x02 && bytes[1] === 0xA0) {
+              liveReads += 1;
+              notifyLive(liveReads === 1 ? 2191 : 2218);
+            } else if (bytes[0] === 0x33 && (bytes[8] | (bytes[9] << 8)) === 0x04 && bytes[12] === 0) {
+              const type = bytes[13];
+              const isTodaySport = type === 0x08 && bytes[14] === 1;
+              emit(chars.get(0x0AF7), healthFrame(type, isTodaySport ? 2113 : null));
+            }
+            return Promise.resolve();
+          }
+        }
+        [0x0AF6, 0x0AF7, 0x0AF1, 0x0AF2].forEach((id) => chars.set(id, new Characteristic(id)));
+        const service = {
+          getCharacteristic: (id) => Promise.resolve(chars.get(Number(id))),
+        };
+        const server = {
+          getPrimaryService: () => Promise.resolve(service),
+        };
+        const device = {
+          name: 'Mock ID208 (synthetic)',
+          gatt: {
+            connected: false,
+            connect: () => {
+              device.gatt.connected = true;
+              return Promise.resolve(server);
+            },
+          },
+          addEventListener() {},
+        };
+        Object.defineProperty(navigator, 'bluetooth', {
+          configurable: true,
+          value: { requestDevice: () => Promise.resolve(device) },
+        });
+      })();
+    """)
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda err: errors.append(str(err)))
+    failures = []
+    try:
+        page.goto(f"{BASE}/index.html?v={epoch}", wait_until="load")
+        page.click("#btnSync")
+        page.wait_for_function(
+            "() => document.querySelector('#secSteps .body')?.innerText.includes('2218')",
+            timeout=15000,
+        )
+        steps_text = page.inner_text("#secSteps .body")
+        stored = page.evaluate("async () => Store.get(todayStr(), 'steps')")
+        if "2218" not in steps_text:
+            failures.append("mock sync: dashboard did not render final live count: " + steps_text)
+        if not stored or stored["payload"]["steps"] != 2218:
+            failures.append("mock sync: IndexedDB did not save final live count: " + str(stored))
+        if stored and stored["payload"].get("kcal") != 321:
+            failures.append("mock sync: sport calories were not preserved: " + str(stored))
+        if errors:
+            failures.append("mock sync: browser errors " + str(errors))
+        if not failures:
+            log("mock sync: Sync Data rendered 2218 live steps over stale 2113 sport summary")
+    except Exception as exc:  # noqa: BLE001 - report browser failures with the rest
+        failures.append("mock sync: " + str(exc))
+    finally:
+        context.close()
+    for failure in failures:
+        log("FAIL: " + failure)
+    return failures
+
+
 def main():
     fixture()
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
@@ -251,6 +398,8 @@ def main():
                 failures.append("dashboard: last-sync line did not update")
             if "1 step days, 1 nights, 1 HR days, 1 workouts" not in store_status:
                 failures.append("dashboard: store summary unexpected: " + store_status)
+
+            failures.extend(check_mock_sync(browser, epoch))
 
             try:
                 with page.expect_download(timeout=10000) as download_info:
